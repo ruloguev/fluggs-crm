@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { createClient } from "@/lib/supabase"
 import { 
   Users, 
   PhoneOutgoing, 
@@ -11,7 +12,6 @@ import {
   TrendingUp,
   ArrowDownRight
 } from "lucide-react"
-// import { supabase } from "@/lib/supabase" // <-- Pronto descomentaremos esto
 
 // --- COMPONENTE: Mini Gráfica Circular Neón ---
 const NeonRing = ({ percentage, color, glowColor }: { percentage: number, color: string, glowColor: string }) => {
@@ -40,54 +40,97 @@ const NeonRing = ({ percentage, color, glowColor }: { percentage: number, color:
   )
 }
 
+// --- FUNCIÓN AUXILIAR: Calcular "Hace X tiempo" ---
+function timeAgo(dateString: string) {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+  
+  if (diffInSeconds < 60) return "Hace un momento"
+  const diffInMinutes = Math.floor(diffInSeconds / 60)
+  if (diffInMinutes < 60) return `Hace ${diffInMinutes} min`
+  const diffInHours = Math.floor(diffInMinutes / 60)
+  if (diffInHours < 24) return `Hace ${diffInHours} horas`
+  return `Hace ${Math.floor(diffInHours / 24)} días`
+}
+
+// --- PANTALLA PRINCIPAL ---
 export default function DashboardPage() {
-  // 1. VARIABLES DE ESTADO (Aquí vivirá la información real)
+  const [supabase] = useState(() => createClient())
+
   const [isLoading, setIsLoading] = useState(true)
   const [metrics, setMetrics] = useState({
     conversionRate: 0,
     contactRate: 0,
     activeLeads: 0,
-    projectedValue: 0,
+    projectedValue: "0",
   })
   const [chartData, setChartData] = useState<number[]>([])
   const [signals, setSignals] = useState<any[]>([])
 
-  // 2. FUNCIÓN DE CONEXIÓN (El "Cerebro")
   useEffect(() => {
     async function fetchDashboardData() {
       setIsLoading(true)
       
       try {
-        // --- AQUÍ IRÁ LA LLAMADA A SUPABASE ---
-        // const { data: leads } = await supabase.from('leads').select('*')
-        // const { data: deals } = await supabase.from('deals').select('*')
-        
-        // Por ahora, simulamos que Supabase nos responde después de 1 segundo
-        // Esto evita que la página se rompa mientras creamos las tablas reales
-        setTimeout(() => {
-          setMetrics({
-            conversionRate: 24.8,
-            contactRate: 68.2,
-            activeLeads: 142,
-            projectedValue: 2.4, // En millones
-          })
-          setChartData([35, 45, 30, 60, 45, 75, 50, 85, 65, 100, 80, 110])
-          setSignals([
-            { title: "Lead Contactado", desc: "Roberto Carlos agendó visita", time: "Hace 10 min", type: "success" },
-            { title: "Nuevo Lead", desc: "Desde campaña de Facebook", time: "Hace 45 min", type: "neutral" },
-            { title: "Contrato Firmado", desc: "Propiedad en Valle Alto", time: "Hace 2 horas", type: "accent" },
-            { title: "Seguimiento", desc: "Llamada pendiente con Ana", time: "Hace 3 horas", type: "neutral" },
-          ])
-          setIsLoading(false)
-        }, 1000)
+        // 1. OBTENER TOTAL DE LEADS
+        const { count: totalLeads } = await supabase
+          .from('leads')
+          .select('*', { count: 'exact', head: true })
 
+        // 2. OBTENER VALOR PROYECTADO (Suma de budget_max)
+        const { data: leadsData } = await supabase
+          .from('leads')
+          .select('budget_max')
+        
+        const totalValue = leadsData?.reduce((sum, lead) => sum + (Number(lead.budget_max) || 0), 0) || 0
+        // Convertimos a millones (ej. 2400000 -> "2.4")
+        const projectedValueInM = (totalValue / 1000000).toFixed(1)
+
+        // 3. OBTENER SEÑALES (Actividades Recientes)
+        const { data: activitiesData } = await supabase
+          .from('activities')
+          .select('type, title, body, created_at')
+          .order('created_at', { ascending: false })
+          .limit(4)
+
+        // Transformamos los datos de la DB al formato visual de nuestro diseño
+        const mappedSignals = activitiesData?.map((act) => {
+          // Asignamos colores según el tipo de actividad
+          let uiType = 'neutral'
+          if (['call', 'whatsapp', 'email', 'visit'].includes(act.type)) uiType = 'success'
+          if (act.type === 'stage_change') uiType = 'accent'
+
+          return {
+            title: act.title || `Actividad: ${act.type}`,
+            desc: act.body || 'Registro actualizado en el sistema.',
+            time: timeAgo(act.created_at),
+            type: uiType
+          }
+        }) || []
+
+        // ACTUALIZAMOS LA INTERFAZ
+        setMetrics({
+          conversionRate: 24.8, // Nota: Estáticas por ahora hasta definir qué es una "conversión"
+          contactRate: 68.2,    // Nota: Estática por ahora
+          activeLeads: totalLeads || 0,
+          projectedValue: projectedValueInM,
+        })
+        
+        setSignals(mappedSignals)
+        
+        // Gráfica simulada (requiere cruzar datos por día más adelante)
+        setChartData([35, 45, 30, 60, 45, 75, 50, 85, 65, 100, 80, 110])
+        
       } catch (error) {
-        console.error("Error cargando datos:", error)
+        console.error("Error cargando datos del Dashboard:", error)
+      } finally {
+        setIsLoading(false)
       }
     }
 
     fetchDashboardData()
-  }, [])
+  }, [supabase])
 
   return (
     <div className="space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -212,6 +255,10 @@ export default function DashboardPage() {
         <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl">
           <h2 className="text-lg font-semibold text-zinc-100 mb-6">Señales Recientes</h2>
           <div className="space-y-6">
+            {signals.length === 0 && !isLoading && (
+              <p className="text-sm text-zinc-500 italic">No hay actividades recientes registradas.</p>
+            )}
+            
             {signals.map((item, i) => (
               <div key={i} className="flex gap-4 relative animate-in slide-in-from-right-4 fade-in duration-500" style={{ animationDelay: `${i * 150}ms`, animationFillMode: 'both' }}>
                 {i !== signals.length - 1 && <div className="absolute left-[9px] top-6 w-px h-full bg-zinc-800/60"></div>}
@@ -229,7 +276,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-zinc-200">{item.title}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{item.desc}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{item.desc}</p>
                   <span className="text-[10px] text-zinc-600 font-medium tracking-wider uppercase mt-1 block">{item.time}</span>
                 </div>
               </div>

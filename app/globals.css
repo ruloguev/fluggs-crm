@@ -148,7 +148,7 @@
     opacity: 0.05; /* Punto más bajo: casi invisible */
   }
   50% {
-    opacity: 0.25; /* Punto más alto: brilla el panal */
+    opacity: 0.20; /* Punto más alto: brilla el panal */
   }
 }
 

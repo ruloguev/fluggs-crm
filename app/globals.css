@@ -142,30 +142,34 @@
   }
 }
 
-/* Patrón de fondo latente con hexágonos redondeados para Flugzz. */
+/* Patrón de fondo latente con hexágonos para Flugzz. */
 .flugzz-background {
-  @apply relative;
-  background-color: theme('colors.zinc.950');
-  &::before {
-    content: "";
-    @apply absolute inset-0 opacity-10;
-    /* Generamos hexágonos sutiles con líneas finas y radius suave */
-    background-image: 
-      linear-gradient(30deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(150deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(30deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(150deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(30deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(150deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(113, 113, 122, 0.25) 1px, transparent 1px);
-    background-size: 40px 69.28px; /* Tamaño del hexágono base */
-    background-position: 0 0, 0 0, 20px 34.64px, 20px 34.64px, 0 0, 20px 34.64px;
-    mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 70%); /* Efecto latente/desvanecido */
-  }
+  position: relative;
+  background-color: #09090b; /* zinc-950 */
 }
 
-/* Scrollbar personalizada para que no rompa el diseño oscuro */
+.flugzz-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.25; /* Subimos la opacidad para que sea muy visible. Puedes bajarlo a 0.15 si es mucho */
+  pointer-events: none; /* SÚPER IMPORTANTE: Para que no bloquee los clics de tus botones */
+  z-index: 0;
+  background-image: 
+    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+  background-size: 40px 69.28px;
+  background-position: 0 0, 0 0, 20px 34.64px, 20px 34.64px, 0 0, 20px 34.64px;
+  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 80%);
+}
+
+/* Scrollbar personalizada */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }

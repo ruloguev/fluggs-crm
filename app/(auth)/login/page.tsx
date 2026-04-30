@@ -6,7 +6,16 @@ import { createClient } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowRight, Hexagon, Loader2 } from "lucide-react"
+import { ArrowRight, Loader2 } from "lucide-react"
+
+// Isotipo SVG diseñado en código para Flugzz.
+const FlugzzIsotipo = ({ className = "w-10 h-10" }) => (
+  <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 5L89.1769 27.5V72.5L50 95L10.8231 72.5V27.5L50 5Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M50 25L75.9808 39.95V60.05L50 75L24.0192 60.05V39.95L50 25Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.65"/>
+    <path d="M50 40L62.9904 47.475V52.525L50 60L37.0096 52.525V47.475L50 40Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 
 export default function LoginPage() {
   const router = useRouter()
@@ -22,38 +31,38 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError("Credenciales incorrectas. Intenta de nuevo.")
       setLoading(false)
     } else {
-      // Si todo sale bien, lo mandamos al dashboard
       router.push("/dashboard")
       router.refresh()
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950 relative overflow-hidden">
+    // Aplicamos flugzz-background con un efecto de degradado para la login page
+    <div className="min-h-screen flex items-center justify-center font-sans flugzz-background relative overflow-hidden bg-black">
       
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-zinc-800/40 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-zinc-900/40 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Efectos de spotlight sutiles */}
+      <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-flugzz-accent/10 rounded-full blur-[128px] pointer-events-none z-0"></div>
+      <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-zinc-800/20 rounded-full blur-[128px] pointer-events-none z-0"></div>
 
-      <div className="relative z-10 w-full max-w-md p-8 mx-4 overflow-hidden border border-zinc-800/50 rounded-2xl bg-zinc-900/50 backdrop-blur-xl shadow-2xl">
+      <div className="relative z-10 w-full max-w-md p-10 mx-4 overflow-hidden border border-zinc-800/60 rounded-3xl bg-zinc-950/60 backdrop-blur-xl shadow-2xl shadow-black/60">
         
-        <div className="flex flex-col items-center mb-8 space-y-2">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-zinc-800/80 border border-zinc-700/50 mb-2 shadow-inner">
-            <Hexagon className="w-6 h-6 text-zinc-100" />
+        <div className="flex flex-col items-center mb-10 space-y-3">
+          <div className="flex items-center justify-center w-16 h-16 rounded-3xl bg-zinc-900 border border-zinc-700/50 mb-3 shadow-inner">
+            <FlugzzIsotipo className="w-9 h-9 text-zinc-100" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Fluggs.</h1>
-          <p className="text-sm text-zinc-400">Ingresa a tu entorno de trabajo</p>
+          <span className="font-extrabold text-3xl tracking-tighter text-zinc-100 flex items-baseline">
+            Flugzz<span className="text-flugzz-accent ml-1">•</span>
+          </span>
+          <p className="text-base text-zinc-400">Ingresa a tu entorno inmobiliario premium.</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        <form onSubmit={handleLogin} className="space-y-6">
           {error && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm text-center">
               {error}
@@ -67,16 +76,14 @@ export default function LoginPage() {
               type="email" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="agente@inmobiliaria.com" 
+              placeholder="tu@inmobiliaria.com" 
               required
-              className="bg-zinc-950/50 border-zinc-800 text-zinc-100"
+              className="bg-zinc-900 border-zinc-800 text-zinc-100 focus-visible:ring-flugzz-accent"
             />
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-zinc-300">Contraseña</Label>
-            </div>
+            <Label htmlFor="password" className="text-zinc-300">Contraseña</Label>
             <Input 
               id="password" 
               type="password" 
@@ -84,13 +91,13 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••" 
               required
-              className="bg-zinc-950/50 border-zinc-800 text-zinc-100"
+              className="bg-zinc-900 border-zinc-800 text-zinc-100 focus-visible:ring-flugzz-accent"
             />
           </div>
 
           <Button 
             disabled={loading}
-            className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200 mt-6"
+            className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200 mt-8 rounded-full h-11"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -103,9 +110,9 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="mt-8 text-center text-sm text-zinc-400">
-          ¿Aún no eres parte de Fluggs?{" "}
-          <a href="#" className="font-medium text-zinc-100 hover:underline">Regístrate</a>
+        <div className="mt-10 text-center text-sm text-zinc-400">
+          ¿Aún no eres parte de Flugzz.?{" "}
+          <a href="#" className="font-semibold text-zinc-100 hover:underline">Regístrate</a>
         </div>
 
       </div>

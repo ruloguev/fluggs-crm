@@ -142,38 +142,37 @@
   }
 }
 
-/* Patrón de fondo latente con hexágonos para Flugzz. */
+/* 1. Creamos la animación del pulso (respiración suave) */
+@keyframes latido-flugzz {
+  0%, 100% {
+    opacity: 0.05; /* Punto más bajo: casi invisible */
+  }
+  50% {
+    opacity: 0.25; /* Punto más alto: brilla el panal */
+  }
+}
+
+/* 2. El fondo principal */
 .flugzz-background {
   position: relative;
   background-color: #09090b; /* zinc-950 */
 }
 
+/* 3. El panal con la animación inyectada */
 .flugzz-background::before {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.25; /* Subimos la opacidad para que sea muy visible. Puedes bajarlo a 0.15 si es mucho */
-  pointer-events: none; /* SÚPER IMPORTANTE: Para que no bloquee los clics de tus botones */
   z-index: 0;
-  background-image: 
-    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(30deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(150deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-  background-size: 40px 69.28px;
-  background-position: 0 0, 0 0, 20px 34.64px, 20px 34.64px, 0 0, 20px 34.64px;
-  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 80%);
-}
-
-/* Scrollbar personalizada */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  pointer-events: none;
+  
+  /* AQUÍ ESTÁ LA MAGIA: 
+     Llama a "latido-flugzz", tarda 6 segundos en completar un ciclo, 
+     lo hace suave (ease-in-out) y se repite para siempre (infinite) */
+  animation: latido-flugzz 8s ease-in-out infinite;
+  
+  background-image: url("data:image/svg+xml,%3Csvg width='56' height='98' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cg stroke='%23ffffff' stroke-width='1' fill='none' fill-rule='evenodd' stroke-linejoin='round'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/svg%3E");
+  
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
 }

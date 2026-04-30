@@ -72,11 +72,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex flex-col w-64 border-r border-zinc-800/60 bg-zinc-950/60 backdrop-blur-xl relative z-10">
         {/* Logo Area - Transformado a Flugzz. */}
         <div className="h-16 flex items-center px-6 border-b border-zinc-800/60">
-          <FlugzzIsotipo className="w-8 h-8 text-zinc-100 mr-3.5" />
-          <span className="font-semibold text-2xl tracking-tighter text-zinc-100 flex items-baseline">
-            Flugzz.<span className="text-flugzz-accent ml-0.5">•</span>
-          </span>
-        </div>
+  <FlugzzIsotipo className="w-8 h-8 text-zinc-100 mr-3.5" />
+  <span className="font-semibold text-2xl tracking-tighter text-zinc-100 flex items-baseline">
+    Flugzz<span style={{ color: '#22D3EE' }} className="ml-0.5">.</span>
+  </span>
+</div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 scrollbar-hide">
           {navigation.map((item) => {
@@ -139,8 +139,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center">
                 <FlugzzIsotipo className="w-7 h-7 text-zinc-100 mr-3" />
                 <span className="font-semibold text-xl tracking-tighter text-zinc-100 flex items-baseline">
-                  Flugzz.<span className="text-flugzz-accent ml-0.5">•</span>
-                </span>
+                  Flugzz<span style={{ color: '#22D3EE' }} className="ml-0.5">.</span>
+                  </span>
               </div>
               <button onClick={() => setIsMobileMenuOpen(false)} className="text-zinc-500 hover:text-zinc-100">
                 <X className="w-5 h-5" />

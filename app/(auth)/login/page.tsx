@@ -58,8 +58,8 @@ export default function LoginPage() {
             <FlugzzIsotipo className="w-9 h-9 text-zinc-100" />
           </div>
           <span className="font-semibold text-3xl tracking-tighter text-zinc-100 flex items-baseline">
-            Flugzz. <span className="text-flugzz-accent ml-1">•</span>
-          </span>
+            Flugzz<span style={{ color: '#22D3EE' }} className="ml-0.5">.</span>
+            </span>
           <p className="text-base text-zinc-400">Ingresa a tu entorno inmobiliario premium.</p>
         </div>
 

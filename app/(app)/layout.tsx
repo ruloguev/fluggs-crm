@@ -25,15 +25,15 @@ const navigation = [
   { name: "Asistente IA", href: "/asistente", icon: Bot },
 ]
 
-// Componente SVG del Isotipo diseñado en código para Flugzz.
+// Tu Isotipo Oficial
 const FlugzzIsotipo = ({ className = "w-8 h-8" }) => (
-  <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M50 5L89.1769 27.5V72.5L50 95L10.8231 72.5V27.5L50 5Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M50 25L75.9808 39.95V60.05L50 75L24.0192 60.05V39.95L50 25Z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.65"/>
-    <path d="M50 40L62.9904 47.475V52.525L50 60L37.0096 52.525V47.475L50 40Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
+  <img 
+    src="/Flugzz.svg" 
+    alt="Flugzz Isotipo" 
+    className={className} 
+    style={{ filter: 'invert(1)' }} /* Esto hace que tu logo negro se vuelva blanco para el modo oscuro */
+  />
 )
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()

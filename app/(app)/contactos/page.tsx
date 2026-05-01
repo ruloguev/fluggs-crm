@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -67,8 +67,6 @@ function formatMoney(value: number | null, currency = "MXN") {
 
 export default function ContactosPage() {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const supabase = createClient()
   const { profile } = useAuth()
 
@@ -156,11 +154,19 @@ export default function ContactosPage() {
   }, [loadData, profile?.company_id])
 
   useEffect(() => {
-    if (searchParams.get("new") === "1") {
-      setIsOpen(true)
-      router.replace(pathname)
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", window.location.pathname)
+      const timeoutId = window.setTimeout(() => {
+        setIsOpen(true)
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
     }
-  }, [pathname, router, searchParams])
+  }, [])
 
   async function handleSaveLead(event: React.FormEvent) {
     event.preventDefault()

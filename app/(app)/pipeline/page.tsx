@@ -2,185 +2,201 @@
 
 import { useState, useEffect } from "react"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
-import { MoreHorizontal, Plus, MessageCircle, Phone, Calendar } from "lucide-react"
+import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { createClient } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
-// Datos iniciales estructurados para Drag & Drop
-const initialData = {
-  new: {
-    id: "new",
-    title: "Nuevo",
-    color: "bg-blue-500",
-    items: [
-      { id: "1", name: "Carlos Jiménez", project: "Torre A - Depto 402", budget: "$3.5M", priority: "high" },
-      { id: "2", name: "Ana Sofía", project: "Residencial Bosques", budget: "$2.1M", priority: "medium" },
-    ]
-  },
-  contacted: {
-    id: "contacted",
-    title: "Contactado",
-    color: "bg-amber-500",
-    items: [
-      { id: "3", name: "Roberto Valdez", project: "Ciudad Maderas - Lote 12", budget: "$850k", priority: "high" },
-    ]
-  },
-  visit: {
-    id: "visit",
-    title: "Visita Agendada",
-    color: "bg-purple-500",
-    items: [
-      { id: "4", name: "Lucía Pérez", project: "Penthouse Loft", budget: "$7.2M", priority: "low" },
-    ]
-  },
-  proposal: {
-    id: "proposal",
-    title: "Propuesta",
-    color: "bg-emerald-500",
-    items: []
-  }
+type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
+
+type Lead = {
+  id: string; title: string | null; priority: 'low' | 'medium' | 'high'
+  budget_max: number | null; currency: string; last_activity_at: string
+  stage_id: string | null; metadata: any
+  contact: { full_name: string; phone: string | null }
+  source: { name: string; icon: string | null; color: string | null } | null
+}
+
+function timeAgo(d: string) {
+  const diff = (Date.now() - new Date(d).getTime()) / 1000
+  if (diff < 3600) return `${Math.floor(diff/60)}m`
+  if (diff < 86400) return `${Math.floor(diff/3600)}h`
+  return `${Math.floor(diff/86400)}d`
+}
+
+const P_STYLES = {
+  high: 'bg-red-500/10 text-red-400 border-red-500/20',
+  medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  low: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+}
+
+function LeadCard({ lead, index }: { lead: Lead; index: number }) {
+  const router = useRouter()
+  const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
+  const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes('facebook')
+
+  return (
+    <Draggable draggableId={lead.id} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          style={provided.draggableProps.style}
+          className={`p-4 rounded-xl border shadow-sm transition-all select-none cursor-grab active:cursor-grabbing ${
+            snapshot.isDragging
+              ? "bg-zinc-800 border-zinc-600 shadow-xl shadow-black/50 scale-[1.02] rotate-1"
+              : stale ? "bg-zinc-900 border-amber-500/20 hover:border-amber-500/40"
+              : "bg-zinc-900 border-zinc-800/50 hover:border-zinc-700"
+          }`}
+          onClick={() => !snapshot.isDragging && router.push(`/leads/${lead.id}`)}
+        >
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <p className="font-medium text-zinc-100 text-sm leading-snug">{lead.contact.full_name}</p>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isFb && <span className="text-[9px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 rounded">fb</span>}
+              {stale && <AlertCircle className="w-3 h-3 text-amber-400" aria-label="Sin actividad +3 días" />}
+            </div>
+          </div>
+
+          {lead.title && <p className="text-xs text-zinc-500 truncate mb-3">{lead.title}</p>}
+
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${P_STYLES[lead.priority]}`}>
+              {lead.priority === 'high' ? 'Alta' : lead.priority === 'medium' ? 'Media' : 'Baja'}
+            </span>
+            {lead.budget_max && (
+              <span className="text-[10px] text-zinc-500 font-mono">
+                ${(lead.budget_max/1000000).toFixed(1)}M
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-zinc-800/60">
+            <div className="flex gap-1.5">
+              {lead.contact.phone && (
+                <a href={`tel:${lead.contact.phone}`} onClick={e=>e.stopPropagation()}
+                  className="p-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all">
+                  <Phone className="w-3.5 h-3.5" />
+                </a>
+              )}
+              {lead.contact.phone && (
+                <a href={`https://wa.me/${lead.contact.phone?.replace(/\D/g,'')}`} target="_blank"
+                  onClick={e=>e.stopPropagation()}
+                  className="p-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all">
+                  <MessageCircle className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+            <div className="flex items-center text-[10px] text-zinc-600 gap-1">
+              <Clock className="w-3 h-3" />{timeAgo(lead.last_activity_at)}
+            </div>
+          </div>
+        </div>
+      )}
+    </Draggable>
+  )
 }
 
 export default function PipelinePage() {
-  // Estado para manejar las tarjetas
-  const [columns, setColumns] = useState(initialData)
-  
-  // Evitar errores de hidratación en Next.js
+  const [stages, setStages] = useState<Stage[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
-  useEffect(() => setIsMounted(true), [])
+  const supabase = createClient()
 
-  // Función mágica que se ejecuta al soltar una tarjeta
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination) return
+  useEffect(() => { setIsMounted(true); loadPipeline() }, [])
 
-    const { source, destination } = result
-
-    // Si soltó en la misma columna y misma posición, no hacemos nada
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return
-
-    const sourceCol = columns[source.droppableId as keyof typeof columns]
-    const destCol = columns[destination.droppableId as keyof typeof columns]
-
-    const sourceItems = [...sourceCol.items]
-    const destItems = [...destCol.items]
-
-    // Quitamos la tarjeta de la columna original
-    const [movedItem] = sourceItems.splice(source.index, 1)
-
-    // Si es la misma columna, solo reordenamos
-    if (source.droppableId === destination.droppableId) {
-      sourceItems.splice(destination.index, 0, movedItem)
-      setColumns({
-        ...columns,
-        [source.droppableId]: { ...sourceCol, items: sourceItems }
-      })
-    } else {
-      // Si cambió de columna, la inyectamos en la nueva
-      destItems.splice(destination.index, 0, movedItem)
-      setColumns({
-        ...columns,
-        [source.droppableId]: { ...sourceCol, items: sourceItems },
-        [destination.droppableId]: { ...destCol, items: destItems }
-      })
-    }
+  async function loadPipeline() {
+    setLoading(true)
+    const [{ data: s }, { data: l }] = await Promise.all([
+      supabase.from('pipeline_stages').select('*').order('position'),
+      supabase.from('leads').select(`
+        id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,
+        contact:contacts(full_name,phone),
+        source:lead_sources(name,icon,color)
+      `).order('last_activity_at', { ascending: false }).limit(200),
+    ])
+    setStages(s ?? [])
+    setLeads((l as any) ?? [])
+    setLoading(false)
   }
 
-  if (!isMounted) return null // Previene destellos al cargar
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return
+    const { draggableId, destination } = result
+    const newStageId = destination.droppableId
+    setLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
+    await (supabase as any).from('leads')
+      .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
+      .eq('id', draggableId)
+  }
+
+  if (!isMounted) return null
+  const activeStages = stages.filter(s => !s.is_closed)
 
   return (
-    <div className="h-full flex flex-col space-y-6">
+    <div className="h-full flex flex-col space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Pipeline de Ventas</h1>
-          <p className="text-sm text-zinc-400 mt-1">Arrastra las tarjetas para actualizar su estado.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
+            Pipeline<span className="text-flugzz-accent">.</span>
+          </h1>
+          <p className="text-sm text-zinc-400 mt-1">
+            {loading ? 'Cargando...' : `${leads.length} leads activos`}
+          </p>
         </div>
         <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200">
           <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
         </Button>
       </div>
 
-      <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-6 h-full items-start">
-            {Object.values(columns).map((col) => (
-              <div key={col.id} className="w-80 flex-shrink-0 flex flex-col gap-4">
-                {/* Cabecera de la columna */}
-                <div className="flex items-center justify-between px-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${col.color}`} />
-                    <h2 className="font-medium text-zinc-200">{col.title}</h2>
-                    <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-full">
-                      {col.items.length}
-                    </span>
-                  </div>
-                  <button className="text-zinc-500 hover:text-zinc-300">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </div>
+      {loading ? (
+        <div className="flex items-center justify-center flex-1">
+          <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
+              {activeStages.map(stage => {
+                const stageLeads = leads.filter(l => l.stage_id === stage.id)
+                return (
+                  <div key={stage.id} className="w-72 flex-shrink-0 flex flex-col gap-3">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{stage.name}</span>
+                        <span className="text-xs text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
+                      </div>
+                      <button className="text-zinc-600 hover:text-zinc-300 p-1"><Plus className="w-3.5 h-3.5" /></button>
+                    </div>
 
-                {/* Zona donde se pueden soltar tarjetas */}
-                <Droppable droppableId={col.id}>
-                  {(provided, snapshot) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className={`flex-1 min-h-[150px] flex flex-col gap-3 p-2 rounded-xl border transition-colors ${
-                        snapshot.isDraggingOver ? "bg-zinc-800/40 border-zinc-700/50" : "bg-zinc-900/20 border-zinc-800/30"
-                      }`}
-                    >
-                      {col.items.map((item, index) => (
-                        <Draggable key={item.id} draggableId={item.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              style={{ ...provided.draggableProps.style }}
-                              className={`p-4 rounded-xl border shadow-sm transition-shadow ${
-                                snapshot.isDragging 
-                                  ? "bg-zinc-800 border-zinc-600 shadow-xl shadow-black/50 z-50 scale-105" 
-                                  : "bg-zinc-900 border-zinc-800/50 hover:border-zinc-700"
-                              }`}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                                  item.priority === 'high' ? 'bg-red-500/10 text-red-500' : 'bg-zinc-800 text-zinc-400'
-                                }`}>
-                                  {item.priority}
-                                </span>
-                                <p className="text-xs font-mono text-zinc-500">{item.budget}</p>
-                              </div>
-                              
-                              <h3 className="font-medium text-zinc-100">{item.name}</h3>
-                              <p className="text-xs text-zinc-500 mb-4">{item.project}</p>
-
-                              <div className="flex items-center gap-2 pt-3 border-t border-zinc-800/50">
-                                <button className="p-2 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-all">
-                                  <MessageCircle className="w-3.5 h-3.5" />
-                                </button>
-                                <button className="p-2 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-all">
-                                  <Phone className="w-3.5 h-3.5" />
-                                </button>
-                                <button className="p-2 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-all ml-auto">
-                                  <Calendar className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                    <Droppable droppableId={stage.id}>
+                      {(provided, snapshot) => (
+                        <div {...provided.droppableProps} ref={provided.innerRef}
+                          className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
+                            snapshot.isDraggingOver
+                              ? "bg-zinc-800/40 border-flugzz-accent/30"
+                              : "bg-zinc-900/20 border-zinc-800/30"
+                          }`}>
+                          {stageLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}
+                          {provided.placeholder}
+                          {stageLeads.length === 0 && !snapshot.isDraggingOver && (
+                            <div className="flex-1 flex items-center justify-center py-8">
+                              <p className="text-xs text-zinc-700">Arrastra aquí</p>
                             </div>
                           )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                      
-                      <button className="w-full py-2 mt-2 border border-dashed border-zinc-800 rounded-xl text-zinc-600 hover:text-zinc-400 hover:border-zinc-700 text-sm transition-all">
-                        + Añadir tarjeta
-                      </button>
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            ))}
-          </div>
-        </DragDropContext>
-      </div>
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+                )
+              })}
+            </div>
+          </DragDropContext>
+        </div>
+      )}
     </div>
   )
 }

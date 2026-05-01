@@ -18,7 +18,7 @@ const ALL_NAV = [
   { name: "Contactos",     href: "/contactos",          icon: Users,           permission: null },
   { name: "Drive",         href: "/drive",              icon: HardDrive,       permission: null },
   { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null },
-  { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_users" as const },
+  { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_integrations" as const },
   { name: "Ajustes",       href: "/ajustes",            icon: Settings,        permission: "can_manage_users" as const },
 ]
 
@@ -63,6 +63,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Filter nav items by permission
   const navItems = ALL_NAV.filter(item => {
+    if (item.href === "/integraciones") {
+      const roleName = role?.name?.toLowerCase() ?? ""
+      if (roleName.includes("mkt") || roleName.includes("marketing")) return true
+    }
     if (!item.permission) return true
     return can(item.permission)
   })

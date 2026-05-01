@@ -34,6 +34,7 @@ const PERMISSIONS: Permission[] = [
   { key: "can_reassign_leads",       label: "Reasignar leads",     description: "Mover leads entre agentes del equipo",            group: "Leads" },
   { key: "can_export_reports",       label: "Exportar reportes",   description: "Descargar datos en CSV y PDF",                    group: "Leads" },
   { key: "can_manage_users",         label: "Gestionar usuarios",  description: "Invitar, editar y desactivar cuentas",            group: "Administración" },
+  { key: "can_manage_integrations",  label: "Gestionar integraciones", description: "Configurar conexiones y automatizaciones de captación", group: "Administración" },
   { key: "can_manage_drive",         label: "Gestionar drive",     description: "Subir, editar y archivar materiales",             group: "Administración" },
   { key: "can_manage_knowledge",     label: "Gestionar IA",        description: "Cargar y actualizar documentos del asistente",    group: "Administración" },
   { key: "is_transversal",           label: "Rol transversal",     description: "Ve todo el equipo sin jerarquía vertical",        group: "Especial" },
@@ -50,7 +51,7 @@ const COLORS = [
 const DEFAULT_PERMISSIONS: Record<string, boolean> = {
   can_view_team: false, can_view_contact_data: true, can_view_call_recordings: false,
   can_reassign_leads: false, can_export_reports: false,
-  can_manage_users: false, can_manage_drive: false, can_manage_knowledge: false,
+  can_manage_users: false, can_manage_integrations: false, can_manage_drive: false, can_manage_knowledge: false,
   is_transversal: false,
 }
 

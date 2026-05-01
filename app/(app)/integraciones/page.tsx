@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
+import { useRouter } from "next/navigation"
 import {
   Globe, RefreshCw, Plus, Trash2, GripVertical, CheckCircle2,
   XCircle, Copy, ExternalLink, Users, Shuffle, Loader2, AlertCircle
@@ -347,13 +349,25 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
 
 // ── Página principal ──────────────────────────────────────────
 export default function IntegracionesPage() {
+  const router = useRouter()
+  const { can, loading: authLoading, role } = useAuth()
   const [tab, setTab] = useState<'facebook' | 'roundrobin'>('facebook')
   const [integration, setIntegration] = useState<any>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => { loadIntegration() }, [])
+  useEffect(() => {
+    const roleName = role?.name?.toLowerCase() ?? ""
+    const canOpenIntegrations = can("can_manage_users") || can("can_manage_integrations") || roleName.includes("mkt") || roleName.includes("marketing")
+    if (!authLoading && !canOpenIntegrations) {
+      router.push("/dashboard")
+      return
+    }
+    if (!authLoading && canOpenIntegrations) {
+      void loadIntegration()
+    }
+  }, [authLoading, can, role?.name, router])
 
   async function loadIntegration() {
     setLoading(true)

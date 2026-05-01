@@ -451,8 +451,8 @@ export default function EquipoPage() {
       </div>
 
       {/* Invite sheet */}
-      {showInvite && (
-        <InviteSheet roles={roles} companyId={profile!.company_id}
+      {showInvite && profile?.company_id && (
+        <InviteSheet roles={roles} companyId={profile.company_id}
           onClose={() => setShowInvite(false)}
           onInvited={() => { setShowInvite(false); loadData() }} />
       )}

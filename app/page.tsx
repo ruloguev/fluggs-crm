@@ -8,11 +8,11 @@ export default function LandingPageMockup() {
     <div className="min-h-screen bg-[#09090b] text-zinc-100 relative overflow-hidden font-sans flex flex-col">
       
       {/* EL PANAL DE FONDO */}
-      <div className="absolute inset-0 z-0 opacity-40">
+      <div className="absolute inset-0 z-0 opacity-15">
         <div 
           className="absolute inset-0 animate-pulse" 
           style={{ 
-            animationDuration: '8s',
+            animationDuration: '4s',
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='56' height='98' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cg stroke='%23ffffff' stroke-width='1' fill='none' fill-rule='evenodd' stroke-linejoin='round'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: '56px 98px'
           }}
@@ -55,13 +55,17 @@ export default function LandingPageMockup() {
         </p>
 
         {/* Botones */}
-        <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300 w-full sm:w-auto">
-          <Link href="/login" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-flugzz-accent text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] group">
+        <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300 w-full sm:w-auto z-50">
+          
+          {/* Botón Primario Corregido (Sólido y brillante) */}
+          <Link href="/login" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-cyan-400 text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] group">
             Iniciar Ecosistema
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
+
+          {/* Botón Secundario */}
           <button className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-800/60 text-white font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm group">
-            <Play className="w-5 h-5 text-zinc-400 group-hover:text-flugzz-accent transition-colors" />
+            <Play className="w-5 h-5 text-zinc-400 group-hover:text-cyan-400 transition-colors" />
             Ver recorrido guiado
           </button>
         </div>

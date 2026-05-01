@@ -100,11 +100,12 @@ function InviteSheet({ roles, companyId, onClose, onInvited }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), fullName: fullName.trim(), roleId, companyId }),
       })
-      const data = await res.json()
+      const raw = await res.text()
+      const data = raw ? JSON.parse(raw) : null
 
       if (!res.ok) { setError(data.error ?? "Error al enviar invitación"); setSending(false); return }
 
-      if (data.inviteLink) setInviteLink(data.inviteLink)
+      if (data?.inviteLink) setInviteLink(data.inviteLink)
       setDone(true)
       onInvited()
     } catch (e: any) {

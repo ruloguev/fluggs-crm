@@ -19,7 +19,7 @@ const ALL_NAV = [
   { name: "Drive",         href: "/drive",              icon: HardDrive,       permission: null },
   { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null },
   { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_users" as const },
-  { name: "Ajustes",       href: "/ajustes/equipo",     icon: Settings,        permission: "can_manage_users" as const },
+  { name: "Ajustes",       href: "/ajustes",            icon: Settings,        permission: "can_manage_users" as const },
 ]
 
 const FlugzzIsotipo = ({ className = "w-8 h-8" }) => (
@@ -103,7 +103,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 active ? "text-zinc-100" : "text-zinc-500 group-hover:text-zinc-300"
               }`} />
               {item.name}
-              {item.href === "/ajustes/equipo" && role && (
+              {item.href === "/ajustes" && role && (
                 <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700">
                   {role.name}
                 </span>

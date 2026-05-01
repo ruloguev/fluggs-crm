@@ -1,9 +1,23 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { ArrowRight, Play, Zap } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function LandingPageMockup() {
+  const router = useRouter()
+  const { profile, loading } = useAuth()
+
+  useEffect(() => {
+    if (!loading && profile) {
+      router.replace("/dashboard")
+    }
+  }, [loading, profile, router])
+
+  if (loading || profile) return null
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 relative overflow-hidden font-sans flex flex-col">
       

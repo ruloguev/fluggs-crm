@@ -207,7 +207,7 @@ function RoleCard({
 
 // ── Main Page ──────────────────────────────────────────────────
 export default function RolesPage() {
-  const { profile, can, loading: authLoading } = useAuth()
+  const { profile, can, role, loading: authLoading } = useAuth()
   const router = useRouter()
   const supabase = createClient()
 
@@ -218,11 +218,18 @@ export default function RolesPage() {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  const normalizedRoleName = role?.name?.toLowerCase() ?? ""
+  const canManageSettings =
+    can("can_manage_users") ||
+    normalizedRoleName.includes("director") ||
+    normalizedRoleName.includes("gerente") ||
+    normalizedRoleName.includes("admin") ||
+    (role?.level ?? 99) <= 2
 
   // Guard
   useEffect(() => {
-    if (!authLoading && !can("can_manage_users")) router.push("/pipeline")
-  }, [authLoading])
+    if (!authLoading && !canManageSettings) router.push("/pipeline")
+  }, [authLoading, canManageSettings, router])
 
   useEffect(() => { if (profile) loadRoles() }, [profile])
 

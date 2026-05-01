@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -67,6 +67,8 @@ function formatMoney(value: number | null, currency = "MXN") {
 
 export default function ContactosPage() {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const { profile } = useAuth()
 
@@ -153,6 +155,13 @@ export default function ContactosPage() {
     }
   }, [loadData, profile?.company_id])
 
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setIsOpen(true)
+      router.replace(pathname)
+    }
+  }, [pathname, router, searchParams])
+
   async function handleSaveLead(event: React.FormEvent) {
     event.preventDefault()
     if (!profile?.company_id) return
@@ -162,6 +171,36 @@ export default function ContactosPage() {
 
     const { data: authUser } = await supabase.auth.getUser()
     const userId = authUser.user?.id
+    let stageId = formData.stage_id
+
+    if (!stageId) {
+      const { data: existingStage } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("company_id", profile.company_id)
+        .eq("is_closed", false)
+        .order("position")
+        .limit(1)
+        .single()
+
+      stageId = existingStage?.id ?? ""
+
+      if (!stageId) {
+        const { data: createdStage } = await supabase
+          .from("pipeline_stages")
+          .insert({
+            company_id: profile.company_id,
+            name: "Nuevo",
+            color: "#22D3EE",
+            position: 1,
+            is_closed: false,
+          })
+          .select("id")
+          .single()
+
+        stageId = createdStage?.id ?? ""
+      }
+    }
 
     const { data: contactData, error: contactError } = await supabase
       .from("contacts")
@@ -190,7 +229,7 @@ export default function ContactosPage() {
         contact_id: contactData.id,
         owner_id: userId,
         source_id: formData.source_id || null,
-        stage_id: formData.stage_id || null,
+        stage_id: stageId || null,
         title: formData.title.trim() || `${formData.full_name.trim()} — Lead`,
         project: formData.project.trim() || null,
         priority: formData.priority,
@@ -225,7 +264,7 @@ export default function ContactosPage() {
       title: "",
       project: "",
       source_id: sources[0]?.id || "",
-      stage_id: stages.find((stage) => !stage.is_closed)?.id || "",
+      stage_id: stageId || stages.find((stage) => !stage.is_closed)?.id || "",
       priority: "medium",
       budget_max: "",
       currency: companySettings?.default_currency || "MXN",

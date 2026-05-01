@@ -6,6 +6,7 @@ import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2 } from "lucide-
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/AuthContext"
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
 
@@ -104,18 +105,25 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
   const supabase = createClient()
+  const router = useRouter()
+  const { profile } = useAuth()
 
-  useEffect(() => { setIsMounted(true); loadPipeline() }, [])
+  useEffect(() => {
+    setIsMounted(true)
+    if (profile?.company_id) {
+      void loadPipeline(profile.company_id)
+    }
+  }, [profile?.company_id])
 
-  async function loadPipeline() {
+  async function loadPipeline(companyId: string) {
     setLoading(true)
     const [{ data: s }, { data: l }] = await Promise.all([
-      supabase.from('pipeline_stages').select('*').order('position'),
+      supabase.from('pipeline_stages').select('*').eq('company_id', companyId).order('position'),
       supabase.from('leads').select(`
         id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,
         contact:contacts(full_name,phone),
         source:lead_sources(name,icon,color)
-      `).order('last_activity_at', { ascending: false }).limit(200),
+      `).eq('company_id', companyId).order('last_activity_at', { ascending: false }).limit(200),
     ])
     setStages(s ?? [])
     setLeads((l as any) ?? [])
@@ -125,7 +133,7 @@ export default function PipelinePage() {
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return
     const { draggableId, destination } = result
-    const newStageId = destination.droppableId
+    const newStageId = destination.droppableId === "__unassigned__" ? null : destination.droppableId
     setLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
     await (supabase as any).from('leads')
       .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
@@ -134,6 +142,7 @@ export default function PipelinePage() {
 
   if (!isMounted) return null
   const activeStages = stages.filter(s => !s.is_closed)
+  const unassignedLeads = leads.filter(l => !l.stage_id)
 
   return (
     <div className="h-full flex flex-col space-y-5">
@@ -146,7 +155,7 @@ export default function PipelinePage() {
             {loading ? 'Cargando...' : `${leads.length} leads activos`}
           </p>
         </div>
-        <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200">
+        <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200" onClick={() => router.push("/contactos?new=1")}>
           <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
         </Button>
       </div>
@@ -169,7 +178,7 @@ export default function PipelinePage() {
                         <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{stage.name}</span>
                         <span className="text-xs text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
                       </div>
-                      <button className="text-zinc-600 hover:text-zinc-300 p-1"><Plus className="w-3.5 h-3.5" /></button>
+                      <button className="text-zinc-600 hover:text-zinc-300 p-1" onClick={() => router.push("/contactos?new=1")}><Plus className="w-3.5 h-3.5" /></button>
                     </div>
 
                     <Droppable droppableId={stage.id}>
@@ -193,6 +202,34 @@ export default function PipelinePage() {
                   </div>
                 )
               })}
+
+              {unassignedLeads.length > 0 && (
+                <div className="w-72 flex-shrink-0 flex flex-col gap-3">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-zinc-500" />
+                      <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Sin etapa</span>
+                      <span className="text-xs text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded-full">{unassignedLeads.length}</span>
+                    </div>
+                  </div>
+                  <Droppable droppableId="__unassigned__">
+                    {(provided, snapshot) => (
+                      <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
+                          snapshot.isDraggingOver
+                            ? "bg-zinc-800/40 border-flugzz-accent/30"
+                            : "bg-zinc-900/20 border-zinc-800/30"
+                        }`}
+                      >
+                        {unassignedLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              )}
             </div>
           </DragDropContext>
         </div>

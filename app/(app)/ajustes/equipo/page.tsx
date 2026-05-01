@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import {
   UserPlus, Mail, Shield, ChevronDown, Check, X,
   Loader2, MoreHorizontal, UserX, UserCheck,
-  Link as LinkIcon, Copy, AlertCircle, Users
+  Copy, AlertCircle, Users, Edit2, Trash2
 } from "lucide-react"
 
 type Role = { id: string; name: string; level: number; color: string }
@@ -32,16 +32,6 @@ function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg"
     <div className={`${sz} rounded-full bg-zinc-800 border border-zinc-700/50 flex items-center justify-center font-bold text-zinc-300 shrink-0`}>
       {initials}
     </div>
-  )
-}
-
-function RoleBadge({ role }: { role: Role | null }) {
-  if (!role) return <span className="text-xs text-zinc-600">Sin rol</span>
-  return (
-    <span className="text-xs px-2 py-0.5 rounded-full border font-medium"
-      style={{ backgroundColor: `${role.color}20`, borderColor: `${role.color}40`, color: role.color }}>
-      {role.name}
-    </span>
   )
 }
 
@@ -98,7 +88,6 @@ function InviteSheet({ roles, companyId, onClose, onInvited }: {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [inviteLink, setInviteLink] = useState<string | null>(null)
-  const supabase = createClient()
 
   async function sendInvite() {
     if (!email.trim() || !fullName.trim()) { setError("Completa todos los campos"); return }
@@ -207,12 +196,87 @@ function InviteSheet({ roles, companyId, onClose, onInvited }: {
   )
 }
 
+function EditMemberSheet({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: Member
+  onClose: () => void
+  onSaved: (patch: Partial<Member>) => void
+}) {
+  const supabase = createClient()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    full_name: member.full_name,
+    email: member.email,
+    phone: member.phone ?? "",
+  })
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+      })
+      .eq("id", member.id)
+
+    if (updateError) {
+      setError(updateError.message)
+      setSaving(false)
+      return
+    }
+
+    setSaving(false)
+    onSaved({
+      full_name: form.full_name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || null,
+    })
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 pb-8 md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-8 md:rounded-2xl md:border">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-zinc-100 font-medium text-lg">Editar usuario</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700" />
+          <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700" />
+          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="Teléfono"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700" />
+          {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={onClose} className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-300 hover:border-zinc-700">Cancelar</button>
+            <button onClick={save} disabled={saving} className="rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-200 disabled:opacity-50">
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Member row ─────────────────────────────────────────────────
-function MemberRow({ member, roles, onRoleChange, onToggleActive }: {
+function MemberRow({ member, roles, onRoleChange, onToggleActive, onEdit, onDelete }: {
   member: Member
   roles: Role[]
   onRoleChange: (memberId: string, roleId: string) => void
   onToggleActive: (memberId: string, isActive: boolean) => void
+  onEdit: (member: Member) => void
+  onDelete: (member: Member) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -264,6 +328,14 @@ function MemberRow({ member, roles, onRoleChange, onToggleActive }: {
                 }`}>
                 {member.is_active ? <><UserX className="w-4 h-4" />Desactivar usuario</> : <><UserCheck className="w-4 h-4" />Activar usuario</>}
               </button>
+              <button onClick={() => { onEdit(member); setMenuOpen(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-zinc-300 hover:bg-zinc-900 transition-colors">
+                <Edit2 className="w-4 h-4" />Editar usuario
+              </button>
+              <button onClick={() => { onDelete(member); setMenuOpen(false) }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
+                <Trash2 className="w-4 h-4" />Eliminar usuario
+              </button>
             </div>
           </>
         )}
@@ -274,7 +346,7 @@ function MemberRow({ member, roles, onRoleChange, onToggleActive }: {
 
 // ── Main page ──────────────────────────────────────────────────
 export default function EquipoPage() {
-  const { profile, can, loading: authLoading } = useAuth()
+  const { profile, can, role, loading: authLoading } = useAuth()
   const router = useRouter()
   const supabase = createClient()
 
@@ -282,15 +354,24 @@ export default function EquipoPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [editingMember, setEditingMember] = useState<Member | null>(null)
+  const [deletingMember, setDeletingMember] = useState<Member | null>(null)
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("active")
   const [search, setSearch] = useState("")
+  const normalizedRoleName = role?.name?.toLowerCase() ?? ""
+  const canManageSettings =
+    can("can_manage_users") ||
+    normalizedRoleName.includes("director") ||
+    normalizedRoleName.includes("gerente") ||
+    normalizedRoleName.includes("admin") ||
+    (role?.level ?? 99) <= 2
 
   // Tabs for sub-nav (Equipo / Roles)
   const [activeTab, setActiveTab] = useState<"equipo" | "roles">("equipo")
 
   useEffect(() => {
-    if (!authLoading && !can("can_manage_users")) router.push("/pipeline")
-  }, [authLoading])
+    if (!authLoading && !canManageSettings) router.push("/pipeline")
+  }, [authLoading, canManageSettings, router])
 
   useEffect(() => { if (profile) loadData() }, [profile])
 
@@ -332,6 +413,23 @@ export default function EquipoPage() {
   async function toggleActive(memberId: string, isActive: boolean) {
     await supabase.from("profiles").update({ is_active: !isActive }).eq("id", memberId)
     setMembers(prev => prev.map(m => m.id === memberId ? { ...m, is_active: !isActive } : m))
+  }
+
+  async function deleteMember(member: Member) {
+    const res = await fetch("/api/team/member", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: member.id }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      alert(data?.error ?? "No se pudo eliminar el usuario.")
+      return
+    }
+
+    setMembers(prev => prev.filter(m => m.id !== member.id))
+    setDeletingMember(null)
   }
 
   const filtered = members.filter(m => {
@@ -420,7 +518,8 @@ export default function EquipoPage() {
             <div className="space-y-1.5">
               {roleMembers.map(member => (
                 <MemberRow key={member.id} member={member} roles={roles}
-                  onRoleChange={updateRole} onToggleActive={toggleActive} />
+                  onRoleChange={updateRole} onToggleActive={toggleActive}
+                  onEdit={setEditingMember} onDelete={setDeletingMember} />
               ))}
             </div>
           </div>
@@ -436,7 +535,8 @@ export default function EquipoPage() {
             <div className="space-y-1.5">
               {unassigned.map(member => (
                 <MemberRow key={member.id} member={member} roles={roles}
-                  onRoleChange={updateRole} onToggleActive={toggleActive} />
+                  onRoleChange={updateRole} onToggleActive={toggleActive}
+                  onEdit={setEditingMember} onDelete={setDeletingMember} />
               ))}
             </div>
           </div>
@@ -455,6 +555,37 @@ export default function EquipoPage() {
         <InviteSheet roles={roles} companyId={profile.company_id}
           onClose={() => setShowInvite(false)}
           onInvited={() => { setShowInvite(false); loadData() }} />
+      )}
+
+      {editingMember && (
+        <EditMemberSheet
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onSaved={(patch) => {
+            setMembers(prev => prev.map(member => member.id === editingMember.id ? { ...member, ...patch } : member))
+            setEditingMember(null)
+          }}
+        />
+      )}
+
+      {deletingMember && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={() => setDeletingMember(null)} />
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-8 md:rounded-2xl md:border">
+            <h3 className="text-zinc-100 font-medium text-lg">Eliminar usuario</h3>
+            <p className="text-sm text-zinc-500 mt-2">
+              Esta acción eliminará la cuenta de {deletingMember.full_name} y ya no podrá ingresar al sistema.
+            </p>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setDeletingMember(null)} className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-300 hover:border-zinc-700">
+                Cancelar
+              </button>
+              <button onClick={() => void deleteMember(deletingMember)} className="rounded-xl bg-red-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-400">
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

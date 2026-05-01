@@ -43,6 +43,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
+  const normalizedRoleName = role?.name?.toLowerCase() ?? ""
+  const canManageSettings =
+    can("can_manage_users") ||
+    normalizedRoleName.includes("director") ||
+    normalizedRoleName.includes("gerente") ||
+    normalizedRoleName.includes("admin") ||
+    (role?.level ?? 99) <= 2
+  const canManageIntegrations =
+    can("can_manage_integrations") ||
+    canManageSettings ||
+    normalizedRoleName.includes("mkt") ||
+    normalizedRoleName.includes("marketing")
 
   // Redirect to onboarding if authenticated but no company
   useEffect(() => {
@@ -63,10 +75,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Filter nav items by permission
   const navItems = ALL_NAV.filter(item => {
-    if (item.href === "/integraciones") {
-      const roleName = role?.name?.toLowerCase() ?? ""
-      if (roleName.includes("mkt") || roleName.includes("marketing")) return true
-    }
+    if (item.href === "/integraciones") return canManageIntegrations
+    if (item.href === "/ajustes") return canManageSettings
     if (!item.permission) return true
     return can(item.permission)
   })

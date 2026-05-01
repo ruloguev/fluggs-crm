@@ -356,10 +356,17 @@ export default function IntegracionesPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const roleName = role?.name?.toLowerCase() ?? ""
+  const canOpenIntegrations =
+    can("can_manage_users") ||
+    can("can_manage_integrations") ||
+    roleName.includes("mkt") ||
+    roleName.includes("marketing") ||
+    roleName.includes("director") ||
+    roleName.includes("gerente") ||
+    (role?.level ?? 99) <= 2
 
   useEffect(() => {
-    const roleName = role?.name?.toLowerCase() ?? ""
-    const canOpenIntegrations = can("can_manage_users") || can("can_manage_integrations") || roleName.includes("mkt") || roleName.includes("marketing")
     if (!authLoading && !canOpenIntegrations) {
       router.push("/dashboard")
       return

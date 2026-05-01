@@ -19,6 +19,7 @@ type Company = {
 type Role = {
   id: string
   name: string
+  level: number
   permissions: Record<string, boolean>
 }
 
@@ -75,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       nextProfile.role_id
         ? supabase
             .from("roles")
-            .select("id, name, permissions")
+            .select("id, name, level, permissions")
             .eq("id", nextProfile.role_id)
             .single()
         : Promise.resolve({ data: null }),

@@ -48,7 +48,7 @@ const STAGE_COLORS = ["#22D3EE", "#38BDF8", "#A78BFA", "#F97316", "#F43F5E", "#1
 export default function AdminSettingsPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { profile, loading: authLoading, can } = useAuth()
+  const { profile, loading: authLoading, can, role } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [savingGeneral, setSavingGeneral] = useState(false)
@@ -60,9 +60,16 @@ export default function AdminSettingsPage() {
   const [templateItems, setTemplateItems] = useState<Record<string, DocumentTemplateItem[]>>({})
   const [newTemplateName, setNewTemplateName] = useState("")
   const [newTemplateType, setNewTemplateType] = useState<"sale" | "rent" | "other">("sale")
+  const normalizedRoleName = role?.name?.toLowerCase() ?? ""
+  const canManageSettings =
+    can("can_manage_users") ||
+    normalizedRoleName.includes("director") ||
+    normalizedRoleName.includes("gerente") ||
+    normalizedRoleName.includes("admin") ||
+    (role?.level ?? 99) <= 2
 
   useEffect(() => {
-    if (!authLoading && !can("can_manage_users")) {
+    if (!authLoading && !canManageSettings) {
       router.push("/pipeline")
       return
     }
@@ -113,7 +120,7 @@ export default function AdminSettingsPage() {
 
       return () => window.clearTimeout(timeoutId)
     }
-  }, [authLoading, can, profile?.company_id, router, supabase])
+  }, [authLoading, canManageSettings, profile?.company_id, router, supabase])
 
   async function saveGeneralSettings() {
     if (!company) return

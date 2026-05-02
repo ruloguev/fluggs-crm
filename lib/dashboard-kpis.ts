@@ -7,7 +7,7 @@ export type LeadKpi = {
   id: string
   owner_id: string | null
   stage_id: string | null
-  budget_max: number | null
+  budget_max?: number | null
   last_activity_at: string | null
   created_at?: string
 }

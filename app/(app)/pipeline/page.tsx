@@ -47,8 +47,8 @@ function LeadCard({ lead, index }: { lead: Lead; index: number }) {
           className={`p-4 rounded-xl border shadow-sm transition-all select-none cursor-grab active:cursor-grabbing ${
             snapshot.isDragging
               ? "bg-zinc-800 border-zinc-600 shadow-xl shadow-black/50 scale-[1.02] rotate-1"
-              : stale ? "bg-zinc-900 border-amber-500/20 hover:border-amber-500/40"
-              : "bg-zinc-900 border-zinc-800/50 hover:border-zinc-700"
+              : stale ? "bg-zinc-950/95 border-amber-500/35 hover:border-amber-500/50 shadow-black/20"
+              : "bg-zinc-950/95 border-zinc-800/70 hover:border-zinc-600 shadow-black/15"
           }`}
           onClick={() => !snapshot.isDragging && router.push(`/leads/${lead.id}`)}
         >
@@ -77,14 +77,14 @@ function LeadCard({ lead, index }: { lead: Lead; index: number }) {
             <div className="flex gap-1.5">
               {lead.contact.phone && (
                 <a href={`tel:${lead.contact.phone}`} onClick={e=>e.stopPropagation()}
-                  className="p-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all">
+                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all">
                   <Phone className="w-3.5 h-3.5" />
                 </a>
               )}
               {lead.contact.phone && (
                 <a href={`https://wa.me/${lead.contact.phone?.replace(/\D/g,'')}`} target="_blank"
                   onClick={e=>e.stopPropagation()}
-                  className="p-1.5 rounded-lg bg-zinc-800/50 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all">
+                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all">
                   <MessageCircle className="w-3.5 h-3.5" />
                 </a>
               )}
@@ -176,7 +176,7 @@ export default function PipelinePage() {
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
                         <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{stage.name}</span>
-                        <span className="text-xs text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
+                        <span className="text-xs text-zinc-600 bg-zinc-900/75 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
                       </div>
                       <button className="text-zinc-600 hover:text-zinc-300 p-1" onClick={() => router.push("/contactos?new=1")}><Plus className="w-3.5 h-3.5" /></button>
                     </div>
@@ -186,8 +186,8 @@ export default function PipelinePage() {
                         <div {...provided.droppableProps} ref={provided.innerRef}
                           className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
                             snapshot.isDraggingOver
-                              ? "bg-zinc-800/40 border-flugzz-accent/30"
-                              : "bg-zinc-900/20 border-zinc-800/30"
+                              ? "bg-zinc-800/55 border-flugzz-accent/35"
+                              : "bg-zinc-900/40 border-zinc-800/45"
                           }`}>
                           {stageLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}
                           {provided.placeholder}
@@ -209,7 +209,7 @@ export default function PipelinePage() {
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-zinc-500" />
                       <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Sin etapa</span>
-                      <span className="text-xs text-zinc-600 bg-zinc-900/60 px-1.5 py-0.5 rounded-full">{unassignedLeads.length}</span>
+                      <span className="text-xs text-zinc-600 bg-zinc-900/75 px-1.5 py-0.5 rounded-full">{unassignedLeads.length}</span>
                     </div>
                   </div>
                   <Droppable droppableId="__unassigned__">
@@ -219,8 +219,8 @@ export default function PipelinePage() {
                         ref={provided.innerRef}
                         className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
                           snapshot.isDraggingOver
-                            ? "bg-zinc-800/40 border-flugzz-accent/30"
-                            : "bg-zinc-900/20 border-zinc-800/30"
+                            ? "bg-zinc-800/55 border-flugzz-accent/35"
+                            : "bg-zinc-900/40 border-zinc-800/45"
                         }`}
                       >
                         {unassignedLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}

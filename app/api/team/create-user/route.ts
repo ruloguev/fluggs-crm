@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey)
-    const { email, password, fullName, roleId, companyId } = await req.json()
+    const { email, password, fullName, roleId, companyId, reportsTo } = await req.json()
 
     if (!email || !password || !fullName || !companyId) {
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const { error: membershipError } = await adminClient.from("team_memberships").upsert({
       company_id: companyId,
       user_id: userId,
-      reports_to: null,
+      reports_to: reportsTo ?? null,
     })
 
     if (membershipError) {

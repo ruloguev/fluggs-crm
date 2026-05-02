@@ -8,6 +8,25 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
+    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "El asistente no está configurado en el servidor. Añade ANTHROPIC_API_KEY en las variables de entorno del deploy (p. ej. Vercel).",
+        },
+        { status: 503 },
+      )
+    }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+      return NextResponse.json(
+        {
+          error:
+            "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor. Es necesaria para la base de conocimiento.",
+        },
+        { status: 503 },
+      )
+    }
+
     const { message, companyId, history = [] } = await req.json()
     if (!message || !companyId)
       return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 })
@@ -43,6 +62,9 @@ BASE DE CONOCIMIENTO:
 ${contextText}`
       : `Eres el asistente de ventas de esta inmobiliaria. Aún no hay documentos cargados en la base de conocimiento. Indica que el administrador debe cargar documentos en Ajustes → Asistente IA. Puedes ayudar con preguntas generales de ventas inmobiliarias. Responde en español.`
 
+    const model =
+      process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514"
+
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -51,7 +73,7 @@ ${contextText}`
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model,
         max_tokens: 1024,
         system: systemPrompt,
         messages: [

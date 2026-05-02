@@ -91,7 +91,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     : "??"
 
   const Sidebar = () => (
-    <aside className="flex flex-col h-full w-60 bg-zinc-950/80 border-r border-zinc-800/60 backdrop-blur-xl">
+    <aside className="flex flex-col h-full w-60 bg-zinc-950/86 border-r border-zinc-800/60 backdrop-blur-xl">
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-zinc-800/60 shrink-0">
         <FlugzzIsotipo className="w-7 h-7 mr-3" />
@@ -182,7 +182,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-800/60 bg-zinc-950/60 backdrop-blur-md sticky top-0 z-10 shrink-0">
+        <header className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-800/60 bg-zinc-950/70 backdrop-blur-md sticky top-0 z-10 shrink-0">
           <button className="md:hidden p-2 -ml-2 text-zinc-400 hover:text-zinc-100"
             onClick={() => setMobileOpen(true)}>
             <Menu className="w-5 h-5" />
@@ -192,7 +192,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
               <input type="text" placeholder="Buscar leads, contactos..."
-                className="w-full bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-9 pr-4 py-1.5 text-sm text-zinc-300 outline-none focus:border-zinc-700 placeholder:text-zinc-600 transition-colors" />
+                className="w-full bg-zinc-900/70 border border-zinc-800/60 rounded-full pl-9 pr-4 py-1.5 text-sm text-zinc-300 outline-none focus:border-zinc-700 placeholder:text-zinc-600 transition-colors" />
             </div>
           </div>
 

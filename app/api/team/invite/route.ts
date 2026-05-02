@@ -19,9 +19,10 @@ export async function POST(req: NextRequest) {
     if (!email || !fullName || !companyId)
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
 
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "")
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { full_name: fullName, company_id: companyId, role_id: roleId ?? null },
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/login`,
+      redirectTo: `${appUrl}/auth/callback`,
     })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })

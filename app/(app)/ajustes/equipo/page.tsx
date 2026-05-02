@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import {
   UserPlus, Mail, Shield, ChevronDown, Check, X,
   Loader2, MoreHorizontal, UserX, UserCheck,
-  Copy, AlertCircle, Users, Edit2, Trash2
+  Copy, AlertCircle, Users, Edit2, Trash2, KeyRound,
 } from "lucide-react"
 
 type Role = { id: string; name: string; level: number; color: string }
@@ -133,7 +133,9 @@ function InviteSheet({ roles, companyId, onClose, onInvited }: {
             </div>
             <div>
               <p className="text-zinc-100 font-medium">Invitación enviada</p>
-              <p className="text-zinc-500 text-sm mt-1">{email} recibirá un email con instrucciones.</p>
+              <p className="text-zinc-500 text-sm mt-1">
+                {email} recibirá un correo. Al abrir el enlace, se validará el acceso y entrará al CRM (URL de retorno: /auth/callback).
+              </p>
             </div>
             {inviteLink && (
               <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-left">
@@ -189,6 +191,175 @@ function InviteSheet({ roles, companyId, onClose, onInvited }: {
             <button onClick={sendInvite} disabled={sending}
               className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-medium disabled:opacity-40 hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2">
               {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</> : <><Mail className="w-4 h-4" /> Enviar invitación</>}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ── Create user with password (admin) ──────────────────────────
+function CreateUserSheet({ roles, companyId, onClose, onCreated }: {
+  roles: Role[]
+  companyId: string
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [email, setEmail] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [roleId, setRoleId] = useState<string>(roles[roles.length - 1]?.id ?? "")
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  async function submit() {
+    if (!email.trim() || !fullName.trim()) {
+      setError("Completa nombre y email")
+      return
+    }
+    if (password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres")
+      return
+    }
+    if (password !== confirm) {
+      setError("Las contraseñas no coinciden")
+      return
+    }
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/team/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          fullName: fullName.trim(),
+          password,
+          roleId: roleId || null,
+          companyId,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(data?.error ?? "Error al crear usuario")
+        setSending(false)
+        return
+      }
+      setDone(true)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error inesperado")
+    }
+    setSending(false)
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 pb-8 md:max-w-md md:left-1/2 md:-translate-x-1/2 md:rounded-2xl md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:border max-h-[90vh] overflow-y-auto">
+        <div className="w-10 h-1 bg-zinc-800 rounded-full mx-auto mb-5 md:hidden" />
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-zinc-100 font-medium text-lg">Crear usuario y contraseña</h3>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="text-center space-y-4 py-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
+              <Check className="w-7 h-7 text-emerald-400" />
+            </div>
+            <p className="text-zinc-100 font-medium">Usuario creado</p>
+            <p className="text-zinc-500 text-sm">
+              Puedes compartir el correo y la contraseña por un canal seguro. El usuario puede iniciar sesión de inmediato.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onCreated()
+                onClose()
+              }}
+              className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-2.5 text-sm font-medium hover:bg-zinc-200"
+            >
+              Listo
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <input
+              autoFocus
+              placeholder="Nombre completo"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
+            />
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
+            />
+            <input
+              type="password"
+              placeholder="Contraseña (mín. 8 caracteres)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
+            />
+            <input
+              type="password"
+              placeholder="Confirmar contraseña"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
+            />
+            <div>
+              <p className="text-xs text-zinc-500 mb-2">Rol asignado</p>
+              <div className="flex flex-wrap gap-2">
+                {roles.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setRoleId(r.id)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs border transition-all ${
+                      roleId === r.id ? "text-zinc-900 font-medium border-transparent" : "text-zinc-400 border-zinc-800 hover:border-zinc-700"
+                    }`}
+                    style={roleId === r.id ? { backgroundColor: r.color } : {}}
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: roleId === r.id ? "#fff" : r.color }}
+                    />
+                    {r.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={sending}
+              className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-medium disabled:opacity-40 hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Creando…
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4" /> Crear usuario
+                </>
+              )}
             </button>
           </div>
         )}
@@ -283,7 +454,7 @@ function MemberRow({ member, roles, onRoleChange, onToggleActive, onEdit, onDele
 
   return (
     <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-      member.is_active ? "bg-zinc-900/30 border-zinc-800/40 hover:border-zinc-700/60" : "bg-zinc-950/40 border-zinc-800/20 opacity-50"
+      member.is_active ? "bg-zinc-900/50 border-zinc-800/40 hover:border-zinc-700/60" : "bg-zinc-950/50 border-zinc-800/20 opacity-50"
     }`}>
       <Avatar name={member.full_name} />
 
@@ -355,6 +526,7 @@ export default function EquipoPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [showCreateUser, setShowCreateUser] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [deletingMember, setDeletingMember] = useState<Member | null>(null)
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("active")
@@ -469,10 +641,22 @@ export default function EquipoPage() {
           </h1>
           <p className="text-sm text-zinc-400 mt-1">{activeCount} usuarios activos</p>
         </div>
-        <button onClick={() => setShowInvite(true)}
-          className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-200 transition-colors shrink-0">
-          <UserPlus className="w-4 h-4" /> Invitar
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowCreateUser(true)}
+            className="flex items-center gap-2 border border-zinc-700 bg-zinc-900/85 text-zinc-100 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-800 hover:border-zinc-600 transition-colors"
+          >
+            <KeyRound className="w-4 h-4" /> Crear usuario
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-200 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" /> Invitar
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -556,6 +740,15 @@ export default function EquipoPage() {
         <InviteSheet roles={roles} companyId={profile.company_id}
           onClose={() => setShowInvite(false)}
           onInvited={() => { setShowInvite(false); loadData() }} />
+      )}
+
+      {showCreateUser && profile?.company_id && (
+        <CreateUserSheet
+          roles={roles}
+          companyId={profile.company_id}
+          onClose={() => setShowCreateUser(false)}
+          onCreated={() => { setShowCreateUser(false); loadData() }}
+        />
       )}
 
       {editingMember && (

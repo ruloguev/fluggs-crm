@@ -116,7 +116,7 @@ function MetricCard({
   accentClass: string
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-5 backdrop-blur-xl">
+    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5 backdrop-blur-xl">
       <div className="flex items-start justify-between gap-3">
         <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${accentClass}`}>
           <Icon className="w-5 h-5" />
@@ -142,7 +142,7 @@ function BarList({
 }) {
   const max = Math.max(...items.map((item) => item.value), 1)
   return (
-    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
+    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
       <div className="mb-5">
         <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
         <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
@@ -180,14 +180,14 @@ function ActorGrid({
   currency: string
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
+    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
       <div className="mb-5">
         <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
         <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {cards.map((card) => (
-          <div key={card.id} className="rounded-2xl border border-zinc-800/60 bg-zinc-950/70 p-4">
+          <div key={card.id} className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-base font-medium text-zinc-100">{card.name}</p>
@@ -225,7 +225,7 @@ function ActorGrid({
 
 function SignalsPanel({ activities }: { activities: ActivityRecord[] }) {
   return (
-    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
+    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
       <h2 className="text-lg font-semibold text-zinc-100 mb-5">Señales recientes</h2>
       <div className="space-y-4">
         {activities.map((activity) => (
@@ -482,7 +482,7 @@ export default function DashboardPage() {
           <p className="text-sm text-zinc-400 mt-2 max-w-2xl">{perspectiveDescription}</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 px-4 py-3 backdrop-blur-xl">
+        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 px-4 py-3 backdrop-blur-xl">
           <p className="text-xs uppercase tracking-[0.22em] text-zinc-600">Alcance actual</p>
           <p className="text-sm text-zinc-200 mt-1">{scopeUserIds.length} usuarios en este panel</p>
         </div>
@@ -518,7 +518,7 @@ export default function DashboardPage() {
           )}
 
           {mode === "marketing" && (
-            <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
+            <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-100">Integraciones y captación</h2>
@@ -530,7 +530,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 mt-5">
-                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/70 p-4">
+                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl border border-blue-500/20 bg-blue-500/10 flex items-center justify-center">
                       <Cable className="w-5 h-5 text-blue-300" />
@@ -544,7 +544,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/70 p-4">
+                <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-center">
                       <TrendingUp className="w-5 h-5 text-emerald-300" />
@@ -572,7 +572,7 @@ export default function DashboardPage() {
             accent="bg-gradient-to-r from-emerald-500 to-teal-400"
           />
 
-          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
+          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl border border-zinc-800 bg-zinc-950 flex items-center justify-center">
                 {mode === "marketing" ? <Cable className="w-5 h-5 text-zinc-300" /> : mode === "director" ? <Building2 className="w-5 h-5 text-zinc-300" /> : mode === "coordinador" ? <Users className="w-5 h-5 text-zinc-300" /> : <PhoneOutgoing className="w-5 h-5 text-zinc-300" />}

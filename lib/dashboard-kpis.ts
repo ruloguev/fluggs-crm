@@ -49,7 +49,7 @@ export function conversionPercent(leads: LeadKpi[], closedWonStageIds: string[])
  */
 export function contactacionPercent(
   leads: LeadKpi[],
-  activities: ActivityKpi[],
+  activities: ActivityKpi[] = [],
   dayWindow = 7,
 ): number {
   if (leads.length === 0) return 0
@@ -74,7 +74,7 @@ export function contactacionPercent(
 /** % de miembros del equipo que loguearon actividad en los últimos N días */
 export function coberturaEquipoPercent(
   teamIds: string[],
-  activities: ActivityKpi[],
+  activities: ActivityKpi[] = [],
   dayWindow = 7,
   snapshotAt = Date.now(),
 ): number {
@@ -93,7 +93,7 @@ export function coberturaEquipoPercent(
 /** % de leads abiertos con 2+ actividades en últimos 14 días */
 export function eficienciaPercent(
   leads: LeadKpi[],
-  activities: ActivityKpi[],
+  activities: ActivityKpi[] = [],
   closedWonStageIds: string[],
   snapshotAt = Date.now(),
 ): number {

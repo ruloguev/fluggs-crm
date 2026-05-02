@@ -13,120 +13,66 @@ import {
   contactacionPercent,
   conversionPercent,
   getClosedWonStageIds,
+  coberturaEquipoPercent,
+  eficienciaPercent,
+  velocidadPipelinePercent,
+  type LeadKpi,
+  type ActivityKpi,
+  type StageKpi,
 } from "@/lib/dashboard-kpis"
 
 type PermissionMap = Record<string, boolean>
 
 type RoleRecord = {
-  id: string
-  name: string
-  level: number
-  color: string
-  permissions: PermissionMap
+  id: string; name: string; level: number; color: string; permissions: PermissionMap
 }
-
 type ProfileRecord = {
-  id: string
-  full_name: string
-  email: string | null
-  is_active: boolean
-  role_id: string | null
-  role: RoleRecord | null
-  team_memberships: { reports_to: string | null }[] | null
+  id: string; full_name: string; email: string | null; is_active: boolean; role_id: string | null
+  role: RoleRecord | null; team_memberships: { reports_to: string | null }[] | null
 }
-
-type LeadRecord = {
-  id: string
-  owner_id: string | null
-  source_id: string | null
-  stage_id: string | null
-  budget_max: number | null
-  currency: string | null
-  created_at: string
-  last_activity_at: string | null
-}
-
-type ActivityRecord = {
-  id: string
-  user_id: string | null
-  type: string
-  title: string | null
-  body: string | null
-  created_at: string
-}
-
+type LeadRecord = LeadKpi & { source_id: string | null; currency: string | null }
+type ActivityRecord = ActivityKpi & { title: string | null; body: string | null }
 type SourceRecord = { id: string; name: string }
-type StageRecord = { id: string; name: string; color: string | null; is_closed: boolean }
+type StageRecord = StageKpi & { color: string | null; position?: number }
 type IntegrationRecord = { page_id: string; page_name: string | null; is_active: boolean; last_synced_at: string | null }
 type CompanyRecord = { default_currency: string | null }
 
-type ScopeMetrics = {
-  leadCount: number
-  staleCount: number
-  activities7d: number
-  projectedValue: number
-}
-
+type ScopeMetrics = { leadCount: number; staleCount: number; activities7d: number; projectedValue: number }
 type ActorCard = {
-  id: string
-  name: string
-  roleName: string
-  leadCount: number
-  staleCount: number
-  activities7d: number
-  projectedValue: number
-  topSource: string
+  id: string; name: string; roleName: string; leadCount: number; staleCount: number
+  activities7d: number; projectedValue: number; topSource: string
 }
-
 type DashboardMode = "director" | "gerente" | "coordinador" | "marketing" | "agente"
 
 function formatCurrency(amount: number, currency = "MXN") {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount)
 }
 
 function timeAgo(dateString: string) {
-  const diffInSeconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
-  if (diffInSeconds < 60) return "Hace un momento"
-  const diffInMinutes = Math.floor(diffInSeconds / 60)
-  if (diffInMinutes < 60) return `Hace ${diffInMinutes} min`
-  const diffInHours = Math.floor(diffInMinutes / 60)
-  if (diffInHours < 24) return `Hace ${diffInHours} horas`
-  return `Hace ${Math.floor(diffInHours / 24)} días`
+  const diff = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
+  if (diff < 60) return "Hace un momento"
+  if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`
+  if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} horas`
+  return `Hace ${Math.floor(diff / 86400)} días`
 }
 
 function getDashboardMode(roleName: string, permissions: PermissionMap | undefined): DashboardMode {
-  const normalized = roleName.toLowerCase()
-  if (normalized.includes("director")) return "director"
-  if (normalized.includes("gerente")) return "gerente"
-  if (normalized.includes("coordin")) return "coordinador"
-  if (normalized.includes("mkt") || normalized.includes("marketing")) return "marketing"
+  const n = roleName.toLowerCase()
+  if (n.includes("director")) return "director"
+  if (n.includes("gerente")) return "gerente"
+  if (n.includes("coordin")) return "coordinador"
+  if (n.includes("mkt") || n.includes("marketing")) return "marketing"
   if (permissions?.is_transversal) return "director"
   return "agente"
 }
 
-function MetricCard({
-  icon: Icon,
-  title,
-  value,
-  hint,
-  accentClass,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  value: string
-  hint: string
-  accentClass: string
+function MetricCard({ icon: Icon, title, value, hint, accentClass }: {
+  icon: React.ComponentType<{ className?: string }>; title: string; value: string; hint: string; accentClass: string
 }) {
   return (
     <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5 backdrop-blur-xl">
       <div className="flex items-start justify-between gap-3">
-        <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${accentClass}`}>
-          <Icon className="w-5 h-5" />
-        </div>
+        <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center ${accentClass}`}><Icon className="w-5 h-5" /></div>
         <span className="text-[10px] uppercase tracking-[0.24em] text-zinc-600">{hint}</span>
       </div>
       <p className="text-sm text-zinc-400 mt-4">{title}</p>
@@ -135,37 +81,18 @@ function MetricCard({
   )
 }
 
-function BarList({
-  title,
-  subtitle,
-  items,
-  accent,
-}: {
-  title: string
-  subtitle: string
-  items: { label: string; value: number; helper?: string }[]
-  accent: string
+function BarList({ title, subtitle, items, accent }: {
+  title: string; subtitle: string; items: { label: string; value: number; helper?: string }[]; accent: string
 }) {
-  const max = Math.max(...items.map((item) => item.value), 1)
+  const max = Math.max(...items.map(i => i.value), 1)
   return (
     <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
-        <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
-      </div>
+      <div className="mb-5"><h2 className="text-lg font-semibold text-zinc-100">{title}</h2><p className="text-sm text-zinc-500 mt-1">{subtitle}</p></div>
       <div className="space-y-4">
-        {items.map((item) => (
+        {items.map(item => (
           <div key={item.label}>
-            <div className="flex items-center justify-between gap-3 mb-2 text-sm">
-              <span className="text-zinc-300">{item.label}</span>
-              <span className="text-zinc-500">{item.helper ?? item.value}</span>
-            </div>
-            <div className="h-2 rounded-full bg-zinc-800/70 overflow-hidden">
-              <div
-                className={`h-full rounded-full ${accent}`}
-                style={{ width: `${(item.value / max) * 100}%` }}
-              />
-            </div>
+            <div className="flex items-center justify-between gap-3 mb-2 text-sm"><span className="text-zinc-300">{item.label}</span><span className="text-zinc-500">{item.helper ?? item.value}</span></div>
+            <div className="h-2 rounded-full bg-zinc-800/70 overflow-hidden"><div className={`h-full rounded-full ${accent}`} style={{ width: `${(item.value / max) * 100}%` }} /></div>
           </div>
         ))}
         {items.length === 0 && <p className="text-sm text-zinc-600">Sin datos suficientes todavía.</p>}
@@ -174,56 +101,33 @@ function BarList({
   )
 }
 
-function ActorGrid({
-  title,
-  subtitle,
-  cards,
-  currency,
-}: {
-  title: string
-  subtitle: string
-  cards: ActorCard[]
-  currency: string
+function ActorGrid({ title, subtitle, cards, currency }: {
+  title: string; subtitle: string; cards: ActorCard[]; currency: string
 }) {
   return (
     <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
-        <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {cards.map((card) => (
-          <div key={card.id} className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-base font-medium text-zinc-100">{card.name}</p>
-                <p className="text-xs uppercase tracking-[0.2em] text-zinc-600 mt-1">{card.roleName}</p>
+      <div className="mb-5"><h2 className="text-lg font-semibold text-zinc-100">{title}</h2><p className="text-sm text-zinc-500 mt-1">{subtitle}</p></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {cards.map(card => (
+          <div key={card.id} className="rounded-xl border border-zinc-800/40 bg-zinc-950/60 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-xs font-bold text-zinc-300 shrink-0">
+                {card.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
               </div>
-              <span className="rounded-full border border-zinc-800 px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500">
-                {card.topSource}
-              </span>
+              <div className="min-w-0"><p className="text-sm font-medium text-zinc-200 truncate">{card.name}</p><p className="text-xs text-zinc-600">{card.roleName}</p></div>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
-              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800 p-3">
-                <p className="text-zinc-500">Leads</p>
-                <p className="text-xl font-semibold text-zinc-100 mt-1">{card.leadCount}</p>
-              </div>
-              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800 p-3">
-                <p className="text-zinc-500">Actividad 7d</p>
-                <p className="text-xl font-semibold text-zinc-100 mt-1">{card.activities7d}</p>
-              </div>
-              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800 p-3">
-                <p className="text-zinc-500">Sin seguimiento</p>
-                <p className="text-xl font-semibold text-amber-300 mt-1">{card.staleCount}</p>
-              </div>
-              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800 p-3">
-                <p className="text-zinc-500">Valor</p>
-                <p className="text-base font-semibold text-zinc-100 mt-1">{formatCurrency(card.projectedValue, currency)}</p>
-              </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div><p className="text-lg font-semibold text-zinc-100">{card.leadCount}</p><p className="text-[10px] text-zinc-600 uppercase tracking-wider">leads</p></div>
+              <div><p className={`text-lg font-semibold ${card.staleCount > 0 ? "text-amber-400" : "text-zinc-100"}`}>{card.staleCount}</p><p className="text-[10px] text-zinc-600 uppercase tracking-wider">estancados</p></div>
+              <div><p className="text-lg font-semibold text-cyan-400">{card.activities7d}</p><p className="text-[10px] text-zinc-600 uppercase tracking-wider">actividad</p></div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-zinc-800/60 flex items-center justify-between">
+              <span className="text-xs text-zinc-500">{card.topSource}</span>
+              <span className="text-xs text-emerald-400">{formatCurrency(card.projectedValue, currency)}</span>
             </div>
           </div>
         ))}
-        {cards.length === 0 && <p className="text-sm text-zinc-600">Todavía no hay equipos asignados a este nivel.</p>}
+        {cards.length === 0 && <p className="col-span-2 text-sm text-zinc-600">Sin equipos configurados en este nivel.</p>}
       </div>
     </div>
   )
@@ -234,7 +138,7 @@ function SignalsPanel({ activities }: { activities: ActivityRecord[] }) {
     <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
       <h2 className="text-lg font-semibold text-zinc-100 mb-5">Señales recientes</h2>
       <div className="space-y-4">
-        {activities.map((activity) => (
+        {activities.map(activity => (
           <div key={activity.id} className="flex gap-3">
             <div className="mt-1 w-3 h-3 rounded-full bg-flugzz-accent/80 shadow-[0_0_12px_rgba(34,211,238,0.5)]" />
             <div>
@@ -250,9 +154,40 @@ function SignalsPanel({ activities }: { activities: ActivityRecord[] }) {
   )
 }
 
+// ── KPI Donuts por modo ────────────────────────────────────────
+type DonutConfig = {
+  percent: number
+  label: string
+  subtitle: string
+  variant: "cyan" | "emerald" | "violet" | "amber"
+}
+
+function KpiDonuts({ donuts }: { donuts: DonutConfig[] }) {
+  // Size decreases slightly when showing more donuts
+  const size = donuts.length <= 2 ? 160 : donuts.length === 3 ? 145 : 130
+  return (
+    <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">Rendimiento comercial</h2>
+          <p className="text-xs text-zinc-500 mt-1">Llamadas sin respuesta cuentan como intento de contactación.</p>
+        </div>
+      </div>
+      <div className={`grid gap-6 ${donuts.length <= 2 ? "grid-cols-2" : donuts.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
+        {donuts.map(d => (
+          <div key={d.label} className="flex justify-center">
+            <NeonDonut percent={d.percent} label={d.label} subtitle={d.subtitle} variant={d.variant} size={size} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), [])
-  const { profile, role, loading: authLoading } = useAuth()
+  const { profile, role, can, loading: authLoading } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [profiles, setProfiles] = useState<ProfileRecord[]>([])
@@ -267,53 +202,20 @@ export default function DashboardPage() {
   useEffect(() => {
     const companyId = profile?.company_id
     if (!companyId) return
-
     let cancelled = false
+
     async function loadDashboard() {
       setLoading(true)
-
       const [{ data: profileRows }, { data: leadRows }, { data: activityRows }, { data: sourceRows }, { data: stageRows }, { data: integrationRow }, { data: companyRow }] =
         await Promise.all([
-          supabase
-            .from("profiles")
-            .select(`
-              id, full_name, email, is_active, role_id,
-              role:roles(id, name, level, color, permissions),
-              team_memberships(reports_to)
-            `)
-            .eq("company_id", companyId)
-            .eq("is_active", true),
-          supabase
-            .from("leads")
-            .select("id, owner_id, source_id, stage_id, budget_max, currency, created_at, last_activity_at")
-            .eq("company_id", companyId),
-          supabase
-            .from("activities")
-            .select("id, user_id, type, title, body, created_at")
-            .eq("company_id", companyId)
-            .order("created_at", { ascending: false })
-            .limit(80),
-          supabase
-            .from("lead_sources")
-            .select("id, name")
-            .eq("company_id", companyId),
-          supabase
-            .from("pipeline_stages")
-            .select("id, name, color, is_closed")
-            .eq("company_id", companyId)
-            .order("position"),
-          supabase
-            .from("facebook_integrations")
-            .select("page_id, page_name, is_active, last_synced_at")
-            .eq("company_id", companyId)
-            .single(),
-          supabase
-            .from("companies")
-            .select("default_currency")
-            .eq("id", companyId)
-            .single(),
+          supabase.from("profiles").select(`id, full_name, email, is_active, role_id, role:roles(id, name, level, color, permissions), team_memberships(reports_to)`).eq("company_id", companyId).eq("is_active", true),
+          supabase.from("leads").select("id, owner_id, source_id, stage_id, budget_max, currency, created_at, last_activity_at").eq("company_id", companyId),
+          supabase.from("activities").select("id, user_id, lead_id, type, call_status, title, body, created_at").eq("company_id", companyId).order("created_at", { ascending: false }).limit(300),
+          supabase.from("lead_sources").select("id, name").eq("company_id", companyId),
+          supabase.from("pipeline_stages").select("id, name, color, is_closed, position").eq("company_id", companyId).order("position"),
+          supabase.from("facebook_integrations").select("page_id, page_name, is_active, last_synced_at").eq("company_id", companyId).single(),
+          supabase.from("companies").select("default_currency").eq("id", companyId).single(),
         ])
-
       if (cancelled) return
       setProfiles((profileRows as ProfileRecord[] | null) ?? [])
       setLeads((leadRows as LeadRecord[] | null) ?? [])
@@ -335,18 +237,16 @@ export default function DashboardPage() {
 
   const reportsToMap = useMemo(() => {
     const map = new Map<string, string | null>()
-    profiles.forEach((item) => {
-      map.set(item.id, item.team_memberships?.[0]?.reports_to ?? null)
-    })
+    profiles.forEach(p => map.set(p.id, p.team_memberships?.[0]?.reports_to ?? null))
     return map
   }, [profiles])
 
   const reportsByLeader = useMemo(() => {
     const map = new Map<string, string[]>()
-    profiles.forEach((item) => {
-      const managerId = reportsToMap.get(item.id)
-      if (!managerId) return
-      map.set(managerId, [...(map.get(managerId) ?? []), item.id])
+    profiles.forEach(p => {
+      const mgr = reportsToMap.get(p.id)
+      if (!mgr) return
+      map.set(mgr, [...(map.get(mgr) ?? []), p.id])
     })
     return map
   }, [profiles, reportsToMap])
@@ -363,151 +263,140 @@ export default function DashboardPage() {
     return collected
   }, [reportsByLeader])
 
-  const scopeUserIds = (() => {
+  const scopeUserIds = useMemo(() => {
     if (!profile?.id) return []
-    if (mode === "director" || mode === "marketing") return profiles.map((item) => item.id)
+    if (mode === "director" || mode === "marketing") return profiles.map(p => p.id)
     if (mode === "gerente") return [profile.id, ...getDescendants(profile.id)]
     if (mode === "coordinador") return [profile.id, ...(reportsByLeader.get(profile.id) ?? [])]
     return [profile.id]
-  })()
+  }, [mode, profile?.id, profiles, getDescendants, reportsByLeader])
 
   const scopeLeadRecords = useMemo(
-    () => leads.filter((lead) => lead.owner_id && scopeUserIds.includes(lead.owner_id)),
-    [leads, scopeUserIds]
+    () => leads.filter(l => l.owner_id && scopeUserIds.includes(l.owner_id)),
+    [leads, scopeUserIds],
   )
 
   const scopeActivities = useMemo(
-    () => activities.filter((activity) => activity.user_id && scopeUserIds.includes(activity.user_id)).slice(0, 8),
-    [activities, scopeUserIds]
+    () => activities.filter(a => a.user_id && scopeUserIds.includes(a.user_id)),
+    [activities, scopeUserIds],
   )
 
   const scopeMetrics = useMemo<ScopeMetrics>(() => {
-    const now = snapshotAt
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
+    const sevenDaysAgo = snapshotAt - 7 * 24 * 60 * 60 * 1000
     return {
       leadCount: scopeLeadRecords.length,
-      staleCount: scopeLeadRecords.filter((lead) => {
-        if (!lead.last_activity_at) return true
-        return now - new Date(lead.last_activity_at).getTime() > 3 * 24 * 60 * 60 * 1000
-      }).length,
-      activities7d: scopeActivities.filter((activity) => new Date(activity.created_at).getTime() >= sevenDaysAgo).length,
-      projectedValue: scopeLeadRecords.reduce((sum, lead) => sum + Number(lead.budget_max || 0), 0),
+      staleCount: scopeLeadRecords.filter(l => !l.last_activity_at || snapshotAt - new Date(l.last_activity_at).getTime() > 3 * 24 * 60 * 60 * 1000).length,
+      activities7d: scopeActivities.filter(a => new Date(a.created_at).getTime() >= sevenDaysAgo).length,
+      projectedValue: scopeLeadRecords.reduce((s, l) => s + Number(l.budget_max || 0), 0),
     }
   }, [scopeActivities, scopeLeadRecords, snapshotAt])
 
   const wonStageIds = useMemo(() => getClosedWonStageIds(stages), [stages])
+  const firstStageId = stages[0]?.id ?? null
 
-  const conversionPct = useMemo(
-    () => conversionPercent(scopeLeadRecords, wonStageIds),
-    [scopeLeadRecords, wonStageIds],
-  )
+  const conversionPct = useMemo(() => conversionPercent(scopeLeadRecords, wonStageIds), [scopeLeadRecords, wonStageIds])
+  const contactacionPct = useMemo(() => contactacionPercent(scopeLeadRecords, scopeActivities), [scopeLeadRecords, scopeActivities])
+  const wonCount = useMemo(() => scopeLeadRecords.filter(l => l.stage_id && wonStageIds.includes(l.stage_id)).length, [scopeLeadRecords, wonStageIds])
 
-  const contactacionPct = useMemo(
-    () => contactacionPercent(scopeLeadRecords),
-    [scopeLeadRecords],
-  )
+  // KPIs extra — solo se computan cuando aplican
+  const directReportIds = useMemo(() => reportsByLeader.get(profile?.id ?? "") ?? [], [reportsByLeader, profile?.id])
 
-  const wonCount = useMemo(
-    () =>
-      scopeLeadRecords.filter(
-        (l) => l.stage_id && wonStageIds.includes(l.stage_id),
-      ).length,
-    [scopeLeadRecords, wonStageIds],
-  )
+  const coberturaEquipoPct = useMemo(() => {
+    const teamIds = mode === "director" ? profiles.map(p => p.id) : mode === "gerente" ? getDescendants(profile?.id ?? "") : directReportIds
+    return coberturaEquipoPercent(teamIds, scopeActivities, 7, snapshotAt)
+  }, [mode, profiles, profile?.id, directReportIds, scopeActivities, snapshotAt, getDescendants])
 
-  const stageBars = useMemo(() => {
-    return stages.map((stage) => ({
-      label: stage.name,
-      value: scopeLeadRecords.filter((lead) => lead.stage_id === stage.id).length,
-      helper: `${scopeLeadRecords.filter((lead) => lead.stage_id === stage.id).length} leads`,
-    })).filter((item) => item.value > 0)
-  }, [scopeLeadRecords, stages])
+  const eficienciaPct = useMemo(() => eficienciaPercent(scopeLeadRecords, scopeActivities, wonStageIds, snapshotAt), [scopeLeadRecords, scopeActivities, wonStageIds, snapshotAt])
+  const velocidadPct = useMemo(() => velocidadPipelinePercent(scopeLeadRecords, firstStageId, snapshotAt), [scopeLeadRecords, firstStageId, snapshotAt])
 
-  const sourceBars = useMemo(() => {
-    return sources.map((source) => ({
-      label: source.name,
-      value: scopeLeadRecords.filter((lead) => lead.source_id === source.id).length,
-      helper: `${scopeLeadRecords.filter((lead) => lead.source_id === source.id).length} captados`,
-    })).filter((item) => item.value > 0).sort((a, b) => b.value - a.value).slice(0, 6)
-  }, [scopeLeadRecords, sources])
+  // Build donuts config per mode
+  const donuts = useMemo<DonutConfig[]>(() => {
+    const base: DonutConfig[] = [
+      { percent: conversionPct, label: "Conversión", subtitle: `${wonCount} / ${scopeLeadRecords.length || 0} cerrados`, variant: "cyan" },
+      { percent: contactacionPct, label: "Contactación (7d)", subtitle: "Actividad o llamada registrada", variant: "emerald" },
+    ]
+    if (mode === "coordinador") {
+      base.push({ percent: coberturaEquipoPct, label: "Cobertura equipo", subtitle: "% agentes activos esta semana", variant: "violet" })
+    }
+    if (mode === "gerente") {
+      base.push({ percent: coberturaEquipoPct, label: "Cobertura equipo", subtitle: "% del equipo activo esta semana", variant: "violet" })
+      base.push({ percent: eficienciaPct, label: "Eficiencia (14d)", subtitle: "Leads con 2+ actividades recientes", variant: "amber" })
+    }
+    if (mode === "director") {
+      base.push({ percent: coberturaEquipoPct, label: "Cobertura total", subtitle: "% del equipo activo esta semana", variant: "violet" })
+      base.push({ percent: eficienciaPct, label: "Eficiencia (14d)", subtitle: "Leads con seguimiento sostenido", variant: "amber" })
+      base.push({ percent: velocidadPct, label: "Velocidad (30d)", subtitle: "Leads nuevos que ya avanzaron", variant: "cyan" })
+    }
+    return base
+  }, [mode, conversionPct, contactacionPct, coberturaEquipoPct, eficienciaPct, velocidadPct, wonCount, scopeLeadRecords.length])
+
+  const stageBars = useMemo(() => stages.map(s => ({
+    label: s.name, value: scopeLeadRecords.filter(l => l.stage_id === s.id).length,
+    helper: `${scopeLeadRecords.filter(l => l.stage_id === s.id).length} leads`,
+  })).filter(i => i.value > 0), [scopeLeadRecords, stages])
+
+  const sourceBars = useMemo(() => sources.map(s => ({
+    label: s.name, value: scopeLeadRecords.filter(l => l.source_id === s.id).length,
+    helper: `${scopeLeadRecords.filter(l => l.source_id === s.id).length} captados`,
+  })).filter(i => i.value > 0).sort((a, b) => b.value - a.value).slice(0, 6), [scopeLeadRecords, sources])
 
   const buildActorCard = useCallback((actorId: string): ActorCard | null => {
-    const actor = profiles.find((item) => item.id === actorId)
+    const actor = profiles.find(p => p.id === actorId)
     if (!actor) return null
-    const actorLeads = leads.filter((lead) => lead.owner_id === actorId)
-    const actorActivities = activities.filter((activity) => activity.user_id === actorId)
-    const topSourceId = actorLeads.reduce<Record<string, number>>((acc, lead) => {
-      if (!lead.source_id) return acc
-      acc[lead.source_id] = (acc[lead.source_id] ?? 0) + 1
+    const actorLeads = leads.filter(l => l.owner_id === actorId)
+    const actorActivities = activities.filter(a => a.user_id === actorId)
+    const topSourceId = actorLeads.reduce<Record<string, number>>((acc, l) => {
+      if (!l.source_id) return acc
+      acc[l.source_id] = (acc[l.source_id] ?? 0) + 1
       return acc
     }, {})
     const topSource = Object.entries(topSourceId).sort((a, b) => b[1] - a[1])[0]?.[0]
-    const sourceName = sources.find((source) => source.id === topSource)?.name ?? "Sin fuente"
     return {
-      id: actor.id,
-      name: actor.full_name,
-      roleName: actor.role?.name ?? "Sin rol",
+      id: actor.id, name: actor.full_name, roleName: actor.role?.name ?? "Sin rol",
       leadCount: actorLeads.length,
-      staleCount: actorLeads.filter((lead) => !lead.last_activity_at || snapshotAt - new Date(lead.last_activity_at).getTime() > 3 * 24 * 60 * 60 * 1000).length,
-      activities7d: actorActivities.filter((activity) => snapshotAt - new Date(activity.created_at).getTime() <= 7 * 24 * 60 * 60 * 1000).length,
-      projectedValue: actorLeads.reduce((sum, lead) => sum + Number(lead.budget_max || 0), 0),
-      topSource: sourceName,
+      staleCount: actorLeads.filter(l => !l.last_activity_at || snapshotAt - new Date(l.last_activity_at).getTime() > 3 * 24 * 60 * 60 * 1000).length,
+      activities7d: actorActivities.filter(a => snapshotAt - new Date(a.created_at).getTime() <= 7 * 24 * 60 * 60 * 1000).length,
+      projectedValue: actorLeads.reduce((s, l) => s + Number(l.budget_max || 0), 0),
+      topSource: sources.find(s => s.id === topSource)?.name ?? "Sin fuente",
     }
   }, [activities, leads, profiles, snapshotAt, sources])
 
   const actorCards = useMemo(() => {
-    const targetIds =
-      mode === "coordinador"
-        ? reportsByLeader.get(profile?.id ?? "") ?? []
-        : mode === "gerente"
-          ? reportsByLeader.get(profile?.id ?? "") ?? []
-          : mode === "director"
-            ? profiles.filter((item) => (reportsByLeader.get(item.id) ?? []).length > 0).map((item) => item.id)
-            : []
+    const targetIds = mode === "coordinador" ? directReportIds
+      : mode === "gerente" ? directReportIds
+      : mode === "director" ? profiles.filter(p => (reportsByLeader.get(p.id) ?? []).length > 0).map(p => p.id)
+      : []
+    return targetIds.map(id => buildActorCard(id)).filter((c): c is ActorCard => Boolean(c))
+  }, [buildActorCard, mode, directReportIds, profiles, reportsByLeader])
 
-    return targetIds.map((id) => buildActorCard(id)).filter((item): item is ActorCard => Boolean(item))
-  }, [buildActorCard, mode, profile?.id, profiles, reportsByLeader])
+  const perspectiveTitle = useMemo(() => ({
+    director: "Panorama directivo", gerente: "Vista gerencial", coordinador: "Vista de coordinación",
+    marketing: "Panel de marketing", agente: "Tablero operativo",
+  }[mode]), [mode])
 
-  const perspectiveTitle = useMemo(() => {
-    if (mode === "director") return "Panorama directivo"
-    if (mode === "gerente") return "Vista gerencial"
-    if (mode === "coordinador") return "Vista de coordinación"
-    if (mode === "marketing") return "Panel de marketing"
-    return "Tablero operativo"
-  }, [mode])
+  const perspectiveDescription = useMemo(() => ({
+    director: "Ves el rendimiento global, la salud del pipeline y el detalle por liderazgo.",
+    gerente: "Ves el comportamiento de cada coordinación que te reporta y sus alertas comerciales.",
+    coordinador: "Ves el rendimiento de cada agente, su actividad y los leads que requieren seguimiento.",
+    marketing: "Ves captación, fuentes, integraciones y el pulso del origen de los leads.",
+    agente: "Ves tu cartera activa, tu actividad reciente y dónde se está frenando tu pipeline.",
+  }[mode]), [mode])
 
-  const perspectiveDescription = useMemo(() => {
-    if (mode === "director") return "Ves el rendimiento global, la salud del pipeline y el detalle por liderazgo."
-    if (mode === "gerente") return "Ves el comportamiento de cada coordinación que te reporta y sus alertas comerciales."
-    if (mode === "coordinador") return "Ves el rendimiento de cada agente, su actividad y los leads que requieren seguimiento."
-    if (mode === "marketing") return "Ves captación, fuentes, integraciones y el pulso del origen de los leads."
-    return "Ves tu cartera activa, tu actividad reciente y dónde se está frenando tu pipeline."
-  }, [mode])
-
-  if (authLoading || loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
-      </div>
-    )
-  }
+  if (authLoading || loading) return (
+    <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" /></div>
+  )
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <span className="rounded-full border border-flugzz-accent/20 bg-flugzz-accent/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-flugzz-accent">
-              {perspectiveTitle}
-            </span>
+            <span className="rounded-full border border-flugzz-accent/20 bg-flugzz-accent/10 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-flugzz-accent">{perspectiveTitle}</span>
             <span className="text-xs text-zinc-600">{role?.name ?? "Sin rol"}</span>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tighter text-zinc-100">
-            Dashboard<span className="text-flugzz-accent">.</span>
-          </h1>
+          <h1 className="text-3xl font-semibold tracking-tighter text-zinc-100">Dashboard<span className="text-flugzz-accent">.</span></h1>
           <p className="text-sm text-zinc-400 mt-2 max-w-2xl">{perspectiveDescription}</p>
         </div>
-
         <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 px-4 py-3 backdrop-blur-xl">
           <p className="text-xs uppercase tracking-[0.22em] text-zinc-600">Alcance actual</p>
           <p className="text-sm text-zinc-200 mt-1">{scopeUserIds.length} usuarios en este panel</p>
@@ -521,97 +410,38 @@ export default function DashboardPage() {
         <MetricCard icon={CircleDollarSign} title="Valor proyectado" value={formatCurrency(scopeMetrics.projectedValue, currency)} hint={currency} accentClass="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
       </div>
 
-      <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-100">Rendimiento comercial</h2>
-            <p className="text-sm text-zinc-500 mt-1 max-w-xl">
-              <span className="text-zinc-300">Conversión</span>: leads en etapa «venta cerrada» (nombre sugerido para medir cierre). Si no tienes esa etapa, usamos todas las etapas marcadas como cerradas.
-              {" "}
-              <span className="text-zinc-300">Contactación</span>: leads con actividad en los últimos 7 días.
-            </p>
-            <p className="text-xs text-zinc-600 mt-3">
-              Cierres contados: <span className="text-zinc-400">{wonCount}</span> · Base:{" "}
-              <span className="text-zinc-400">{scopeLeadRecords.length}</span> leads en esta vista
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-10 lg:gap-14 shrink-0">
-            <NeonDonut
-              percent={conversionPct}
-              label="Conversión"
-              subtitle={`${wonCount} / ${scopeLeadRecords.length || 0} en venta cerrada`}
-              variant="cyan"
-            />
-            <NeonDonut
-              percent={contactacionPct}
-              label="Contactación (7d)"
-              subtitle="Leads con movimiento reciente"
-              variant="emerald"
-            />
-          </div>
-        </div>
-      </div>
+      {/* KPI Donuts — todos los modos los ven, distintos sets */}
+      <KpiDonuts donuts={donuts} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
-          <BarList
-            title="Embudo por etapa"
-            subtitle="Lectura visual del pipeline dentro del alcance de este rol."
-            items={stageBars}
-            accent="bg-gradient-to-r from-cyan-500 to-blue-500"
-          />
+          <BarList title="Embudo por etapa" subtitle="Lectura visual del pipeline dentro del alcance de este rol." items={stageBars} accent="bg-gradient-to-r from-cyan-500 to-blue-500" />
 
           {(mode === "director" || mode === "gerente" || mode === "coordinador") && (
             <ActorGrid
               title={mode === "coordinador" ? "Detalle por agente" : mode === "gerente" ? "Detalle por coordinación" : "Detalle por liderazgo"}
-              subtitle={mode === "coordinador"
-                ? "Cada tarjeta resume actividad, cartera y saturación de seguimiento por asesor."
-                : mode === "gerente"
-                  ? "Cada coordinación se resume con volumen, actividad y origen dominante."
-                  : "Vista transversal del rendimiento de líderes con equipos activos."}
-              cards={actorCards}
-              currency={currency}
+              subtitle={mode === "coordinador" ? "Actividad, cartera y saturación por asesor." : mode === "gerente" ? "Volumen, actividad y origen por coordinación." : "Vista transversal del rendimiento de líderes."}
+              cards={actorCards} currency={currency}
             />
           )}
 
           {mode === "marketing" && (
             <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-zinc-100">Integraciones y captación</h2>
-                  <p className="text-sm text-zinc-500 mt-1">Marketing ve el estado de los conectores y su impacto en la captación.</p>
-                </div>
-                <Link href="/integraciones" className="inline-flex items-center gap-2 text-sm text-flugzz-accent hover:text-cyan-300">
-                  Abrir integraciones <ArrowRight className="w-4 h-4" />
-                </Link>
+                <div><h2 className="text-lg font-semibold text-zinc-100">Integraciones y captación</h2><p className="text-sm text-zinc-500 mt-1">Estado de conectores e impacto en la captación.</p></div>
+                <Link href="/integraciones" className="inline-flex items-center gap-2 text-sm text-flugzz-accent hover:text-cyan-300">Abrir integraciones <ArrowRight className="w-4 h-4" /></Link>
               </div>
-
               <div className="grid gap-4 md:grid-cols-2 mt-5">
                 <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl border border-blue-500/20 bg-blue-500/10 flex items-center justify-center">
-                      <Cable className="w-5 h-5 text-blue-300" />
-                    </div>
-                    <div>
-                      <p className="text-zinc-100 font-medium">{integration?.page_name || integration?.page_id || "Facebook Lead Ads"}</p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        {integration?.is_active ? "Activo y listo para captar leads" : "Sin configuración activa"}
-                      </p>
-                    </div>
+                    <div className="w-11 h-11 rounded-2xl border border-blue-500/20 bg-blue-500/10 flex items-center justify-center"><Cable className="w-5 h-5 text-blue-300" /></div>
+                    <div><p className="text-zinc-100 font-medium">{integration?.page_name || integration?.page_id || "Facebook Lead Ads"}</p><p className="text-xs text-zinc-500 mt-1">{integration?.is_active ? "Activo y listo para captar leads" : "Sin configuración activa"}</p></div>
                   </div>
                 </div>
-
                 <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/78 p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-emerald-300" />
-                    </div>
-                    <div>
-                      <p className="text-zinc-100 font-medium">{sourceBars[0]?.label || "Sin fuente dominante"}</p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        {sourceBars[0] ? `${sourceBars[0].value} leads captados en esta fuente` : "Conecta una fuente para empezar a medir"}
-                      </p>
-                    </div>
+                    <div className="w-11 h-11 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-emerald-300" /></div>
+                    <div><p className="text-zinc-100 font-medium">{sourceBars[0]?.label || "Sin fuente dominante"}</p><p className="text-xs text-zinc-500 mt-1">{sourceBars[0] ? `${sourceBars[0].value} leads en esta fuente` : "Conecta una fuente para medir"}</p></div>
                   </div>
                 </div>
               </div>
@@ -620,15 +450,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <SignalsPanel activities={scopeActivities} />
-
-          <BarList
-            title="Fuentes principales"
-            subtitle="Qué origen está empujando el pipeline dentro de esta vista."
-            items={sourceBars}
-            accent="bg-gradient-to-r from-emerald-500 to-teal-400"
-          />
-
+          <SignalsPanel activities={scopeActivities.slice(0, 8)} />
+          <BarList title="Fuentes principales" subtitle="Origen que está empujando el pipeline en esta vista." items={sourceBars} accent="bg-gradient-to-r from-emerald-500 to-teal-400" />
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl border border-zinc-800 bg-zinc-950 flex items-center justify-center">
@@ -637,27 +460,20 @@ export default function DashboardPage() {
               <div>
                 <h2 className="text-lg font-semibold text-zinc-100">Siguiente acción sugerida</h2>
                 <p className="text-sm text-zinc-500 mt-1">
-                  {mode === "marketing"
-                    ? "Revisa integraciones activas y compara captación por fuente."
-                    : mode === "director"
-                      ? "Ataca primero a los equipos con más leads sin seguimiento."
-                      : mode === "gerente"
-                        ? "Entra al detalle de las coordinaciones con actividad baja."
-                        : mode === "coordinador"
-                          ? "Prioriza a los agentes con más leads estancados."
-                          : "Haz seguimiento a tus leads sin actividad de más de 72 horas."}
+                  {mode === "marketing" ? "Revisa integraciones activas y compara captación por fuente."
+                    : mode === "director" ? "Ataca primero a los equipos con más leads sin seguimiento."
+                    : mode === "gerente" ? "Entra al detalle de las coordinaciones con actividad baja."
+                    : mode === "coordinador" ? "Prioriza a los agentes con más leads estancados."
+                    : "Haz seguimiento a tus leads sin actividad de más de 72 horas."}
                 </p>
               </div>
             </div>
-
             <div className="mt-5 flex flex-wrap gap-2">
               <Link href={mode === "marketing" ? "/integraciones" : "/pipeline"} className="inline-flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-200">
-                Abrir {mode === "marketing" ? "integraciones" : "pipeline"}
-                <ArrowRight className="w-4 h-4" />
+                Abrir {mode === "marketing" ? "integraciones" : "pipeline"}<ArrowRight className="w-4 h-4" />
               </Link>
               <Link href={mode === "marketing" ? "/contactos" : "/ajustes/equipo"} className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 hover:border-zinc-700">
-                {mode === "marketing" ? "Ver leads captados" : "Ver equipo"}
-                <ArrowRight className="w-4 h-4" />
+                {mode === "marketing" ? "Ver leads captados" : "Ver equipo"}<ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>

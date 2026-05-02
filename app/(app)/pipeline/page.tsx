@@ -31,10 +31,66 @@ const P_STYLES = {
   low: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
 }
 
-function LeadCard({ lead, index }: { lead: Lead; index: number }) {
+function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate }: {
+  lead: Lead; index: number
+  stages: Stage[]
+  supabase: ReturnType<typeof createClient>
+  profileId: string
+  companyId: string
+  onLeadUpdate: (leadId: string, patch: Partial<Lead>) => void
+}) {
   const router = useRouter()
   const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
   const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes('facebook')
+
+  async function handleCall(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!lead.contact.phone) return
+
+    // Open native dialer
+    window.location.href = `tel:${lead.contact.phone}`
+
+    // Find "Contactado" stage (case-insensitive, also "contactado")
+    const contactadoStage = stages.find(s =>
+      s.name.toLowerCase().includes("contactad") || s.name.toLowerCase().includes("contacto")
+    )
+
+    const now = new Date().toISOString()
+
+    // Register call activity
+    await supabase.from("activities").insert({
+      company_id: companyId,
+      user_id: profileId,
+      lead_id: lead.id,
+      type: "call",
+      title: "Llamada saliente",
+      body: `Llamada iniciada desde pipeline a ${lead.contact.phone}`,
+      call_status: "pending",
+      created_at: now,
+    })
+
+    // Advance to "Contactado" stage if found and lead isn't already there or further
+    if (contactadoStage && lead.stage_id !== contactadoStage.id) {
+      const currentStagePos = stages.find(s => s.id === lead.stage_id)?.position ?? -1
+      const contactadoPos = contactadoStage.position
+      // Only advance forward, never move back
+      if (currentStagePos < contactadoPos) {
+        await supabase.from("leads").update({
+          stage_id: contactadoStage.id,
+          last_activity_at: now,
+        }).eq("id", lead.id)
+        onLeadUpdate(lead.id, { stage_id: contactadoStage.id, last_activity_at: now })
+      } else {
+        // Just update last_activity_at
+        await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+        onLeadUpdate(lead.id, { last_activity_at: now })
+      }
+    } else {
+      await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+      onLeadUpdate(lead.id, { last_activity_at: now })
+    }
+  }
 
   return (
     <Draggable draggableId={lead.id} index={index}>
@@ -76,10 +132,14 @@ function LeadCard({ lead, index }: { lead: Lead; index: number }) {
           <div className="flex items-center justify-between pt-3 border-t border-zinc-800/60">
             <div className="flex gap-1.5">
               {lead.contact.phone && (
-                <a href={`tel:${lead.contact.phone}`} onClick={e=>e.stopPropagation()}
-                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all">
+                <button
+                  type="button"
+                  title={`Llamar a ${lead.contact.phone}`}
+                  onClick={handleCall}
+                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all"
+                >
                   <Phone className="w-3.5 h-3.5" />
-                </a>
+                </button>
               )}
               {lead.contact.phone && (
                 <a href={`https://wa.me/${lead.contact.phone?.replace(/\D/g,'')}`} target="_blank"
@@ -189,7 +249,7 @@ export default function PipelinePage() {
                               ? "bg-zinc-800/55 border-flugzz-accent/35"
                               : "bg-zinc-900/40 border-zinc-800/45"
                           }`}>
-                          {stageLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}
+                          {stageLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} stages={stages} supabase={supabase} profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""} onLeadUpdate={(id, patch) => setLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))} />)}
                           {provided.placeholder}
                           {stageLeads.length === 0 && !snapshot.isDraggingOver && (
                             <div className="flex-1 flex items-center justify-center py-8">
@@ -223,7 +283,7 @@ export default function PipelinePage() {
                             : "bg-zinc-900/40 border-zinc-800/45"
                         }`}
                       >
-                        {unassignedLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} />)}
+                        {unassignedLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} stages={stages} supabase={supabase} profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""} onLeadUpdate={(id, patch) => setLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))} />)}
                         {provided.placeholder}
                       </div>
                     )}

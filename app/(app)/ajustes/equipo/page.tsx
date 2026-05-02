@@ -156,12 +156,14 @@ export default function EquipoPage() {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: rolesData }, { data: membersData }] = await Promise.all([
-      supabase.from("roles").select("*").eq("company_id", profile!.company_id).order("level"),
-      supabase.from("profiles").select(`id, full_name, email, phone, avatar_url, is_active, role_id, created_at, role:roles(id, name, level, color), team_memberships(reports_to)`).eq("company_id", profile!.company_id).order("created_at"),
-    ])
-    setRoles(rolesData ?? [])
-    setMembers((membersData ?? []).map((m: any) => ({ ...m, role: m.role ?? null, reports_to: m.team_memberships?.[0]?.reports_to ?? null })))
+    try {
+      const res = await fetch(`/api/team/members?companyId=${profile!.company_id}`)
+      const data = await res.json()
+      if (!res.ok) { console.error("Error cargando equipo:", data.error) } else {
+        setRoles(data.roles ?? [])
+        setMembers(data.members ?? [])
+      }
+    } catch (e) { console.error("Error cargando equipo:", e) }
     setLoading(false)
   }
 

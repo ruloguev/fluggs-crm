@@ -47,8 +47,9 @@ type ListItem = {
 }
 
 export default function DrivePage() {
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, role, can, loading: authLoading } = useAuth()
   const [supabase] = useState(() => createClient())
+  const canManageDrive = can("can_manage_drive") || (role?.level ?? 99) <= 2
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [folders, setFolders] = useState<ListItem[]>([])
@@ -227,22 +228,29 @@ export default function DrivePage() {
             />
           </div>
 
-          <button
-            type="button"
-            className="p-2 rounded-xl bg-zinc-900/55 border border-zinc-800/60 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
-            title="Nueva carpeta"
-            onClick={() => void createFolder()}
-          >
-            <FolderPlus className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-flugzz-accent text-zinc-950 font-semibold hover:bg-cyan-300 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)]"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <UploadCloud className="w-5 h-5" />
-            <span className="hidden sm:inline">Subir archivo</span>
-          </button>
+          {canManageDrive && (
+            <>
+              <button
+                type="button"
+                className="p-2 rounded-xl bg-zinc-900/55 border border-zinc-800/60 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                title="Nueva carpeta"
+                onClick={() => void createFolder()}
+              >
+                <FolderPlus className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-flugzz-accent text-zinc-950 font-semibold hover:bg-cyan-300 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <UploadCloud className="w-5 h-5" />
+                <span className="hidden sm:inline">Subir archivo</span>
+              </button>
+            </>
+          )}
+          {!canManageDrive && (
+            <span className="text-xs text-zinc-600 border border-zinc-800 rounded-xl px-3 py-2">Solo lectura</span>
+          )}
         </div>
       </div>
 

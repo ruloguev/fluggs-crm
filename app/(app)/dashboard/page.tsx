@@ -8,6 +8,12 @@ import {
   Activity, ArrowRight, Building2, Cable, CircleDollarSign,
   Clock3, Loader2, PhoneOutgoing, TrendingUp, Users,
 } from "lucide-react"
+import { NeonDonut } from "@/components/dashboard/neon-donut"
+import {
+  contactacionPercent,
+  conversionPercent,
+  getClosedWonStageIds,
+} from "@/lib/dashboard-kpis"
 
 type PermissionMap = Record<string, boolean>
 
@@ -389,6 +395,26 @@ export default function DashboardPage() {
     }
   }, [scopeActivities, scopeLeadRecords, snapshotAt])
 
+  const wonStageIds = useMemo(() => getClosedWonStageIds(stages), [stages])
+
+  const conversionPct = useMemo(
+    () => conversionPercent(scopeLeadRecords, wonStageIds),
+    [scopeLeadRecords, wonStageIds],
+  )
+
+  const contactacionPct = useMemo(
+    () => contactacionPercent(scopeLeadRecords),
+    [scopeLeadRecords],
+  )
+
+  const wonCount = useMemo(
+    () =>
+      scopeLeadRecords.filter(
+        (l) => l.stage_id && wonStageIds.includes(l.stage_id),
+      ).length,
+    [scopeLeadRecords, wonStageIds],
+  )
+
   const stageBars = useMemo(() => {
     return stages.map((stage) => ({
       label: stage.name,
@@ -493,6 +519,37 @@ export default function DashboardPage() {
         <MetricCard icon={Activity} title="Actividad últimos 7 días" value={String(scopeMetrics.activities7d)} hint="movimiento" accentClass="bg-cyan-500/10 border-cyan-500/20 text-cyan-300" />
         <MetricCard icon={Clock3} title="Leads sin seguimiento" value={String(scopeMetrics.staleCount)} hint="alerta" accentClass="bg-amber-500/10 border-amber-500/20 text-amber-300" />
         <MetricCard icon={CircleDollarSign} title="Valor proyectado" value={formatCurrency(scopeMetrics.projectedValue, currency)} hint={currency} accentClass="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Rendimiento comercial</h2>
+            <p className="text-sm text-zinc-500 mt-1 max-w-xl">
+              <span className="text-zinc-300">Conversión</span>: leads en etapa «venta cerrada» (nombre sugerido para medir cierre). Si no tienes esa etapa, usamos todas las etapas marcadas como cerradas.
+              {" "}
+              <span className="text-zinc-300">Contactación</span>: leads con actividad en los últimos 7 días.
+            </p>
+            <p className="text-xs text-zinc-600 mt-3">
+              Cierres contados: <span className="text-zinc-400">{wonCount}</span> · Base:{" "}
+              <span className="text-zinc-400">{scopeLeadRecords.length}</span> leads en esta vista
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-10 lg:gap-14 shrink-0">
+            <NeonDonut
+              percent={conversionPct}
+              label="Conversión"
+              subtitle={`${wonCount} / ${scopeLeadRecords.length || 0} en venta cerrada`}
+              variant="cyan"
+            />
+            <NeonDonut
+              percent={contactacionPct}
+              label="Contactación (7d)"
+              subtitle="Leads con movimiento reciente"
+              variant="emerald"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

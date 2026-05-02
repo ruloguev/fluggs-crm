@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const runtime = "nodejs"
+
+function getSupabaseAdmin() {
+  const url = getSupabaseUrl()
+  const key = getSupabaseServiceRoleKey()
+  if (!url || !key) return null
+  return createClient(url, key)
+}
 
 function chunkText(text: string, size = 800, overlap = 100): string[] {
   const chunks: string[] = []
@@ -18,21 +23,35 @@ function chunkText(text: string, size = 800, overlap = 100): string[] {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Faltan variables de Supabase en el servidor." },
+        { status: 503 },
+      )
+    }
+
     const { documentId, text, companyId } = await req.json()
     if (!documentId || !text || !companyId)
       return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 })
 
-    const { data: doc } = await supabase.from("knowledge_documents")
-      .select("title").eq("id", documentId).single()
+    const { data: doc } = await supabase
+      .from("knowledge_documents")
+      .select("title")
+      .eq("id", documentId)
+      .single()
 
     const chunks = chunkText(text)
 
     if (!process.env.OPENAI_API_KEY) {
       await supabase.from("knowledge_documents").update({ status: "ready" }).eq("id", documentId)
-      return NextResponse.json({ ok: true, chunks: 0, note: "Sin embeddings — agrega OPENAI_API_KEY" })
+      return NextResponse.json({
+        ok: true,
+        chunks: 0,
+        note: "Sin embeddings — agrega OPENAI_API_KEY",
+      })
     }
 
-    // Delete old chunks for this document
     await supabase.from("knowledge_chunks").delete().eq("document_id", documentId)
 
     let inserted = 0
@@ -42,7 +61,10 @@ export async function POST(req: NextRequest) {
 
       const embRes = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ input: chunk, model: "text-embedding-3-small" }),
       })
       if (!embRes.ok) continue
@@ -61,7 +83,8 @@ export async function POST(req: NextRequest) {
 
     await supabase.from("knowledge_documents").update({ status: "ready" }).eq("id", documentId)
     return NextResponse.json({ ok: true, chunks: inserted })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Error desconocido"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

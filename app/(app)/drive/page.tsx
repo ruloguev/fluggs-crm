@@ -1,244 +1,354 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase"
-import { 
-  Folder, 
-  FileText, 
-  Image as ImageIcon, 
-  UploadCloud, 
-  FolderPlus, 
-  Search, 
-  MoreVertical,
+import { useAuth } from "@/contexts/AuthContext"
+import {
+  Folder,
+  FileText,
+  Image as ImageIcon,
+  UploadCloud,
+  FolderPlus,
+  Search,
   ChevronRight,
   FileArchive,
   Download,
-  Tag
+  Tag,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 
-// --- FUNCIONES AUXILIARES ---
-// Convierte bytes a KB o MB legibles
+const BUCKET = "company-drive"
+
 function formatBytes(bytes: number, decimals = 1) {
-  if (!+bytes) return '0 Bytes'
+  if (!+bytes) return "0 Bytes"
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const sizes = ["Bytes", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`
 }
 
-// Asigna un ícono y color según el tipo de archivo
 function getFileIcon(mimeType: string) {
-  if (mimeType.includes('pdf')) return <FileText className="w-8 h-8 text-rose-400" />
-  if (mimeType.includes('image')) return <ImageIcon className="w-8 h-8 text-flugzz-accent" />
-  if (mimeType.includes('zip') || mimeType.includes('rar')) return <FileArchive className="w-8 h-8 text-amber-400" />
-  return <FileText className="w-8 h-8 text-zinc-400" /> // Default (Word, Excel, etc.)
+  if (mimeType.includes("pdf")) return <FileText className="w-8 h-8 text-rose-400" />
+  if (mimeType.includes("image")) return <ImageIcon className="w-8 h-8 text-flugzz-accent" />
+  if (mimeType.includes("zip") || mimeType.includes("rar"))
+    return <FileArchive className="w-8 h-8 text-amber-400" />
+  return <FileText className="w-8 h-8 text-zinc-400" />
+}
+
+type ListItem = {
+  name: string
+  id: string | null
+  updated_at: string | null
+  created_at: string
+  last_accessed_at: string
+  metadata: Record<string, unknown> | null
 }
 
 export default function DrivePage() {
+  const { profile, loading: authLoading } = useAuth()
   const [supabase] = useState(() => createClient())
   const [isLoading, setIsLoading] = useState(true)
-  
-  // Estados para nuestros datos
-  const [folders, setFolders] = useState<any[]>([])
-  const [files, setFiles] = useState<any[]>([])
-  const [currentPath, setCurrentPath] = useState([{ id: null, name: "Mi Bóveda" }])
+  const [error, setError] = useState<string | null>(null)
+  const [folders, setFolders] = useState<ListItem[]>([])
+  const [files, setFiles] = useState<ListItem[]>([])
+  const [pathSegments, setPathSegments] = useState<string[]>([])
+  const [search, setSearch] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    async function fetchDriveData() {
-      setIsLoading(true)
-      
-      try {
-        // AQUÍ IRÁ LA LLAMADA REAL A SUPABASE
-        // const { data: foldersData } = await supabase.from('drive_folders').select('*').eq('parent_id', currentPath[currentPath.length - 1].id)
-        // const { data: filesData } = await supabase.from('drive_files').select('*').eq('folder_id', currentPath[currentPath.length - 1].id)
+  const companyId = profile?.company_id
 
-        // Datos simulados estructurados EXACTAMENTE como tu base de datos
-        setTimeout(() => {
-          setFolders([
-            { id: "1", name: "Contratos de Compraventa", created_at: "2024-03-10T10:00:00Z" },
-            { id: "2", name: "Identificaciones (INE/Pasaporte)", created_at: "2024-03-12T14:30:00Z" },
-            { id: "3", name: "Plantillas Legales", created_at: "2024-03-15T09:15:00Z" },
-          ])
+  const listPrefix = useCallback(() => {
+    if (!companyId) return ""
+    if (pathSegments.length === 0) return companyId
+    return [companyId, ...pathSegments].join("/")
+  }, [companyId, pathSegments])
 
-          setFiles([
-            { 
-              id: "101", 
-              name: "Contrato_ValleAlto_Firma.pdf", 
-              mime_type: "application/pdf", 
-              file_size_bytes: 2540000, // ~2.4 MB
-              version: 2,
-              download_count: 4,
-              tags: ["Urgente", "Valle Alto"],
-              created_at: "2024-03-20T16:20:00Z" 
-            },
-            { 
-              id: "102", 
-              name: "Render_Fachada_Principal.jpg", 
-              mime_type: "image/jpeg", 
-              file_size_bytes: 4800000, // ~4.5 MB
-              version: 1,
-              download_count: 12,
-              tags: ["Marketing"],
-              created_at: "2024-03-21T11:05:00Z" 
-            },
-            { 
-              id: "103", 
-              name: "Machote_Promesa_Compra.docx", 
-              mime_type: "application/msword", 
-              file_size_bytes: 850000, // ~830 KB
-              version: 5,
-              download_count: 45,
-              is_template: true,
-              tags: ["Plantilla"],
-              created_at: "2024-03-22T08:45:00Z" 
-            }
-          ])
-          setIsLoading(false)
-        }, 800)
-
-      } catch (error) {
-        console.error("Error cargando archivos:", error)
-      }
+  const load = useCallback(async () => {
+    if (!companyId) return
+    setIsLoading(true)
+    setError(null)
+    const prefix = listPrefix()
+    const { data, error: listError } = await supabase.storage.from(BUCKET).list(prefix, {
+      limit: 200,
+      sortBy: { column: "name", order: "asc" },
+    })
+    if (listError) {
+      setError(
+        listError.message.includes("not found")
+          ? 'El bucket «company-drive» no existe. Ejecuta la migración SQL del proyecto o créalo en Supabase Storage.'
+          : listError.message,
+      )
+      setFolders([])
+      setFiles([])
+      setIsLoading(false)
+      return
     }
 
-    fetchDriveData()
-  }, []) // En el futuro escucharemos el currentPath para recargar al entrar a carpetas
+    const rows = (data ?? []) as ListItem[]
+    const isFolder = (i: ListItem) =>
+      i.metadata === null && i.name !== ".keep"
+    const folderRows = rows.filter(isFolder)
+    const fileRows = rows
+      .filter((i) => !isFolder(i))
+      .filter((i) => i.name !== ".keep")
+    setFolders(folderRows)
+    setFiles(fileRows)
+    setIsLoading(false)
+  }, [companyId, listPrefix, supabase])
+
+  useEffect(() => {
+    if (!authLoading && companyId) void load()
+    if (!authLoading && !companyId) setIsLoading(false)
+  }, [authLoading, companyId, load])
+
+  async function uploadFiles(fileList: FileList | null) {
+    if (!fileList?.length || !companyId) return
+    setError(null)
+    const base = listPrefix()
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i]
+      const dest = `${base}/${file.name}`.replace(/\/+/g, "/")
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(dest, file, {
+        upsert: false,
+      })
+      if (upErr) {
+        setError(upErr.message)
+        break
+      }
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    await load()
+  }
+
+  async function createFolder() {
+    const name = window.prompt("Nombre de la carpeta")
+    if (!name?.trim() || !companyId) return
+    const safe = name.trim().replace(/[/\\]/g, "-")
+    const base = listPrefix()
+    const placeholderPath = `${base}/${safe}/.keep`.replace(/\/+/g, "/")
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(placeholderPath, new Blob([""]), { contentType: "application/octet-stream" })
+    if (upErr) setError(upErr.message)
+    await load()
+  }
+
+  async function downloadFile(name: string) {
+    const base = listPrefix()
+    const path = `${base}/${name}`.replace(/\/+/g, "/")
+    const { data, error: dlErr } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600)
+    if (dlErr || !data?.signedUrl) {
+      setError(dlErr?.message ?? "No se pudo generar enlace")
+      return
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+  }
+
+  function enterFolder(name: string) {
+    setPathSegments((p) => [...p, name])
+  }
+
+  function goToSegment(index: number) {
+    setPathSegments((segments) => segments.slice(0, index))
+  }
+
+  const filteredFiles = files.filter((f) =>
+    f.name.toLowerCase().includes(search.toLowerCase()),
+  )
+  const filteredFolders = folders.filter((f) =>
+    f.name.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="w-8 h-8 text-flugzz-accent animate-spin" />
+      </div>
+    )
+  }
+
+  if (!companyId) {
+    return (
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 text-sm text-amber-100/90 max-w-md">
+        Asigna una empresa a tu perfil para usar el Drive.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700 h-full flex flex-col">
-      
-      {/* HEADER Y BUSCADOR */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => void uploadFiles(e.target.files)}
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tighter text-zinc-100">
             Documentos<span className="text-flugzz-accent ml-1">.</span>
           </h1>
-          
-          {/* Miga de pan (Breadcrumbs) */}
-          <div className="flex items-center text-sm mt-2 text-zinc-400">
-            {currentPath.map((path, index) => (
-              <div key={index} className="flex items-center">
-                <span className="hover:text-zinc-100 cursor-pointer transition-colors font-medium">
-                  {path.name}
-                </span>
-                {index < currentPath.length - 1 && (
-                  <ChevronRight className="w-4 h-4 mx-1.5 text-zinc-600" />
-                )}
-              </div>
+          <div className="flex items-center flex-wrap text-sm mt-2 text-zinc-400 gap-1">
+            <button
+              type="button"
+              className="hover:text-zinc-100 font-medium"
+              onClick={() => setPathSegments([])}
+            >
+              Mi bóveda
+            </button>
+            {pathSegments.map((seg, index) => (
+              <span key={seg + index} className="flex items-center gap-1">
+                <ChevronRight className="w-4 h-4 text-zinc-600 shrink-0" />
+                <button
+                  type="button"
+                  className="hover:text-zinc-100 font-medium"
+                  onClick={() => goToSegment(index + 1)}
+                >
+                  {seg}
+                </button>
+              </span>
             ))}
           </div>
         </div>
 
-        <div className="flex w-full md:w-auto items-center gap-3">
-          {/* Buscador */}
-          <div className="relative group flex-1 md:w-64">
+        <div className="flex w-full md:w-auto items-center gap-3 flex-wrap justify-end">
+          <div className="relative group flex-1 md:w-64 min-w-[160px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-flugzz-accent transition-colors" />
-            <input 
-              type="text" 
-              placeholder="Buscar archivos..." 
-              className="w-full bg-zinc-900/50 border border-zinc-800/60 rounded-xl pl-9 pr-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-flugzz-accent/50 focus:ring-1 focus:ring-flugzz-accent/50 transition-all placeholder:text-zinc-600"
+            <input
+              type="text"
+              placeholder="Buscar en esta carpeta..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-zinc-900/55 border border-zinc-800/60 rounded-xl pl-9 pr-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-flugzz-accent/50 focus:ring-1 focus:ring-flugzz-accent/50 transition-all placeholder:text-zinc-600"
             />
           </div>
-          
-          {/* Acciones */}
-          <button className="p-2 rounded-xl bg-zinc-900/50 border border-zinc-800/60 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors" title="Nueva Carpeta">
+
+          <button
+            type="button"
+            className="p-2 rounded-xl bg-zinc-900/55 border border-zinc-800/60 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+            title="Nueva carpeta"
+            onClick={() => void createFolder()}
+          >
             <FolderPlus className="w-5 h-5" />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-flugzz-accent text-zinc-950 font-semibold hover:bg-cyan-300 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+          <button
+            type="button"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-flugzz-accent text-zinc-950 font-semibold hover:bg-cyan-300 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+            onClick={() => fileInputRef.current?.click()}
+          >
             <UploadCloud className="w-5 h-5" />
             <span className="hidden sm:inline">Subir archivo</span>
           </button>
         </div>
       </div>
 
+      {error && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          {error}
+        </div>
+      )}
+
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-2 border-zinc-800 border-t-flugzz-accent animate-spin"></div>
+        <div className="flex-1 flex items-center justify-center min-h-[200px]">
+          <Loader2 className="w-8 h-8 text-flugzz-accent animate-spin" />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto scrollbar-hide pb-10 space-y-8">
-          
-          {/* SECCIÓN DE CARPETAS */}
-          {folders.length > 0 && (
+          {filteredFolders.length > 0 && (
             <section>
-              <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">Carpetas</h2>
+              <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">
+                Carpetas
+              </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {folders.map((folder) => (
-                  <div 
-                    key={folder.id} 
-                    className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-900/30 border border-zinc-800/50 backdrop-blur-sm hover:border-flugzz-accent/40 hover:bg-zinc-800/40 cursor-pointer transition-all group"
+                {filteredFolders.map((folder) => (
+                  <button
+                    type="button"
+                    key={folder.name}
+                    onClick={() => enterFolder(folder.name)}
+                    className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 text-left hover:border-flugzz-accent/40 hover:bg-zinc-800/45 transition-all group w-full"
                   >
-                    <Folder className="w-8 h-8 text-zinc-500 group-hover:text-flugzz-accent transition-colors fill-zinc-900/50" />
+                    <Folder className="w-8 h-8 text-zinc-500 group-hover:text-flugzz-accent transition-colors" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-zinc-200 text-sm font-medium truncate group-hover:text-white">{folder.name}</h3>
-                      <p className="text-zinc-600 text-xs">Modificado reciéntemente</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* SECCIÓN DE ARCHIVOS */}
-          {files.length > 0 && (
-            <section>
-              <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">Archivos Recientes</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {files.map((file) => (
-                  <div 
-                    key={file.id} 
-                    className="flex flex-col p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl group hover:border-zinc-700 transition-all relative"
-                  >
-                    {/* Botón de opciones (3 puntos) */}
-                    <button className="absolute top-4 right-4 text-zinc-600 hover:text-zinc-200 transition-colors">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-
-                    {/* Ícono grande según el MimeType */}
-                    <div className="mb-4 p-3 bg-zinc-950/50 rounded-xl inline-block w-fit border border-zinc-800/50">
-                      {getFileIcon(file.mime_type)}
-                    </div>
-
-                    {/* Info del archivo */}
-                    <div className="flex-1 mb-4">
-                      <h3 className="text-zinc-100 font-medium truncate pr-6 mb-1" title={file.name}>
-                        {file.name}
+                      <h3 className="text-zinc-200 text-sm font-medium truncate group-hover:text-white">
+                        {folder.name}
                       </h3>
-                      <div className="flex items-center text-xs text-zinc-500 gap-3">
-                        <span>{formatBytes(file.file_size_bytes)}</span>
-                        <span className="w-1 h-1 rounded-full bg-zinc-700"></span>
-                        <span>v{file.version}</span>
-                      </div>
+                      <p className="text-zinc-600 text-xs">Carpeta</p>
                     </div>
-
-                    {/* Footer de la tarjeta (Tags y Descargas) */}
-                    <div className="flex items-center justify-between pt-4 border-t border-zinc-800/60">
-                      <div className="flex gap-1.5 overflow-hidden">
-                        {file.is_template && (
-                          <span className="px-2 py-0.5 rounded-md bg-flugzz-accent/10 border border-flugzz-accent/20 text-[10px] font-medium text-flugzz-accent flex items-center shrink-0">
-                            PLANTILLA
-                          </span>
-                        )}
-                        {file.tags?.slice(0, 2).map((tag: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 rounded-md bg-zinc-800 text-[10px] font-medium text-zinc-300 flex items-center shrink-0 truncate max-w-[80px]">
-                            <Tag className="w-2.5 h-2.5 mr-1 text-zinc-500" />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      
-                      <div className="flex items-center text-zinc-500 text-xs shrink-0 pl-2">
-                        <Download className="w-3.5 h-3.5 mr-1" />
-                        {file.download_count}
-                      </div>
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </section>
           )}
 
+          {filteredFiles.length > 0 && (
+            <section>
+              <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">
+                Archivos
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredFiles.map((file) => {
+                  const meta = file.metadata as { mimetype?: string; size?: number } | null
+                  const mime = meta?.mimetype ?? "application/octet-stream"
+                  const size = meta?.size ?? 0
+                  return (
+                    <div
+                      key={file.name}
+                      className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-zinc-700 transition-all relative"
+                    >
+                      <div className="absolute top-4 right-4">
+                        <button
+                          type="button"
+                          className="text-zinc-600 hover:text-zinc-200 transition-colors p-1"
+                          title="Descargar"
+                          onClick={() => void downloadFile(file.name)}
+                        >
+                          <Download className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div className="mb-4 p-3 bg-zinc-950/60 rounded-xl inline-block w-fit border border-zinc-800/50">
+                        {getFileIcon(mime)}
+                      </div>
+                      <div className="flex-1 mb-4 pr-8">
+                        <h3
+                          className="text-zinc-100 font-medium truncate mb-1"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </h3>
+                        <div className="flex items-center text-xs text-zinc-500 gap-3">
+                          <span>{formatBytes(size)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-4 border-t border-zinc-800/60 text-zinc-600 text-xs">
+                        <span className="flex items-center gap-1">
+                          <Tag className="w-3 h-3" /> {mime.split("/").pop()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void downloadFile(file.name)}
+                          className="text-flugzz-accent hover:underline"
+                        >
+                          Abrir
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {filteredFolders.length === 0 && filteredFiles.length === 0 && !error && (
+            <div className="text-center py-16 text-zinc-600 text-sm">
+              <p>Esta carpeta está vacía.</p>
+              <p className="mt-2">Sube archivos o crea una carpeta.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

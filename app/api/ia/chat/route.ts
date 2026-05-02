@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import {
+  getAnthropicApiKey,
+  getSupabaseServiceRoleKey,
+  getSupabaseUrl,
+} from "@/lib/server-env"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const runtime = "nodejs"
+
+function getSupabaseAdmin() {
+  const url = getSupabaseUrl()
+  const key = getSupabaseServiceRoleKey()
+  if (!url || !key) return null
+  return createClient(url, key)
+}
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    const anthropicKey = getAnthropicApiKey()
+    if (!anthropicKey) {
       return NextResponse.json(
         {
           error:
-            "El asistente no está configurado en el servidor. Añade ANTHROPIC_API_KEY en las variables de entorno del deploy (p. ej. Vercel).",
+            "El servidor no recibe una clave de Anthropic válida. En Vercel: revisa ANTHROPIC_API_KEY en Environment Variables para «Production» (o el entorno que uses), vuelve a desplegar, y evita comillas en el valor.",
         },
         { status: 503 },
       )
     }
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+
+    const supabase = getSupabaseAdmin()
+    if (!supabase) {
       return NextResponse.json(
         {
           error:
-            "Falta SUPABASE_SERVICE_ROLE_KEY en el servidor. Es necesaria para la base de conocimiento.",
+            "Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el servidor.",
         },
         { status: 503 },
       )
@@ -33,24 +45,31 @@ export async function POST(req: NextRequest) {
 
     let contextText = ""
 
-    // Búsqueda semántica si hay key de OpenAI
     if (process.env.OPENAI_API_KEY) {
       const embRes = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ input: message, model: "text-embedding-3-small" }),
       })
       if (embRes.ok) {
         const embData = await embRes.json()
         const embedding = embData.data[0].embedding
         const { data: chunks } = await supabase.rpc("match_knowledge_chunks", {
-          query_embedding: embedding, match_threshold: 0.70,
-          match_count: 5, p_company_id: companyId,
+          query_embedding: embedding,
+          match_threshold: 0.7,
+          match_count: 5,
+          p_company_id: companyId,
         })
         if (chunks?.length > 0) {
-          contextText = chunks.map((c: any, i: number) =>
-            `[Fuente ${i + 1} — ${c.document_title}]\n${c.content}`
-          ).join("\n\n---\n\n")
+          contextText = chunks
+            .map(
+              (c: { document_title?: string; content: string }, i: number) =>
+                `[Fuente ${i + 1} — ${c.document_title}]\n${c.content}`,
+            )
+            .join("\n\n---\n\n")
         }
       }
     }
@@ -68,7 +87,7 @@ ${contextText}`
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "x-api-key": anthropicKey,
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
@@ -77,20 +96,29 @@ ${contextText}`
         max_tokens: 1024,
         system: systemPrompt,
         messages: [
-          ...history.slice(-6).map((m: any) => ({ role: m.role, content: m.content })),
+          ...history.slice(-6).map((m: { role: string; content: string }) => ({
+            role: m.role,
+            content: m.content,
+          })),
           { role: "user", content: message },
         ],
       }),
     })
 
     if (!claudeRes.ok) {
-      const err = await claudeRes.json()
-      return NextResponse.json({ error: err.error?.message ?? "Error de IA" }, { status: 500 })
+      const err = await claudeRes.json().catch(() => ({}))
+      return NextResponse.json(
+        { error: (err as { error?: { message?: string } }).error?.message ?? "Error de IA" },
+        { status: 500 },
+      )
     }
 
     const claudeData = await claudeRes.json()
-    return NextResponse.json({ answer: claudeData.content[0]?.text ?? "Sin respuesta" })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({
+      answer: claudeData.content[0]?.text ?? "Sin respuesta",
+    })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Error desconocido"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

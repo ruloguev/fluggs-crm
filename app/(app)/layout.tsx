@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import {
   LayoutDashboard, Users, KanbanSquare, HardDrive, Bot,
-  Menu, Bell, Search, LogOut, X, Plug, Settings, Loader2
+  Menu, Bell, Search, LogOut, X, Plug, Settings, Loader2, Megaphone,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { useState } from "react"
@@ -14,6 +14,7 @@ import { useState } from "react"
 // Todos los nav items posibles con su permiso requerido (null = visible para todos)
 const ALL_NAV = [
   { name: "Dashboard",     href: "/dashboard",          icon: LayoutDashboard, permission: null },
+  { name: "Marketing",     href: "/dashboard/marketing", icon: Megaphone,      permission: null, marketingOnly: true },
   { name: "Pipeline",      href: "/pipeline",           icon: KanbanSquare,    permission: null },
   { name: "Contactos",     href: "/contactos",          icon: Users,           permission: null },
   { name: "Drive",         href: "/drive",              icon: HardDrive,       permission: null },
@@ -73,8 +74,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .then(({ count }) => setNotifCount(count ?? 0))
   }, [profile])
 
+  const showMarketingNav =
+    normalizedRoleName.includes("marketing") || normalizedRoleName.includes("mkt")
+
   // Filter nav items by permission
-  const navItems = ALL_NAV.filter(item => {
+  const navItems = ALL_NAV.filter((item) => {
+    if ("marketingOnly" in item && item.marketingOnly && !showMarketingNav) return false
     if (item.href === "/integraciones") return canManageIntegrations
     if (item.href === "/ajustes") return canManageSettings
     if (!item.permission) return true
@@ -106,7 +111,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {loading ? <NavSkeleton /> : navItems.map(item => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/")
+          const active =
+            pathname === item.href ||
+            (item.href !== "/dashboard" && pathname.startsWith(item.href + "/")) ||
+            (item.href === "/dashboard" && pathname === "/dashboard")
           return (
             <Link key={item.href} href={item.href}
               onClick={() => setMobileOpen(false)}

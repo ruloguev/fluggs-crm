@@ -43,7 +43,7 @@ export default function LandingPageMockup() {
           <Link href="/login" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors hidden sm:block">
             Iniciar Sesión
           </Link>
-          <Link href="/login" className="text-sm font-medium px-4 py-2 rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-300 transition-colors">
+          <Link href="/signup" className="text-sm font-medium px-4 py-2 rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-300 transition-colors">
             Comenzar
           </Link>
         </div>
@@ -72,7 +72,7 @@ export default function LandingPageMockup() {
         <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300 w-full sm:w-auto z-50">
           
           {/* Botón Primario Corregido (Sólido y brillante) */}
-          <Link href="/login" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-cyan-400 text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] group">
+          <Link href="/signup" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-cyan-400 text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] group">
             Iniciar Ecosistema
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>

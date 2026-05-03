@@ -107,11 +107,18 @@ export async function POST(req: NextRequest) {
     })
 
     if (!geminiRes.ok) {
-      const errorText = await geminiRes.text()
-      console.error("Error devuelto por la API de Google:", errorText)
-      // MÁGIA DE CTO: Mandamos el error directo a tu pantalla para que lo veas en el CRM
+      // MAGIA DE CTO: Si Google rechaza el modelo, le exigimos la lista de los que sí funcionan
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`)
+      const listData = await listRes.json()
+      
+      // Filtramos solo los nombres de los modelos que sirven para generar texto
+      const modelosDisponibles = listData.models
+        ?.filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+        .map((m: any) => m.name.replace('models/', ''))
+        .join(", ") || "No se encontraron modelos válidos."
+
       return NextResponse.json({ 
-        error: `Error de Google (${geminiRes.status}): ${errorText}` 
+        error: `Modelo incorrecto. Tu API Key solo tiene acceso a estos modelos exactos: [ ${modelosDisponibles} ]` 
       }, { status: 500 })
     }
 

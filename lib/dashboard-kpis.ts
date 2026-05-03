@@ -47,6 +47,14 @@ export function conversionPercent(leads: LeadKpi[], closedWonStageIds: string[])
  *  2. Tiene una actividad type="call" con cualquier call_status en el período
  *     (contestada, no_answer, voicemail, busy – todas cuentan como intento).
  */
+/**
+ * Contactación = leads con AL MENOS UNA llamada calificada como "answered"
+ * en el período indicado (default: últimos 7 días).
+ *
+ * Los demás call_status (no_answer, voicemail, busy, pending) cuentan como
+ * INTENTO pero NO como contacto exitoso.
+ * last_activity_at ya NO se usa aquí para evitar falsos positivos.
+ */
 export function contactacionPercent(
   leads: LeadKpi[],
   activities: ActivityKpi[] = [],
@@ -55,19 +63,41 @@ export function contactacionPercent(
   if (leads.length === 0) return 0
   const cutoff = Date.now() - dayWindow * 24 * 60 * 60 * 1000
 
-  const calledLeadIds = new Set<string>()
+  // Solo llamadas CONTESTADAS (answered) cuentan como contacto exitoso
+  const contactedLeadIds = new Set<string>()
   activities.forEach(a => {
-    if (a.type === "call" && a.lead_id && new Date(a.created_at).getTime() >= cutoff) {
-      calledLeadIds.add(a.lead_id)
+    if (
+      a.type === "call" &&
+      a.call_status === "answered" &&
+      a.lead_id &&
+      new Date(a.created_at).getTime() >= cutoff
+    ) {
+      contactedLeadIds.add(a.lead_id)
     }
   })
 
-  const contacted = leads.filter(l =>
-    (l.last_activity_at && new Date(l.last_activity_at).getTime() >= cutoff) ||
-    (l.id && calledLeadIds.has(l.id))
-  ).length
-
+  const contacted = leads.filter(l => l.id && contactedLeadIds.has(l.id)).length
   return Math.round((contacted / leads.length) * 100)
+}
+
+/**
+ * Intentos de contacto = leads con al menos una llamada (cualquier call_status)
+ * en el período. Métrica complementaria para ver volumen de marcación.
+ */
+export function intentosContactoPercent(
+  leads: LeadKpi[],
+  activities: ActivityKpi[] = [],
+  dayWindow = 7,
+): number {
+  if (leads.length === 0) return 0
+  const cutoff = Date.now() - dayWindow * 24 * 60 * 60 * 1000
+  const attemptedIds = new Set<string>()
+  activities.forEach(a => {
+    if (a.type === "call" && a.lead_id && new Date(a.created_at).getTime() >= cutoff) {
+      attemptedIds.add(a.lead_id)
+    }
+  })
+  return Math.round((attemptedIds.size / leads.length) * 100)
 }
 
 // ── Cobertura de equipo ────────────────────────────────────────

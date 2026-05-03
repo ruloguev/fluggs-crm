@@ -208,7 +208,7 @@ export default function DashboardPage() {
       setLoading(true)
       const [{ data: profileRows }, { data: leadRows }, { data: activityRows }, { data: sourceRows }, { data: stageRows }, { data: integrationRow }, { data: companyRow }] =
         await Promise.all([
-          supabase.from("profiles").select(`id, full_name, email, is_active, role_id, role:roles(id, name, level, color, permissions), team_memberships(reports_to)`).eq("company_id", companyId).eq("is_active", true),
+          fetch(`/api/team/members?companyId=${companyId}`).then(r => r.json()).then(d => ({ data: (d.members ?? []).map((m: any) => ({ ...m, role: m.role ?? null, team_memberships: m.reports_to !== undefined ? [{ reports_to: m.reports_to }] : [] })), error: null })),
           supabase.from("leads").select("id, owner_id, source_id, stage_id, budget_max, currency, created_at, last_activity_at").eq("company_id", companyId),
           supabase.from("activities").select("id, user_id, lead_id, type, call_status, title, body, created_at").eq("company_id", companyId).order("created_at", { ascending: false }).limit(300),
           supabase.from("lead_sources").select("id, name").eq("company_id", companyId),

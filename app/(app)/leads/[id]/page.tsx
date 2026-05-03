@@ -159,8 +159,8 @@ function ActivityItem({ act }: { act: Activity }) {
 type LogType = "call" | "whatsapp" | "email" | "visit" | "note"
 
 function LogActivitySheet({
-  leadId, contactId, companyId, onClose, onSaved
-}: { leadId: string; contactId: string; companyId: string; onClose: () => void; onSaved: () => void }) {
+  leadId, contactId, companyId, currentStageId, stages, onClose, onSaved
+}: { leadId: string; contactId: string; companyId: string; currentStageId: string | null; stages: Stage[]; onClose: () => void; onSaved: () => void }) {
   const [type, setType] = useState<LogType>("call")
   const [note, setNote] = useState("")
   const [callStatus, setCallStatus] = useState<string>("answered")
@@ -199,9 +199,20 @@ function LogActivitySheet({
     }
 
     await (supabase as any).from("activities").insert(payload)
-    await (supabase as any).from("leads")
-      .update({ last_activity_at: new Date().toISOString() })
-      .eq("id", leadId)
+
+    // Solo avanzar si el lead está en la primera columna (sacarlo del estado inicial)
+    let nextStageId: string | null = null
+    if (type === "call" && stages.length > 0 && currentStageId) {
+      const sorted = [...stages].sort((a, b) => a.position - b.position)
+      if (sorted[0]?.id === currentStageId && sorted.length > 1) {
+        nextStageId = sorted[1].id
+      }
+    }
+
+    const leadPatch: Record<string, string> = { last_activity_at: new Date().toISOString() }
+    if (nextStageId) leadPatch.stage_id = nextStageId
+
+    await (supabase as any).from("leads").update(leadPatch).eq("id", leadId)
 
     setSaving(false)
     onSaved()
@@ -1176,6 +1187,8 @@ export default function LeadDetailPage() {
       {showLog && companyId && (
         <LogActivitySheet
           leadId={id} contactId={contact.id} companyId={companyId}
+          currentStageId={lead.stage?.id ?? null}
+          stages={stages}
           onClose={() => setShowLog(false)}
           onSaved={() => { setShowLog(false); loadData() }}
         />

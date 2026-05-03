@@ -1,22 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
-import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2 } from "lucide-react"
+import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
-
 type Lead = {
-  id: string; title: string | null; priority: 'low' | 'medium' | 'high'
+  id: string; title: string | null; priority: "low" | "medium" | "high"
   budget_max: number | null; currency: string; last_activity_at: string
-  stage_id: string | null; metadata: any
+  stage_id: string | null; metadata: any; owner_id: string | null
   contact: { full_name: string; phone: string | null }
   source: { name: string; icon: string | null; color: string | null } | null
 }
+type TeamMember = { id: string; full_name: string; role_level: number }
 
 function timeAgo(d: string) {
   const diff = (Date.now() - new Date(d).getTime()) / 1000
@@ -26,9 +26,9 @@ function timeAgo(d: string) {
 }
 
 const P_STYLES = {
-  high: 'bg-red-500/10 text-red-400 border-red-500/20',
-  medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  low: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  high: "bg-red-500/10 text-red-400 border-red-500/20",
+  medium: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 }
 
 function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate }: {
@@ -41,55 +41,26 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
 }) {
   const router = useRouter()
   const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
-  const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes('facebook')
+  const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes("facebook")
 
   async function handleCall(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     if (!lead.contact.phone) return
-
-    // Open native dialer
     window.location.href = `tel:${lead.contact.phone}`
-
-    // Find "Contactado" stage (case-insensitive, also "contactado")
-    const contactadoStage = stages.find(s =>
-      s.name.toLowerCase().includes("contactad") || s.name.toLowerCase().includes("contacto")
-    )
-
     const now = new Date().toISOString()
-
-    // Register call activity
     await supabase.from("activities").insert({
       company_id: companyId,
       user_id: profileId,
       lead_id: lead.id,
       type: "call",
       title: "Llamada saliente",
-      body: `Llamada iniciada desde pipeline a ${lead.contact.phone}`,
+      body: `Llamada iniciada a ${lead.contact.phone}`,
       call_status: "pending",
       created_at: now,
     })
-
-    // Advance to "Contactado" stage if found and lead isn't already there or further
-    if (contactadoStage && lead.stage_id !== contactadoStage.id) {
-      const currentStagePos = stages.find(s => s.id === lead.stage_id)?.position ?? -1
-      const contactadoPos = contactadoStage.position
-      // Only advance forward, never move back
-      if (currentStagePos < contactadoPos) {
-        await supabase.from("leads").update({
-          stage_id: contactadoStage.id,
-          last_activity_at: now,
-        }).eq("id", lead.id)
-        onLeadUpdate(lead.id, { stage_id: contactadoStage.id, last_activity_at: now })
-      } else {
-        // Just update last_activity_at
-        await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
-        onLeadUpdate(lead.id, { last_activity_at: now })
-      }
-    } else {
-      await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
-      onLeadUpdate(lead.id, { last_activity_at: now })
-    }
+    await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+    onLeadUpdate(lead.id, { last_activity_at: now })
   }
 
   return (
@@ -99,38 +70,46 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          style={provided.draggableProps.style}
-          className={`p-4 rounded-xl border shadow-sm transition-all select-none cursor-grab active:cursor-grabbing ${
+          onClick={() => router.push(`/leads/${lead.id}`)}
+          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-all ${
             snapshot.isDragging
-              ? "bg-zinc-800 border-zinc-600 shadow-xl shadow-black/50 scale-[1.02] rotate-1"
-              : stale ? "bg-zinc-950/95 border-amber-500/35 hover:border-amber-500/50 shadow-black/20"
-              : "bg-zinc-950/95 border-zinc-800/70 hover:border-zinc-600 shadow-black/15"
+              ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+              : "border-zinc-800/55 hover:border-zinc-700/75"
           }`}
-          onClick={() => !snapshot.isDragging && router.push(`/leads/${lead.id}`)}
         >
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="font-medium text-zinc-100 text-sm leading-snug">{lead.contact.full_name}</p>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {isFb && <span className="text-[9px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 rounded">fb</span>}
-              {stale && <AlertCircle className="w-3 h-3 text-amber-400" aria-label="Sin actividad +3 días" />}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-zinc-200 truncate leading-snug">
+                {lead.contact.full_name}
+              </p>
+              {lead.title && (
+                <p className="text-xs text-zinc-500 truncate mt-0.5">{lead.title}</p>
+              )}
             </div>
-          </div>
-
-          {lead.title && <p className="text-xs text-zinc-500 truncate mb-3">{lead.title}</p>}
-
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${P_STYLES[lead.priority]}`}>
-              {lead.priority === 'high' ? 'Alta' : lead.priority === 'medium' ? 'Media' : 'Baja'}
+            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
+              {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
             </span>
-            {lead.budget_max && (
-              <span className="text-[10px] text-zinc-500 font-mono">
-                ${(lead.budget_max/1000000).toFixed(1)}M
-              </span>
-            )}
           </div>
 
-          <div className="flex items-center justify-between pt-3 border-t border-zinc-800/60">
-            <div className="flex gap-1.5">
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <div className="flex items-center gap-1.5">
+              {isFb && (
+                <div className="w-4 h-4 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                  <span className="text-[8px] font-bold text-blue-400">f</span>
+                </div>
+              )}
+              {lead.budget_max && (
+                <span className="text-[11px] text-zinc-500 font-mono">
+                  ${lead.budget_max.toLocaleString()}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {stale && <AlertCircle className="w-3.5 h-3.5 text-amber-500/70" />}
+              <div className="flex items-center gap-1 text-zinc-600 text-[11px]">
+                <Clock className="w-3 h-3" />
+                {timeAgo(lead.last_activity_at)}
+              </div>
               {lead.contact.phone && (
                 <button
                   type="button"
@@ -141,16 +120,14 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
                   <Phone className="w-3.5 h-3.5" />
                 </button>
               )}
-              {lead.contact.phone && (
-                <a href={`https://wa.me/${lead.contact.phone?.replace(/\D/g,'')}`} target="_blank"
-                  onClick={e=>e.stopPropagation()}
-                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all">
-                  <MessageCircle className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </div>
-            <div className="flex items-center text-[10px] text-zinc-600 gap-1">
-              <Clock className="w-3 h-3" />{timeAgo(lead.last_activity_at)}
+              <button
+                type="button"
+                title="WhatsApp"
+                onClick={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.contact.phone}`, "_blank") }}
+                className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
@@ -159,65 +136,186 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
   )
 }
 
+// ── Scope filter dropdown ───────────────────────────────────────
+function ScopeDropdown({ label, options, selectedId, onSelect }: {
+  label: string
+  options: { id: string; name: string }[]
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const current = options.find(o => o.id === selectedId)
+  if (options.length === 0) return null
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors">
+        <span className="text-zinc-400 text-xs">{label}:</span>
+        <span className="text-zinc-200 font-medium">{current?.name ?? "Todos"}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
+      </button>
+      {open && (
+        <><div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+            <button onClick={() => { onSelect(null); setOpen(false) }}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+              Todos
+              {!selectedId && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
+            </button>
+            {options.map(o => (
+              <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                  {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+                </div>
+                <span className="truncate">{o.name}</span>
+                {selectedId === o.id && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Main page ───────────────────────────────────────────────────
 export default function PipelinePage() {
   const [stages, setStages] = useState<Stage[]>([])
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [allLeads, setAllLeads] = useState<Lead[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
+  const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
+
+  const myLevel = role?.level ?? 99
+  // Coordinator: level 3, Manager: level 2, Director: level 1
+  const isLeader = myLevel <= 3
 
   useEffect(() => {
     setIsMounted(true)
-    if (profile?.company_id) {
-      void loadPipeline(profile.company_id)
+    if (profile?.company_id && profile?.id) {
+      void loadAll(profile.company_id, profile.id)
     }
-  }, [profile?.company_id])
+  }, [profile?.company_id, profile?.id])
 
-  async function loadPipeline(companyId: string) {
+  async function loadAll(companyId: string, userId: string) {
     setLoading(true)
-    const [{ data: s }, { data: l }] = await Promise.all([
-      supabase.from('pipeline_stages').select('*').eq('company_id', companyId).order('position'),
-      supabase.from('leads').select(`
-        id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,
+    // Load stages + all leads + team for hierarchy
+    const [{ data: s }, { data: l }, { data: memberships }] = await Promise.all([
+      supabase.from("pipeline_stages").select("*").eq("company_id", companyId).order("position"),
+      supabase.from("leads").select(`
+        id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,
         contact:contacts(full_name,phone),
         source:lead_sources(name,icon,color)
-      `).eq('company_id', companyId).order('last_activity_at', { ascending: false }).limit(200),
+      `).eq("company_id", companyId).order("last_activity_at", { ascending: false }).limit(500),
+      supabase.from("team_memberships").select("user_id, reports_to").eq("company_id", companyId),
     ])
     setStages(s ?? [])
-    setLeads((l as any) ?? [])
+    setAllLeads((l as any) ?? [])
+
+    // Build hierarchy tree
+    if (isLeader && memberships) {
+      const reportsByLeader = new Map<string, string[]>()
+      memberships.forEach((m: any) => {
+        if (!m.reports_to) return
+        reportsByLeader.set(m.reports_to, [...(reportsByLeader.get(m.reports_to) ?? []), m.user_id])
+      })
+      // Recursive descendants
+      function getDescendants(id: string): string[] {
+        const q = [...(reportsByLeader.get(id) ?? [])]
+        const res: string[] = []
+        while (q.length) {
+          const cur = q.shift()!
+          if (res.includes(cur)) continue
+          res.push(cur)
+          q.push(...(reportsByLeader.get(cur) ?? []))
+        }
+        return res
+      }
+      const descendants = getDescendants(userId)
+      // Load profiles of direct reports for filter dropdown
+      if (descendants.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, role_id, role:roles(level)")
+          .in("id", descendants)
+        const members: TeamMember[] = (profiles ?? []).map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name,
+          role_level: p.role?.level ?? 99,
+        }))
+        setTeamMembers(members)
+      }
+    }
     setLoading(false)
   }
+
+  // Compute scope user ids based on hierarchy + filter
+  const scopeIds = useMemo(() => {
+    if (!profile?.id) return []
+    if (!isLeader) return [profile.id] // agente: only self
+    const allScopeIds = [profile.id, ...teamMembers.map(m => m.id)]
+    if (filterMemberId) {
+      // Show only the selected member and their descendants (approx via teamMembers sub-filter)
+      return [filterMemberId]
+    }
+    return allScopeIds
+  }, [profile?.id, isLeader, teamMembers, filterMemberId])
+
+  const visibleLeads = useMemo(
+    () => allLeads.filter(l => l.owner_id && scopeIds.includes(l.owner_id)),
+    [allLeads, scopeIds]
+  )
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return
     const { draggableId, destination } = result
     const newStageId = destination.droppableId === "__unassigned__" ? null : destination.droppableId
-    setLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
-    await (supabase as any).from('leads')
+    setAllLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
+    await (supabase as any).from("leads")
       .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
-      .eq('id', draggableId)
+      .eq("id", draggableId)
   }
 
   if (!isMounted) return null
   const activeStages = stages.filter(s => !s.is_closed)
-  const unassignedLeads = leads.filter(l => !l.stage_id)
+  const unassignedLeads = visibleLeads.filter(l => !l.stage_id)
+
+  // Filter options for dropdown
+  const filterOptions = teamMembers.map(m => ({ id: m.id, name: m.full_name }))
+
+  const filterLabel = myLevel === 1 ? "Gerente/Coordinador"
+    : myLevel === 2 ? "Coordinador"
+    : "Agente"
 
   return (
     <div className="h-full flex flex-col space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
             Pipeline<span className="text-flugzz-accent">.</span>
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {loading ? 'Cargando...' : `${leads.length} leads activos`}
+            {loading ? "Cargando..." : `${visibleLeads.length} leads en vista`}
           </p>
         </div>
-        <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200" onClick={() => router.push("/contactos?new=1")}>
-          <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
-        </Button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {isLeader && filterOptions.length > 0 && (
+            <ScopeDropdown
+              label={filterLabel}
+              options={filterOptions}
+              selectedId={filterMemberId}
+              onSelect={setFilterMemberId}
+            />
+          )}
+          <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200" onClick={() => router.push("/contactos?new=1")}>
+            <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -229,7 +327,7 @@ export default function PipelinePage() {
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
               {activeStages.map(stage => {
-                const stageLeads = leads.filter(l => l.stage_id === stage.id)
+                const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
                 return (
                   <div key={stage.id} className="w-72 flex-shrink-0 flex flex-col gap-3">
                     <div className="flex items-center justify-between px-1">
@@ -240,16 +338,19 @@ export default function PipelinePage() {
                       </div>
                       <button className="text-zinc-600 hover:text-zinc-300 p-1" onClick={() => router.push("/contactos?new=1")}><Plus className="w-3.5 h-3.5" /></button>
                     </div>
-
                     <Droppable droppableId={stage.id}>
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
                           className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
-                            snapshot.isDraggingOver
-                              ? "bg-zinc-800/55 border-flugzz-accent/35"
-                              : "bg-zinc-900/40 border-zinc-800/45"
+                            snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
                           }`}>
-                          {stageLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} stages={stages} supabase={supabase} profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""} onLeadUpdate={(id, patch) => setLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))} />)}
+                          {stageLeads.map((lead, i) => (
+                            <LeadCard key={lead.id} lead={lead} index={i}
+                              stages={stages} supabase={supabase}
+                              profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
+                              onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
+                            />
+                          ))}
                           {provided.placeholder}
                           {stageLeads.length === 0 && !snapshot.isDraggingOver && (
                             <div className="flex-1 flex items-center justify-center py-8">
@@ -274,16 +375,17 @@ export default function PipelinePage() {
                   </div>
                   <Droppable droppableId="__unassigned__">
                     {(provided, snapshot) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
+                      <div {...provided.droppableProps} ref={provided.innerRef}
                         className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
-                          snapshot.isDraggingOver
-                            ? "bg-zinc-800/55 border-flugzz-accent/35"
-                            : "bg-zinc-900/40 border-zinc-800/45"
-                        }`}
-                      >
-                        {unassignedLeads.map((lead, i) => <LeadCard key={lead.id} lead={lead} index={i} stages={stages} supabase={supabase} profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""} onLeadUpdate={(id, patch) => setLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))} />)}
+                          snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
+                        }`}>
+                        {unassignedLeads.map((lead, i) => (
+                          <LeadCard key={lead.id} lead={lead} index={i}
+                            stages={stages} supabase={supabase}
+                            profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
+                            onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
+                          />
+                        ))}
                         {provided.placeholder}
                       </div>
                     )}

@@ -101,10 +101,6 @@ function SignUpForm() {
   }
 
   const currencies = ["MXN", "USD", "COP", "ARS", "CLP", "PEN", "BRL", "EUR"]
-  const industries = [
-    "Inmobiliaria", "Automotriz", "Educación", "Salud", "Tecnología",
-    "Retail", "Servicios financieros", "Construcción", "Consultoría", "Otro",
-  ]
 
   return (
     <div className="relative z-10 w-full max-w-md mx-4">
@@ -227,16 +223,6 @@ function SignUpForm() {
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400">Industria</label>
               <div className="flex flex-wrap gap-2">
-                {industries.map(ind => (
-                  <button key={ind} type="button" onClick={() => set("industry", ind)}
-                    className={`px-3 py-1.5 rounded-xl text-xs border transition-all ${
-                      form.industry === ind
-                        ? "bg-[#22D3EE] text-zinc-900 font-semibold border-transparent"
-                        : "text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:text-zinc-300"
-                    }`}>
-                    {ind}
-                  </button>
-                ))}
               </div>
             </div>
 

@@ -109,7 +109,10 @@ export async function POST(req: NextRequest) {
     if (!geminiRes.ok) {
       const errorText = await geminiRes.text()
       console.error("Error devuelto por la API de Google:", errorText)
-      throw new Error(`Fallo de conexión con IA: ${geminiRes.status}`)
+      // MÁGIA DE CTO: Mandamos el error directo a tu pantalla para que lo veas en el CRM
+      return NextResponse.json({ 
+        error: `Error de Google (${geminiRes.status}): ${errorText}` 
+      }, { status: 500 })
     }
 
     const geminiData = await geminiRes.json()

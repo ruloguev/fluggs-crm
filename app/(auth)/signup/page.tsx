@@ -23,16 +23,14 @@ function SignUpForm() {
     email: "",
     password: "",
     companyName: "",
-    industry: "",
     currency: "MXN",
   })
 
-  // Redirect if already logged in
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace("/dashboard")
     })
-  }, [router, supabase.auth])
+  }, [])
 
   function set(key: string, value: string) {
     setForm(f => ({ ...f, [key]: value }))
@@ -69,7 +67,7 @@ function SignUpForm() {
       return
     }
 
-    // 2. Setup completo via API (service role)
+    // 2. Setup completo via API — sin 'industry'
     const res = await fetch("/api/onboarding/setup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,7 +76,6 @@ function SignUpForm() {
         email: form.email.trim().toLowerCase(),
         fullName: form.fullName.trim(),
         companyName: form.companyName.trim(),
-        industry: form.industry.trim() || null,
         currency: form.currency,
       }),
     })
@@ -91,11 +88,12 @@ function SignUpForm() {
       return
     }
 
-    // 3. Iniciar sesión automáticamente si el email no requiere confirmación
+    // 3. Redirigir
     if (authData.session) {
+      // Sesión inmediata (email confirmation desactivado en Supabase)
       router.push("/onboarding")
     } else {
-      // Email de confirmación enviado
+      // Supabase requiere confirmación de email
       router.push("/login?hint=confirm")
     }
   }
@@ -104,14 +102,14 @@ function SignUpForm() {
 
   return (
     <div className="relative z-10 w-full max-w-md mx-4">
-      {/* Progress indicator */}
+      {/* Progress */}
       <div className="flex items-center gap-3 mb-8 justify-center">
         {["account", "company"].map((s, i) => (
           <div key={s} className="flex items-center gap-3">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-              step === s ? "bg-[#22D3EE] text-zinc-950 scale-110" :
-              (step === "company" && i === 0) ? "bg-zinc-700 text-zinc-300" :
-              "bg-zinc-900 border border-zinc-800 text-zinc-600"
+              step === s ? "bg-[#22D3EE] text-zinc-950 scale-110"
+              : step === "company" && i === 0 ? "bg-zinc-700 text-zinc-300"
+              : "bg-zinc-900 border border-zinc-800 text-zinc-600"
             }`}>{i + 1}</div>
             {i === 0 && <div className={`w-12 h-px transition-colors duration-300 ${step === "company" ? "bg-[#22D3EE]/40" : "bg-zinc-800"}`} />}
           </div>
@@ -119,7 +117,6 @@ function SignUpForm() {
       </div>
 
       <div className="p-8 border border-zinc-800/60 rounded-3xl bg-zinc-950/80 backdrop-blur-xl shadow-2xl shadow-black/60">
-        {/* Header */}
         <div className="flex flex-col items-center mb-8 space-y-2">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700/50 mb-2">
             <FlugzzIsotipo className="w-8 h-8" />
@@ -145,39 +142,29 @@ function SignUpForm() {
               <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" /> Nombre completo
               </label>
-              <input
-                autoFocus
-                type="text"
-                value={form.fullName}
+              <input autoFocus type="text" value={form.fullName}
                 onChange={e => set("fullName", e.target.value)}
                 placeholder="Juan Pérez"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-              />
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5" /> Correo electrónico
               </label>
-              <input
-                type="email"
-                value={form.email}
+              <input type="email" value={form.email}
                 onChange={e => set("email", e.target.value)}
                 placeholder="juan@empresa.com"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-              />
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
                 <Lock className="w-3.5 h-3.5" /> Contraseña
               </label>
               <div className="relative">
-                <input
-                  type={showPass ? "text" : "password"}
-                  value={form.password}
+                <input type={showPass ? "text" : "password"} value={form.password}
                   onChange={e => set("password", e.target.value)}
                   placeholder="Mínimo 8 caracteres"
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 pr-11 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-                />
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 pr-11 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
                 <button type="button" onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors">
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -195,9 +182,7 @@ function SignUpForm() {
                 </div>
               )}
             </div>
-            <button
-              className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 mt-2"
-            >
+            <button className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 mt-2">
               Continuar <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -210,20 +195,10 @@ function SignUpForm() {
               <label className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5" /> Nombre de la empresa
               </label>
-              <input
-                autoFocus
-                type="text"
-                value={form.companyName}
+              <input autoFocus type="text" value={form.companyName}
                 onChange={e => set("companyName", e.target.value)}
                 placeholder="Inmobiliaria Pérez"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Industria</label>
-              <div className="flex flex-wrap gap-2">
-              </div>
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
             </div>
 
             <div className="space-y-1.5">

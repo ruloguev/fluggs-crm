@@ -16,8 +16,8 @@ function getSupabaseAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Verificamos la llave de Gemini
-    const geminiKey = process.env.GEMINI_API_KEY
+    // 1. Verificamos la llave de Gemini (con .trim() para evitar espacios accidentales)
+    const geminiKey = process.env.GEMINI_API_KEY?.trim()
     if (!geminiKey) {
       return NextResponse.json(
         { error: "Falta GEMINI_API_KEY en las variables de entorno." },
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     let contextText = ""
 
-    // 2. Mantenemos OpenAI para los Embeddings
+    // 2. Mantenemos OpenAI para los Embeddings (búsqueda en tu base de datos)
     if (process.env.OPENAI_API_KEY) {
       const embRes = await fetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
@@ -76,23 +76,20 @@ export async function POST(req: NextRequest) {
       ? `Eres el asistente de ventas interno de esta inmobiliaria. Tu única fuente de información es la base de conocimiento abajo. Responde de forma directa y profesional. Si la respuesta no está en los documentos, di exactamente: "No tengo esa información. Consulta con tu director." Cita siempre la fuente entre paréntesis al final. Responde en español.\n\nBASE DE CONOCIMIENTO:\n${contextText}`
       : `Eres el asistente de ventas de esta inmobiliaria. Aún no hay documentos cargados en la base de conocimiento. Indica que el administrador debe cargar documentos en Ajustes → Asistente IA. Puedes ayudar con preguntas generales de ventas inmobiliarias. Responde en español.`
 
-    // 4. INTEGRACIÓN DIRECTA CON GEMINI (FETCH NATIVO)
-    // Mapeamos el historial
+    // 4. INTEGRACIÓN DIRECTA CON GEMINI (Modelo Moderno 2.5 Flash)
     const formattedHistory = history.slice(-6).map((m: { role: string; content: string }) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }))
 
-    // Agregamos el mensaje actual
     formattedHistory.push({
       role: "user",
       parts: [{ text: message }]
     })
 
-    // Construimos la URL exacta de la API REST para Gemini 1.5 Flash
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+    // LA MAGIA: Apuntamos exactamente al modelo que tu cuenta SÍ tiene habilitado
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`
 
-    // Hacemos la llamada directa a Google
     const geminiRes = await fetch(geminiUrl, {
       method: "POST",
       headers: {
@@ -107,24 +104,12 @@ export async function POST(req: NextRequest) {
     })
 
     if (!geminiRes.ok) {
-      // MAGIA DE CTO: Si Google rechaza el modelo, le exigimos la lista de los que sí funcionan
-      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`)
-      const listData = await listRes.json()
-      
-      // Filtramos solo los nombres de los modelos que sirven para generar texto
-      const modelosDisponibles = listData.models
-        ?.filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
-        .map((m: any) => m.name.replace('models/', ''))
-        .join(", ") || "No se encontraron modelos válidos."
-
-      return NextResponse.json({ 
-        error: `Modelo incorrecto. Tu API Key solo tiene acceso a estos modelos exactos: [ ${modelosDisponibles} ]` 
-      }, { status: 500 })
+      const errorText = await geminiRes.text()
+      console.error("Error devuelto por la API de Google:", errorText)
+      throw new Error(`Fallo de conexión con IA: ${geminiRes.status}`)
     }
 
     const geminiData = await geminiRes.json()
-    
-    // Extraemos la respuesta del JSON que nos manda Google
     const answer = geminiData.candidates[0].content.parts[0].text
 
     return NextResponse.json({ answer })

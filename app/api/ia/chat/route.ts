@@ -84,7 +84,7 @@ ${contextText}`
     
     // Usamos Flash porque es brutalmente rápido e ideal para RAG
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash-latest",
+      model: "gemini-1.5-flash-002",
       systemInstruction: systemPrompt // Le pasamos el contexto como instrucción base
     })
 

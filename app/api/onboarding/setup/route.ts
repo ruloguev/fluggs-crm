@@ -114,20 +114,36 @@ export async function POST(req: NextRequest) {
 
     const directorRole = rolesData?.find(r => r.level === 1)
 
-    // 3. Perfil del director
+    if (!directorRole) {
+      return NextResponse.json({ error: "No se pudo crear el rol Director." }, { status: 500 })
+    }
+
+    // 3a. Upsert — crea el perfil si no existe, actualiza si ya lo creó un trigger de Auth
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: userId,
       email: email.trim().toLowerCase(),
       full_name: fullName.trim(),
       company_id: companyId,
-      role_id: directorRole?.id ?? null,
+      role_id: directorRole.id,
       is_active: true,
-    })
+    }, { onConflict: "id" })
 
     if (profileError) {
       console.error("profiles upsert:", profileError)
       return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
+
+    // 3b. UPDATE explícito como doble seguro: garantiza role_id aunque
+    //     un trigger de Supabase Auth haya pisado el perfil después del upsert
+    await supabase
+      .from("profiles")
+      .update({
+        role_id: directorRole.id,
+        company_id: companyId,
+        full_name: fullName.trim(),
+        is_active: true,
+      })
+      .eq("id", userId)
 
     // 4. Pipeline stages
     await supabase.from("pipeline_stages").insert([

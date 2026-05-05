@@ -127,14 +127,16 @@ function UploadForm({ companyId, onUploaded }: { companyId: string; onUploaded: 
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const ACCEPT = ".txt,.md,.csv"
-  const MAX_MB = 5
+  const ACCEPT = ".txt,.md,.csv,.pdf"
+  const MAX_MB = 20
+  const isPDF = file?.name.toLowerCase().endsWith(".pdf") ?? false
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
-    if (f.size > MAX_MB * 1024 * 1024) {
-      setError(`El archivo supera los ${MAX_MB} MB.`)
+    const maxBytes = (f.name.toLowerCase().endsWith(".pdf") ? 20 : 5) * 1024 * 1024
+    if (f.size > maxBytes) {
+      setError(`El archivo supera el límite permitido.`)
       return
     }
     setFile(f)
@@ -145,17 +147,35 @@ function UploadForm({ companyId, onUploaded }: { companyId: string; onUploaded: 
   async function upload() {
     if (!file || !title.trim()) { setError("Necesitas un título y un archivo."); return }
     setUploading(true); setError(null)
-    setProgress("Leyendo archivo...")
 
-    // 1. Leer contenido del archivo
-    const text = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = e => resolve(e.target?.result as string)
-      reader.onerror = reject
-      reader.readAsText(file)
-    })
+    let text = ""
 
-    if (!text.trim()) { setError("El archivo está vacío."); setUploading(false); setProgress(null); return }
+    if (isPDF) {
+      // ── PDF: extraer texto en el servidor ──
+      setProgress("Extrayendo texto del PDF...")
+      const form = new FormData()
+      form.append("file", file)
+      const extractRes = await fetch("/api/ia/document/extract-pdf", { method: "POST", body: form })
+      const extractData = await extractRes.json()
+      if (!extractRes.ok) {
+        setError(extractData.error ?? "No se pudo extraer texto del PDF.")
+        setUploading(false); setProgress(null); return
+      }
+      text = extractData.text
+      setProgress(`PDF leído · ${extractData.pages} página${extractData.pages !== 1 ? "s" : ""} · ${(extractData.charCount / 1000).toFixed(0)}k caracteres`)
+      await new Promise(r => setTimeout(r, 600))
+    } else {
+      // ── Texto plano: leer directo en el cliente ──
+      setProgress("Leyendo archivo...")
+      text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = e => resolve(e.target?.result as string)
+        reader.onerror = reject
+        reader.readAsText(file)
+      })
+    }
+
+    if (!text.trim()) { setError("El archivo está vacío o no tiene texto extraíble."); setUploading(false); setProgress(null); return }
 
     setProgress("Guardando documento...")
 
@@ -211,8 +231,9 @@ function UploadForm({ companyId, onUploaded }: { companyId: string; onUploaded: 
       <div className="flex gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-500/15">
         <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
         <p className="text-xs text-blue-300/70 leading-relaxed">
-          Sube archivos <strong className="text-blue-300">.txt</strong>, <strong className="text-blue-300">.md</strong> o <strong className="text-blue-300">.csv</strong> (máx. 5 MB).
-          El asistente aprenderá de ellos automáticamente. Ideal para fichas técnicas, listas de precios, manuales de objeciones y FAQs.
+          Sube archivos <strong className="text-blue-300">.pdf</strong>, <strong className="text-blue-300">.txt</strong> o <strong className="text-blue-300">.md</strong>.
+          PDFs hasta 20 MB, texto hasta 5 MB. Solo funciona con PDFs nativos (no escaneados).
+          Ideal para fichas técnicas, listas de precios, manuales de objeciones y FAQs.
         </p>
       </div>
 
@@ -236,8 +257,8 @@ function UploadForm({ companyId, onUploaded }: { companyId: string; onUploaded: 
             : "bg-zinc-900/60 border-zinc-700 border-dashed text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
         }`}>
         {file
-          ? <><CheckCircle2 className="w-4 h-4" />{file.name}</>
-          : <><UploadCloud className="w-4 h-4" />Seleccionar archivo ({ACCEPT})</>}
+          ? <><CheckCircle2 className="w-4 h-4" />{file.name}{isPDF ? " · PDF" : ""}</>
+          : <><UploadCloud className="w-4 h-4" />Seleccionar archivo (PDF, TXT, MD)</>}
       </button>
       <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onFileChange} />
 

@@ -12,15 +12,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No se recibió archivo" }, { status: 400 });
     }
 
-    // 1. Convertimos el archivo a ArrayBuffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // 2. EXTRAEMOS EL TEXTO (unpdf es magia pura para Vercel)
+    // 1. Extraemos el contenido
     const { text, totalPages } = await extractText(buffer);
 
-    // 3. Limpiamos un poco el texto para quitar espacios raros
-    const cleanedText = text.replace(/\s+/g, ' ').trim();
+    // 2. SOLUCIÓN AL ERROR DE TIPO:
+    // Unimos el array de páginas en un solo string antes de limpiar
+    const combinedText = Array.isArray(text) ? text.join(" ") : (text || "");
+    
+    // 3. Ahora 'combinedText' es un string, por lo que 'replace' funcionará perfecto
+    const cleanedText = combinedText.replace(/\s+/g, ' ').trim();
 
     return NextResponse.json({ 
       success: true, 

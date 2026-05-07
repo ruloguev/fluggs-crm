@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 1. Forzamos que la ruta sea dinámica para que Vercel no intente 
-// pre-generarla estáticamente durante el despliegue.
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
@@ -10,33 +8,34 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json({ error: "No se subió ningún archivo" }, { status: 400 });
+      return NextResponse.json({ error: "No se recibió el archivo" }, { status: 400 });
     }
 
-    // 2. CARGA BAJO DEMANDA: Solo cargamos pdf-parse cuando la función se ejecuta.
-    // Esto es CRUCIAL para saltarse los errores de compilación de Vercel.
+    // 1. IMPORTACIÓN ESTÁNDAR
+    // Usamos el nombre base de la librería. 
+    // El @ts-ignore es para que TypeScript no se queje de los tipos.
     // @ts-ignore
-    const pdf = require('pdf-parse/lib/pdf-parse.js');
+    const pdf = require('pdf-parse');
 
-    // Convertimos el archivo a un formato que el servidor pueda procesar
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // 3. Extracción de texto
+    // 2. EXTRACCIÓN
+    // pdf-parse devuelve una promesa, por eso usamos await.
     const data = await pdf(buffer);
 
-    // Retornamos el éxito
     return NextResponse.json({ 
-      success: true,
+      success: true, 
       text: data.text,
-      numPages: data.numpages,
-      info: data.info 
+      numPages: data.numpages 
     });
 
   } catch (error: any) {
-    console.error("Error en la API de PDF:", error);
+    console.error("ERROR CRÍTICO EN VERCEL:", error);
+    
     return NextResponse.json({ 
-      error: "Error al procesar el documento", 
+      success: false,
+      error: "Error interno en el servidor",
       details: error.message 
     }, { status: 500 });
   }

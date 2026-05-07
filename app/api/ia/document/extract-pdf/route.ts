@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractText } from 'unpdf';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,47 +8,31 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
-    if (!file) return NextResponse.json({ error: "No hay archivo" }, { status: 400 });
-
-    const bytes = await file.arrayBuffer();
-    const buffer = new Uint8Array(bytes);
-
-    // Importamos dinámicamente el motor de PDF de Mozilla
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-
-    // Configuración para que no busque archivos externos
-    const loadingTask = pdfjs.getDocument({
-      data: buffer,
-      useSystemFonts: true,
-      disableFontFace: true,
-      verbosity: 0
-    });
-
-    const pdf = await loadingTask.promise;
-    let fullText = "";
-
-    // Extraemos el texto página por página
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        // @ts-ignore
-        .map((item) => item.str)
-        .join(" ");
-      fullText += pageText + "\n";
+    if (!file) {
+      return NextResponse.json({ error: "No se recibió archivo" }, { status: 400 });
     }
+
+    // 1. Convertimos el archivo a ArrayBuffer
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // 2. EXTRAEMOS EL TEXTO (unpdf es magia pura para Vercel)
+    const { text, totalPages } = await extractText(buffer);
+
+    // 3. Limpiamos un poco el texto para quitar espacios raros
+    const cleanedText = text.replace(/\s+/g, ' ').trim();
 
     return NextResponse.json({ 
       success: true, 
-      text: fullText,
-      numPages: pdf.numPages 
+      text: cleanedText,
+      numPages: totalPages 
     });
 
   } catch (error: any) {
-    console.error("LOG CRÍTICO VERCEL:", error);
+    console.error("LOG DE ERROR EN VERCEL:", error);
     return NextResponse.json({ 
       success: false, 
-      error: "Error procesando PDF", 
+      error: "Error procesando el PDF", 
       details: error.message 
     }, { status: 500 });
   }

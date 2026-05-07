@@ -7,35 +7,47 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
-    if (!file) {
-      return NextResponse.json({ error: "No se recibió el archivo" }, { status: 400 });
-    }
-
-    // 1. IMPORTACIÓN ESTÁNDAR
-    // Usamos el nombre base de la librería. 
-    // El @ts-ignore es para que TypeScript no se queje de los tipos.
-    // @ts-ignore
-    const pdf = require('pdf-parse');
+    if (!file) return NextResponse.json({ error: "No hay archivo" }, { status: 400 });
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const buffer = new Uint8Array(bytes);
 
-    // 2. EXTRACCIÓN
-    // pdf-parse devuelve una promesa, por eso usamos await.
-    const data = await pdf(buffer);
+    // Importamos dinámicamente el motor de PDF de Mozilla
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+    // Configuración para que no busque archivos externos
+    const loadingTask = pdfjs.getDocument({
+      data: buffer,
+      useSystemFonts: true,
+      disableFontFace: true,
+      verbosity: 0
+    });
+
+    const pdf = await loadingTask.promise;
+    let fullText = "";
+
+    // Extraemos el texto página por página
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        // @ts-ignore
+        .map((item) => item.str)
+        .join(" ");
+      fullText += pageText + "\n";
+    }
 
     return NextResponse.json({ 
       success: true, 
-      text: data.text,
-      numPages: data.numpages 
+      text: fullText,
+      numPages: pdf.numPages 
     });
 
   } catch (error: any) {
-    console.error("ERROR CRÍTICO EN VERCEL:", error);
-    
+    console.error("LOG CRÍTICO VERCEL:", error);
     return NextResponse.json({ 
-      success: false,
-      error: "Error interno en el servidor",
+      success: false, 
+      error: "Error procesando PDF", 
       details: error.message 
     }, { status: 500 });
   }

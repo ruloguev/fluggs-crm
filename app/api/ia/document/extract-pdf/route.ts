@@ -32,7 +32,7 @@ function applyPolyfills() {
 
   if (!g.Path2D) {
     g.Path2D = class Path2D {
-      constructor(_?: string | InstanceType<typeof Path2D>) {}
+      constructor(_?: unknown) {}
       addPath() {}; arc() {}; arcTo() {}; bezierCurveTo() {}
       closePath() {}; ellipse() {}; lineTo() {}; moveTo() {}
       quadraticCurveTo() {}; rect() {}

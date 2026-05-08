@@ -110,10 +110,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const can = useCallback((permission: string) => {
     if (!permission) return true
     const val = role?.permissions?.[permission]
-    // Supabase devuelve JSONB como strings en algunos casos ("true"/"false")
-    if (val === "true"  || val === true)  return true
-    if (val === "false" || val === false) return false
-    return Boolean(val)
+    // Castear a unknown primero para manejar JSONB que llega como string de Supabase
+    const raw = val as unknown
+    if (raw === "true"  || raw === true)  return true
+    if (raw === "false" || raw === false) return false
+    return Boolean(raw)
   }, [role])
 
   const value = useMemo<AuthContextValue>(() => ({

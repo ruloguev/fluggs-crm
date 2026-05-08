@@ -40,35 +40,35 @@ export async function POST(req: NextRequest) {
 
     let contextText = ""
 
-    // 2. Mantenemos OpenAI para los Embeddings (búsqueda en tu base de datos)
-    if (process.env.OPENAI_API_KEY) {
-      const embRes = await fetch("https://api.openai.com/v1/embeddings", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ input: message, model: "text-embedding-3-small" }),
+    // 2. Embedding con Gemini (igual que el ingest — mismo modelo, mismas dimensiones)
+    try {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai")
+      const genAI = new GoogleGenerativeAI(geminiKey)
+      const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" })
+
+      const result = await embeddingModel.embedContent(message)
+      const embeddingValues = result.embedding.values
+      const embeddingString = `[${embeddingValues.join(",")}]`
+
+      const { data: chunks, error: rpcError } = await supabase.rpc("match_knowledge_chunks", {
+        query_embedding: embeddingString,
+        match_threshold: 0.5,   // umbral más bajo para mayor recall
+        match_count: 6,
+        p_company_id: companyId,
       })
-      
-      if (embRes.ok) {
-        const embData = await embRes.json()
-        const embedding = embData.data[0].embedding
-        const { data: chunks } = await supabase.rpc("match_knowledge_chunks", {
-          query_embedding: embedding,
-          match_threshold: 0.7,
-          match_count: 5,
-          p_company_id: companyId,
-        })
-        
-        if (chunks?.length > 0) {
-          contextText = chunks
-            .map((c: { document_title?: string; content: string }, i: number) =>
-                `[Fuente ${i + 1} — ${c.document_title}]\n${c.content}`
-            )
-            .join("\n\n---\n\n")
-        }
+
+      if (rpcError) console.error("match_knowledge_chunks error:", rpcError)
+
+      if (chunks && chunks.length > 0) {
+        contextText = chunks
+          .map((c: { document_title?: string; content: string }, i: number) =>
+            `[Fuente ${i + 1} — ${c.document_title ?? "Documento"}]\n${c.content}`
+          )
+          .join("\n\n---\n\n")
       }
+    } catch (embErr) {
+      console.error("Error generando embedding para búsqueda:", embErr)
+      // Continuamos sin contexto — Gemini responderá en modo general
     }
 
     // 3. Preparamos las instrucciones del sistema

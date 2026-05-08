@@ -166,7 +166,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div className="min-h-screen text-zinc-100 flugzz-background flex font-sans">
+    <div className="h-screen text-zinc-100 flugzz-background flex font-sans overflow-hidden">
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex">

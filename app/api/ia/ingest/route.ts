@@ -73,11 +73,14 @@ export async function POST(req: NextRequest) {
         const embeddingValues = result.embedding.values
 
         // Guardamos en Supabase
+        // pgvector espera el embedding como string "[v1,v2,...]"
+        const embeddingString = `[${embeddingValues.join(",")}]`
+
         await supabase.from("knowledge_chunks").insert({
           document_id: documentId,
           company_id: companyId,
           content: chunk,
-          embedding: embeddingValues, 
+          embedding: embeddingString,
           chunk_index: i,
           metadata: { document_title: doc?.title ?? "Sin título" },
         })

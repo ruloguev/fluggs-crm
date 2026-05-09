@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
 export const runtime = "nodejs"
@@ -52,9 +51,6 @@ export async function POST(req: NextRequest) {
 
     await supabase.from("knowledge_chunks").delete().eq("document_id", documentId)
 
-    const genAI = new GoogleGenerativeAI(geminiKey)
-    const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" })
-
     const chunks = chunkText(text)
     let inserted = 0
     const errors: string[] = []
@@ -65,8 +61,21 @@ export async function POST(req: NextRequest) {
 
       let embeddingValues: number[]
       try {
-        const result = await embeddingModel.embedContent(chunk)
-        embeddingValues = result.embedding.values
+        // Llamada directa a la API v1 de Google (el SDK usa v1beta que no soporta text-embedding-004)
+        const embRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${geminiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: { parts: [{ text: chunk }] } }),
+          }
+        )
+        if (!embRes.ok) {
+          const errText = await embRes.text()
+          throw new Error(`Gemini API ${embRes.status}: ${errText}`)
+        }
+        const embData = await embRes.json()
+        embeddingValues = embData.embedding.values
       } catch (embErr) {
         const msg = embErr instanceof Error ? embErr.message : String(embErr)
         console.error(`[ingest] Chunk ${i} embedding error:`, msg)

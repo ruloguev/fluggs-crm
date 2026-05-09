@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     try {
       // Llamada directa a la API v1 de Google (el SDK usa v1beta que no soporta text-embedding-004)
       const embRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${geminiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -61,21 +61,15 @@ export async function POST(req: NextRequest) {
 
       let embeddingValues: number[]
       try {
-        // Llamada directa a la API v1 de Google (el SDK usa v1beta que no soporta text-embedding-004)
-        const embRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: { parts: [{ text: chunk }] } }),
-          }
+        // SDK: apiVersion en getGenerativeModel (requestOptions), no en el constructor
+        const { GoogleGenerativeAI } = await import("@google/generative-ai")
+        const genAI = new GoogleGenerativeAI(geminiKey)
+        const embModel = genAI.getGenerativeModel(
+          { model: "text-embedding-004" },
+          { apiVersion: "v1" },
         )
-        if (!embRes.ok) {
-          const errText = await embRes.text()
-          throw new Error(`Gemini API ${embRes.status}: ${errText}`)
-        }
-        const embData = await embRes.json()
-        embeddingValues = embData.embedding.values
+        const result = await embModel.embedContent(chunk)
+        embeddingValues = result.embedding.values
       } catch (embErr) {
         const msg = embErr instanceof Error ? embErr.message : String(embErr)
         console.error(`[ingest] Chunk ${i} embedding error:`, msg)

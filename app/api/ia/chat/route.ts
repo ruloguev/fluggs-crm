@@ -42,18 +42,15 @@ export async function POST(req: NextRequest) {
 
     // 2. Embedding con Gemini (igual que el ingest — mismo modelo, mismas dimensiones)
     try {
-      // Llamada directa a la API v1 de Google (el SDK usa v1beta que no soporta text-embedding-004)
-      const embRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: { parts: [{ text: message }] } }),
-        }
+      // SDK: apiVersion en getGenerativeModel (requestOptions), no en el constructor
+      const { GoogleGenerativeAI } = await import("@google/generative-ai")
+      const genAI = new GoogleGenerativeAI(geminiKey)
+      const embModel = genAI.getGenerativeModel(
+        { model: "text-embedding-004" },
+        { apiVersion: "v1" },
       )
-      if (!embRes.ok) throw new Error(`Gemini API ${embRes.status}: ${await embRes.text()}`)
-      const embData = await embRes.json()
-      const embeddingValues: number[] = embData.embedding.values
+      const result = await embModel.embedContent(message)
+      const embeddingValues: number[] = result.embedding.values
       const embeddingString = `[${embeddingValues.join(",")}]`
 
       const { data: chunks, error: rpcError } = await supabase.rpc("match_knowledge_chunks", {

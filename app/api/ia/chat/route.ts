@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import {
-  getSupabaseServiceRoleKey,
-  getSupabaseUrl,
-} from "@/lib/server-env"
+import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
 export const runtime = "nodejs"
 
@@ -16,110 +13,139 @@ function getSupabaseAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Verificamos la llave de Gemini (con .trim() para evitar espacios accidentales)
     const geminiKey = process.env.GEMINI_API_KEY?.trim()
-    if (!geminiKey) {
-      return NextResponse.json(
-        { error: "Falta GEMINI_API_KEY en las variables de entorno." },
-        { status: 503 }
-      )
-    }
+    if (!geminiKey)
+      return NextResponse.json({ error: "Falta GEMINI_API_KEY." }, { status: 503 })
 
     const supabase = getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { error: "Faltan las credenciales de Supabase en el servidor." },
-        { status: 503 }
-      )
-    }
+    if (!supabase)
+      return NextResponse.json({ error: "Faltan credenciales de Supabase." }, { status: 503 })
 
     const { message, companyId, history = [] } = await req.json()
-    if (!message || !companyId) {
-      return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 })
-    }
+    if (!message || !companyId)
+      return NextResponse.json({ error: "Faltan parámetros." }, { status: 400 })
 
+    // ── Búsqueda full-text en Postgres — sin embeddings ──────────
+    // Extrae las palabras clave del mensaje para buscar en los chunks
     let contextText = ""
-
-    // 2. Embedding con Gemini (igual que el ingest — mismo modelo, mismas dimensiones)
     try {
-      // SDK: apiVersion en getGenerativeModel (requestOptions), no en el constructor
-      const { GoogleGenerativeAI } = await import("@google/generative-ai")
-      const genAI = new GoogleGenerativeAI(geminiKey)
-      const embModel = genAI.getGenerativeModel(
-        { model: "text-embedding-004" },
-        { apiVersion: "v1" },
-      )
-      const result = await embModel.embedContent(message)
-      const embeddingValues: number[] = result.embedding.values
-      const embeddingString = `[${embeddingValues.join(",")}]`
+      // Búsqueda con ilike en múltiples palabras clave
+      const keywords = message
+        .toLowerCase()
+        .replace(/[¿?¡!.,;:]/g, " ")
+        .split(/\s+/)
+        .filter((w: string) => w.length > 3)
+        .slice(0, 6)
 
-      const { data: chunks, error: rpcError } = await supabase.rpc("match_knowledge_chunks", {
-        query_embedding: embeddingString,
-        match_threshold: 0.5,   // umbral más bajo para mayor recall
-        match_count: 6,
-        p_company_id: companyId,
-      })
+      // Buscar chunks que contengan cualquiera de las palabras clave
+      let query = supabase
+        .from("knowledge_chunks")
+        .select(`
+          id, content, metadata,
+          knowledge_documents!inner(title, status, is_active)
+        `)
+        .eq("company_id", companyId)
+        .eq("knowledge_documents.is_active", true)
+        .eq("knowledge_documents.status", "ready")
+        .limit(8)
 
-      if (rpcError) console.error("match_knowledge_chunks error:", rpcError)
+      // Buscar por la frase completa primero
+      const { data: phraseMatches } = await supabase
+        .from("knowledge_chunks")
+        .select("id, content, metadata, document_id")
+        .eq("company_id", companyId)
+        .ilike("content", `%${message.slice(0, 50)}%`)
+        .limit(4)
 
-      if (chunks && chunks.length > 0) {
-        contextText = chunks
-          .map((c: { document_title?: string; content: string }, i: number) =>
-            `[Fuente ${i + 1} — ${c.document_title ?? "Documento"}]\n${c.content}`
-          )
+      // Buscar por palabras clave individuales
+      const { data: keywordMatches } = await supabase
+        .from("knowledge_chunks")
+        .select("id, content, metadata, document_id")
+        .eq("company_id", companyId)
+        .or(keywords.map((k: string) => `content.ilike.%${k}%`).join(","))
+        .limit(8)
+
+      // Combinar resultados deduplicando por id
+      const seen = new Set<string>()
+      const allChunks = [...(phraseMatches ?? []), ...(keywordMatches ?? [])]
+        .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
+        .slice(0, 8)
+
+      if (allChunks.length > 0) {
+        contextText = allChunks
+          .map((c, i) => {
+            const title = (c.metadata as any)?.document_title ?? "Documento"
+            return `[Fuente ${i + 1} — ${title}]\n${c.content}`
+          })
           .join("\n\n---\n\n")
       }
-    } catch (embErr) {
-      console.error("Error generando embedding para búsqueda:", embErr)
-      // Continuamos sin contexto — Gemini responderá en modo general
+
+      // Si no hay matches específicos, traer los primeros chunks disponibles
+      if (allChunks.length === 0) {
+        const { data: fallbackChunks } = await supabase
+          .from("knowledge_chunks")
+          .select("id, content, metadata")
+          .eq("company_id", companyId)
+          .order("chunk_index")
+          .limit(5)
+
+        if (fallbackChunks && fallbackChunks.length > 0) {
+          contextText = fallbackChunks
+            .map((c, i) => {
+              const title = (c.metadata as any)?.document_title ?? "Documento"
+              return `[Fuente ${i + 1} — ${title}]\n${c.content}`
+            })
+            .join("\n\n---\n\n")
+        }
+      }
+    } catch (searchErr) {
+      console.error("[chat] Error en búsqueda:", searchErr)
     }
 
-    // 3. Preparamos las instrucciones del sistema
+    // ── System prompt ─────────────────────────────────────────────
     const systemPrompt = contextText
-      ? `Eres el asistente de ventas interno de esta inmobiliaria. Tu única fuente de información es la base de conocimiento abajo. Responde de forma directa y profesional. Si la respuesta no está en los documentos, di exactamente: "No tengo esa información. Consulta con tu director." Cita siempre la fuente entre paréntesis al final. Responde en español.\n\nBASE DE CONOCIMIENTO:\n${contextText}`
-      : `Eres el asistente de ventas de esta inmobiliaria. Aún no hay documentos cargados en la base de conocimiento. Indica que el administrador debe cargar documentos en Ajustes → Asistente IA. Puedes ayudar con preguntas generales de ventas inmobiliarias. Responde en español.`
+      ? `Eres el asistente de ventas interno de esta inmobiliaria. Tu única fuente de información es la base de conocimiento que aparece abajo. Responde de forma directa y profesional. Si la respuesta no está en los documentos, di exactamente: "No tengo esa información. Consulta con tu director." Cita siempre entre paréntesis de qué fuente viene la información. Responde en español.
 
-    // 4. INTEGRACIÓN DIRECTA CON GEMINI (Modelo Moderno 2.5 Flash)
+BASE DE CONOCIMIENTO:
+${contextText}`
+      : `Eres el asistente de ventas de esta inmobiliaria. Aún no hay documentos disponibles en la base de conocimiento, o el administrador no ha cargado ninguno todavía. Puedes ayudar con preguntas generales de ventas inmobiliarias. Responde en español.`
+
+    // ── Llamada a Gemini 2.5 Flash ────────────────────────────────
     const formattedHistory = history.slice(-6).map((m: { role: string; content: string }) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }))
 
-    formattedHistory.push({
-      role: "user",
-      parts: [{ text: message }]
-    })
+    formattedHistory.push({ role: "user", parts: [{ text: message }] })
 
-    // LA MAGIA: Apuntamos exactamente al modelo que tu cuenta SÍ tiene habilitado
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`
-
-    const geminiRes = await fetch(geminiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemPrompt }]
-        },
-        contents: formattedHistory
-      })
-    })
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: formattedHistory,
+        }),
+      }
+    )
 
     if (!geminiRes.ok) {
       const errorText = await geminiRes.text()
-      console.error("Error devuelto por la API de Google:", errorText)
-      throw new Error(`Fallo de conexión con IA: ${geminiRes.status}`)
+      console.error("[chat] Gemini error:", errorText)
+      throw new Error(`Gemini ${geminiRes.status}: ${errorText.slice(0, 200)}`)
     }
 
     const geminiData = await geminiRes.json()
-    const answer = geminiData.candidates[0].content.parts[0].text
+    const answer = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sin respuesta"
 
     return NextResponse.json({ answer })
-    
+
   } catch (e: unknown) {
-    console.error("Error en el Webhook de IA:", e)
-    const message = e instanceof Error ? e.message : "Error desconocido"
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error("[chat] Fatal:", e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Error desconocido" },
+      { status: 500 }
+    )
   }
 }

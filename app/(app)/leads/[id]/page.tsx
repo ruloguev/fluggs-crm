@@ -1004,22 +1004,64 @@ export default function LeadDetailPage() {
         {/* Quick actions */}
         <div className="flex gap-2 flex-wrap">
           {contact.phone && (
-            <a href={`tel:${contact.phone}`}
+            <button
+              onClick={async () => {
+                window.location.href = `tel:${contact.phone}`
+                const now = new Date().toISOString()
+                const sb = supabase as any
+                await sb.from("activities").insert({
+                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  lead_id: id, contact_id: contact.id,
+                  type: "call", title: "Llamada saliente",
+                  body: `Llamada iniciada a ${contact.phone}`,
+                  call_status: "answered", created_at: now,
+                })
+                await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
+                loadData()
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-zinc-100 text-sm transition-all">
               <Phone className="w-3.5 h-3.5" /> Llamar
-            </a>
+            </button>
           )}
           {(contact.whatsapp || contact.phone) && (
-            <a href={`https://wa.me/${(contact.whatsapp || contact.phone)?.replace(/\D/g, "")}`} target="_blank"
+            <button
+              onClick={async () => {
+                const phone = (contact.whatsapp || contact.phone)?.replace(/\D/g, "")
+                window.open(`https://wa.me/${phone}`, "_blank")
+                const now = new Date().toISOString()
+                const sb = supabase as any
+                await sb.from("activities").insert({
+                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  lead_id: id, contact_id: contact.id,
+                  type: "whatsapp", title: "Mensaje de WhatsApp",
+                  body: `Conversación iniciada con ${contact.full_name}`,
+                  created_at: now,
+                })
+                await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
+                loadData()
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-emerald-500/40 text-zinc-300 hover:text-emerald-400 text-sm transition-all">
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-            </a>
+            </button>
           )}
           {contact.email && (
-            <a href={`mailto:${contact.email}`}
+            <button
+              onClick={async () => {
+                window.location.href = `mailto:${contact.email}`
+                const now = new Date().toISOString()
+                const sb = supabase as any
+                await sb.from("activities").insert({
+                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  lead_id: id, contact_id: contact.id,
+                  type: "email", title: "Email enviado",
+                  body: `Email a ${contact.email}`, created_at: now,
+                })
+                await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
+                loadData()
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-blue-500/40 text-zinc-300 hover:text-blue-400 text-sm transition-all">
               <Mail className="w-3.5 h-3.5" /> Email
-            </a>
+            </button>
           )}
           <button onClick={() => setShowLog(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-100 text-zinc-900 hover:bg-zinc-200 text-sm font-medium transition-all ml-auto">

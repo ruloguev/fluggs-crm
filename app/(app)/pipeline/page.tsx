@@ -13,7 +13,7 @@ type Lead = {
   id: string; title: string | null; priority: "low" | "medium" | "high"
   budget_max: number | null; currency: string; last_activity_at: string
   stage_id: string | null; metadata: any; owner_id: string | null
-  contact: { full_name: string; phone: string | null }
+  contact: { id: string; full_name: string; phone: string | null }
   source: { name: string; icon: string | null; color: string | null } | null
 }
 type TeamMember = { id: string; full_name: string; role_level: number }
@@ -53,10 +53,31 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
       company_id: companyId,
       user_id: profileId,
       lead_id: lead.id,
+      contact_id: lead.contact.id,
       type: "call",
       title: "Llamada saliente",
       body: `Llamada iniciada a ${lead.contact.phone}`,
-      call_status: "pending",
+      call_status: "answered",
+      created_at: now,
+    })
+    await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+    onLeadUpdate(lead.id, { last_activity_at: now })
+  }
+
+  async function handleWhatsApp(e: React.MouseEvent) {
+    e.stopPropagation()
+    const phone = lead.contact.phone?.replace(/\D/g, "")
+    if (!phone) return
+    window.open(`https://wa.me/${phone}`, "_blank")
+    const now = new Date().toISOString()
+    await supabase.from("activities").insert({
+      company_id: companyId,
+      user_id: profileId,
+      lead_id: lead.id,
+      contact_id: lead.contact.id,
+      type: "whatsapp",
+      title: "Mensaje de WhatsApp",
+      body: `Conversación iniciada con ${lead.contact.full_name}`,
       created_at: now,
     })
     await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
@@ -123,7 +144,7 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
               <button
                 type="button"
                 title="WhatsApp"
-                onClick={e => { e.stopPropagation(); window.open(`https://wa.me/${lead.contact.phone}`, "_blank") }}
+                onClick={handleWhatsApp}
                 className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
@@ -209,7 +230,7 @@ export default function PipelinePage() {
       supabase.from("pipeline_stages").select("*").eq("company_id", companyId).order("position"),
       supabase.from("leads").select(`
         id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,
-        contact:contacts(full_name,phone),
+        contact:contacts(id,full_name,phone),
         source:lead_sources(name,icon,color)
       `).eq("company_id", companyId).order("last_activity_at", { ascending: false }).limit(500),
       supabase.from("team_memberships").select("user_id, reports_to").eq("company_id", companyId),

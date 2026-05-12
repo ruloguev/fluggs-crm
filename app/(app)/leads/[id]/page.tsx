@@ -115,12 +115,16 @@ function ActivityItem({ act }: { act: Activity }) {
       <div className="pb-5 flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
+            {act.type === "stage_change" ? (
               <p className="text-sm text-zinc-300">
-                Movido de{" "}
-                <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
-                {" → "}
-                <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                {act.from_stage
+                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
+                  : <span className="text-zinc-500">Entró en </span>
+                }
+                {act.to_stage
+                  ? <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                  : <span className="text-zinc-400">{act.title}</span>
+                }
               </p>
             ) : (
               <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>
@@ -1115,10 +1119,16 @@ export default function LeadDetailPage() {
                         {/* same content without the line */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
+                            {act.type === "stage_change" ? (
                               <p className="text-sm text-zinc-300">
-                                Movido de <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
-                                {" → "}<span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                                {act.from_stage
+                                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
+                                  : <span className="text-zinc-500">Entró en </span>
+                                }
+                                {act.to_stage
+                                  ? <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                                  : <span className="text-zinc-400">{act.title}</span>
+                                }
                               </p>
                             ) : <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>}
                             {act.call_duration_secs != null && <p className="text-xs text-zinc-500 mt-0.5">Duración: {fmtDuration(act.call_duration_secs)}</p>}

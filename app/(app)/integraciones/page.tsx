@@ -1,25 +1,58 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import {
-  Globe, RefreshCw, Plus, Trash2, GripVertical, CheckCircle2,
-  XCircle, Copy, ExternalLink, Users, Shuffle, Loader2, AlertCircle
+  Globe, Plus, Trash2, GripVertical, CheckCircle2,
+  XCircle, Copy, Shuffle, Loader2, AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+
+type FacebookIntegration = {
+  id: string
+  company_id: string
+  page_id: string | null
+  page_name: string | null
+  access_token: string | null
+  verify_token: string | null
+  is_active: boolean | null
+}
+
+type AgentProfile = {
+  id: string
+  full_name: string
+  email: string
+  avatar_url: string | null
+}
+
+type QueueMember = {
+  id: string
+  user_id: string
+  position: number
+  is_active: boolean
+  leads_assigned: number
+  profile: {
+    full_name: string
+    email: string
+  } | null
+}
+
+type QueueStats = {
+  current_position: number
+  total_assigned: number
+} | null
 
 const FACEBOOK_DRAFT_KEY = "flugzz:facebook-integration-draft"
 
 const DEFAULT_FACEBOOK_FORM = {
-  page_id: '',
-  page_name: '',
-  access_token: '',
-  verify_token: '',
+  page_id: "",
+  page_name: "",
+  access_token: "",
+  verify_token: "",
 }
 
 function getInitialFacebookDraft() {
@@ -56,7 +89,24 @@ function getInitialFacebookDraft() {
   }
 }
 
-// ── Sección: Estado de conexión ───────────────────────────────
+function buildFacebookFormState(integration?: FacebookIntegration | null) {
+  const initialDraft = getInitialFacebookDraft()
+
+  if (!integration) {
+    return initialDraft
+  }
+
+  return {
+    form: {
+      page_id: integration.page_id ?? initialDraft.form.page_id,
+      page_name: integration.page_name ?? initialDraft.form.page_name,
+      access_token: integration.access_token ?? initialDraft.form.access_token,
+      verify_token: integration.verify_token ?? initialDraft.form.verify_token,
+    },
+    restored: initialDraft.restored,
+  }
+}
+
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
     <span className="flex items-center gap-1.5 text-xs text-emerald-400">
@@ -71,13 +121,18 @@ function StatusBadge({ active }: { active: boolean }) {
   )
 }
 
-// ── Formulario de integración Facebook ───────────────────────
-function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
-  const initialDraft = getInitialFacebookDraft()
-  const [form, setForm] = useState(initialDraft.form)
+function FacebookSetupForm({
+  integration,
+  onSaved,
+}: {
+  integration: FacebookIntegration | null
+  onSaved: () => void
+}) {
+  const initialState = buildFacebookFormState(integration)
+  const [form, setForm] = useState(initialState.form)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [draftRestored] = useState(initialDraft.restored)
+  const [draftRestored] = useState(initialState.restored)
   const supabase = createClient()
 
   useEffect(() => {
@@ -92,86 +147,140 @@ function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
     window.localStorage.setItem(FACEBOOK_DRAFT_KEY, JSON.stringify(form))
   }, [form])
 
-  // Generar un verify_token aleatorio
   function generateToken() {
-    const token = crypto.randomUUID().replace(/-/g, '')
-    setForm(f => ({ ...f, verify_token: token }))
+    const token = crypto.randomUUID().replace(/-/g, "")
+    setForm((current) => ({ ...current, verify_token: token }))
   }
 
-  async function save() {
-    if (!form.page_id || !form.access_token || !form.verify_token) {
-      setError('Page ID, Access Token y Verify Token son requeridos.')
+  async function getCurrentContext() {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user!.id)
+      .single()
+
+    return { user, profile }
+  }
+
+  async function saveWebhookDraft() {
+    if (!form.verify_token) {
+      setError("Genera o captura primero el Verify Token.")
       return
     }
+
     setSaving(true)
     setError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single()
+    const { user, profile } = await getCurrentContext()
+    const payload = {
+      company_id: profile!.company_id,
+      page_name: form.page_name || null,
+      verify_token: form.verify_token,
+      is_active: true,
+      created_by: user!.id,
+    }
 
-    const { error: err } = await (supabase as any).from('facebook_integrations').upsert({
+    const query = integration?.id
+      ? (supabase as any).from("facebook_integrations").update(payload).eq("id", integration.id)
+      : (supabase as any).from("facebook_integrations").insert(payload)
+
+    const { error: saveError } = await query
+
+    setSaving(false)
+    if (saveError) {
+      setError(saveError.message)
+      return
+    }
+
+    onSaved()
+  }
+
+  async function saveLeadCaptureConfig() {
+    if (!form.verify_token || !form.page_id || !form.access_token) {
+      setError("Verify Token, Page ID y Page Access Token son requeridos para activar la captura.")
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    const { user, profile } = await getCurrentContext()
+    const payload = {
       company_id: profile!.company_id,
       page_id: form.page_id,
-      page_name: form.page_name,
+      page_name: form.page_name || null,
       access_token: form.access_token,
       verify_token: form.verify_token,
       is_active: true,
       created_by: user!.id,
-    })
+    }
+
+    const query = integration?.id
+      ? (supabase as any).from("facebook_integrations").update(payload).eq("id", integration.id)
+      : (supabase as any).from("facebook_integrations").insert(payload)
+
+    const { error: saveError } = await query
 
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (saveError) {
+      setError(saveError.message)
+      return
+    }
+
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(FACEBOOK_DRAFT_KEY)
     }
+
     onSaved()
   }
 
-  const webhookUrl = typeof window !== 'undefined'
+  const webhookUrl = typeof window !== "undefined"
     ? `${window.location.origin}/api/facebook`
-    : '/api/facebook'
+    : "/api/facebook"
+  const webhookPrepared = Boolean((integration?.verify_token || form.verify_token || "").trim())
+  const captureReady = Boolean((integration?.page_id || form.page_id) && (integration?.access_token || form.access_token))
 
   return (
     <div className="space-y-5">
-      {/* Instrucciones */}
-      <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-        <p className="text-sm text-blue-300 font-medium mb-2">¿Cómo configurar?</p>
-        <ol className="text-xs text-blue-300/70 space-y-1.5 list-decimal list-inside">
-          <li>Ve a <strong className="text-blue-300">Meta for Developers</strong> → Tu App → Webhooks</li>
-          <li>Agrega un webhook para <strong className="text-blue-300">Page</strong>, suscríbete a <code className="bg-blue-950/50 px-1 rounded">leadgen</code></li>
-          <li>Usa la URL y el Verify Token de abajo</li>
-          <li>Copia el Page ID y el Page Access Token de tu página de Facebook</li>
+      <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+        <p className="mb-2 text-sm font-medium text-blue-300">Como configurarlo</p>
+        <ol className="list-decimal list-inside space-y-1.5 text-xs text-blue-200/70">
+          <li>Genera y guarda primero el webhook.</li>
+          <li>Ve a Meta Developers y pega el callback URL con el verify token.</li>
+          <li>Cuando Meta lo verifique, vuelve y captura Page ID y Access Token.</li>
+          <li>Guarda la pagina para activar la recepcion de leads.</li>
         </ol>
       </div>
 
       {draftRestored && (
-        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
-          Recuperamos tu borrador automÃ¡ticamente para que no pierdas lo que ya habÃ­as capturado.
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">
+          Recuperamos tu borrador automaticamente para que no pierdas lo capturado.
         </div>
       )}
 
       <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/70 p-4 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-zinc-100">Paso 1: Configura el webhook en Meta</p>
-            <p className="text-xs text-zinc-500 mt-1">
-              Copia estos dos valores exactamente igual dentro de Meta Developers.
+            <p className="text-sm font-medium text-zinc-100">Paso 1: Preparar webhook</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Aqui generas el token visible que luego copiaras en Meta.
             </p>
           </div>
-          <div className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[11px] font-medium text-blue-300">
-            Requerido
+          <div className={`rounded-full px-3 py-1 text-[11px] font-medium ${webhookPrepared ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border border-zinc-800 bg-zinc-900 text-zinc-500"}`}>
+            {webhookPrepared ? "Listo" : "Pendiente"}
           </div>
         </div>
 
         <div className="space-y-1.5">
           <Label className="text-zinc-400">Callback URL</Label>
           <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-flugzz-accent truncate">
+            <code className="flex-1 truncate rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-xs text-flugzz-accent">
               {webhookUrl}
             </code>
             <button
               onClick={() => navigator.clipboard.writeText(webhookUrl)}
-              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-zinc-400 transition-colors hover:text-zinc-100"
             >
               <Copy className="w-4 h-4" />
             </button>
@@ -183,190 +292,244 @@ function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
             <Label className="text-zinc-400">Verify Token</Label>
             <button
               onClick={generateToken}
-              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap text-xs"
+              className="whitespace-nowrap rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:text-zinc-100"
             >
               {form.verify_token ? "Regenerar" : "Generar token"}
             </button>
           </div>
+
           <div className="flex items-center gap-2">
-            <code className="flex-1 min-h-[42px] break-all rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 font-mono text-xs text-emerald-300 flex items-center">
+            <code className="flex min-h-[42px] flex-1 items-center break-all rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 font-mono text-xs text-emerald-300">
               {form.verify_token || "Genera un token para copiarlo en Meta"}
             </code>
             <button
               onClick={() => form.verify_token && navigator.clipboard.writeText(form.verify_token)}
               disabled={!form.verify_token}
-              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors disabled:opacity-40"
+              className="rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-zinc-400 transition-colors hover:text-zinc-100 disabled:opacity-40"
             >
               <Copy className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-zinc-400">Verify Token guardado</Label>
+          <Input
+            value={form.verify_token}
+            onChange={(event) => setForm((current) => ({ ...current, verify_token: event.target.value }))}
+            placeholder="Generar o escribir tu token"
+            className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-sm"
+          />
           <p className="text-xs text-zinc-500">
-            Este token debe ser exactamente el mismo en Meta y en Flugzz.
+            Debe ser exactamente el mismo valor en Meta y en Flugzz.
           </p>
         </div>
+
+        <Button onClick={saveWebhookDraft} disabled={saving || !form.verify_token} className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Globe className="w-4 h-4 mr-2" />}
+          Guardar webhook
+        </Button>
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-zinc-400">Verify Token guardado</Label>
-        <Input
-          value={form.verify_token}
-          onChange={e => setForm(f => ({ ...f, verify_token: e.target.value }))}
-          placeholder="Generar o escribir tu token"
-          className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-sm"
-        />
-        {form.verify_token && (
-          <p className="text-xs text-zinc-500">Si cambias este valor, recuerda actualizarlo tambiÃ©n en Meta.</p>
+      <div className={`rounded-2xl border p-4 space-y-4 ${webhookPrepared ? "border-zinc-800/70 bg-zinc-950/70" : "border-zinc-900 bg-zinc-950/40 opacity-60"}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-zinc-100">Paso 2: Vincular pagina y activar leads</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Despues de verificar el webhook en Meta, completa estos datos para activar la captura.
+            </p>
+          </div>
+          <div className={`rounded-full px-3 py-1 text-[11px] font-medium ${captureReady ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border border-zinc-800 bg-zinc-900 text-zinc-500"}`}>
+            {captureReady ? "Listo" : "Pendiente"}
+          </div>
+        </div>
+
+        {!webhookPrepared && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+            Guarda primero el webhook para poder copiarlo y verificarlo en Meta.
+          </div>
         )}
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-zinc-400">Page ID</Label>
-          <Input value={form.page_id} onChange={e => setForm(f => ({ ...f, page_id: e.target.value }))}
-            placeholder="123456789" className="bg-zinc-900 border-zinc-800 text-zinc-100" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-zinc-400">Page ID</Label>
+            <Input
+              value={form.page_id}
+              onChange={(event) => setForm((current) => ({ ...current, page_id: event.target.value }))}
+              placeholder="123456789"
+              className="bg-zinc-900 border-zinc-800 text-zinc-100"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-zinc-400">Nombre de la pagina</Label>
+            <Input
+              value={form.page_name}
+              onChange={(event) => setForm((current) => ({ ...current, page_name: event.target.value }))}
+              placeholder="CD Maderas Oficial"
+              className="bg-zinc-900 border-zinc-800 text-zinc-100"
+            />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-zinc-400">Nombre de la página</Label>
-          <Input value={form.page_name} onChange={e => setForm(f => ({ ...f, page_name: e.target.value }))}
-            placeholder="CD Maderas Oficial" className="bg-zinc-900 border-zinc-800 text-zinc-100" />
-        </div>
-      </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-zinc-400">Page Access Token</Label>
-        <Input type="password" value={form.access_token}
-          onChange={e => setForm(f => ({ ...f, access_token: e.target.value }))}
-          placeholder="EAABwzLixnjYBO..." className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-xs" />
+        <div className="space-y-1.5">
+          <Label className="text-zinc-400">Page Access Token</Label>
+          <Input
+            type="password"
+            value={form.access_token}
+            onChange={(event) => setForm((current) => ({ ...current, access_token: event.target.value }))}
+            placeholder="EAABwzLixnjYBO..."
+            className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-xs"
+          />
+        </div>
+
+        <Button onClick={saveLeadCaptureConfig} disabled={saving || !webhookPrepared} className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200 disabled:opacity-50">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Globe className="w-4 h-4 mr-2" />}
+          Guardar pagina y activar leads
+        </Button>
       </div>
 
       {error && (
-        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
           <AlertCircle className="w-4 h-4 shrink-0" />{error}
         </div>
       )}
-
-      <Button onClick={save} disabled={saving} className="w-full bg-zinc-100 text-zinc-900 hover:bg-zinc-200">
-        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Globe className="w-4 h-4 mr-2" />}
-        Guardar integración
-      </Button>
     </div>
   )
 }
 
-// ── Gestor de Round Robin ─────────────────────────────────────
 function RoundRobinManager({ companyId }: { companyId: string }) {
-  const [agents, setAgents] = useState<any[]>([])
-  const [members, setMembers] = useState<any[]>([])
+  const [agents, setAgents] = useState<AgentProfile[]>([])
+  const [members, setMembers] = useState<QueueMember[]>([])
   const [queueId, setQueueId] = useState<string | null>(null)
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<QueueStats>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
-
-  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
 
-    // Cargar todos los agentes de la company
     const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, avatar_url')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
+      .from("profiles")
+      .select("id, full_name, email, avatar_url")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
 
-    // Cargar la cola de Facebook
     const { data: queue } = await (supabase as any)
-      .from('round_robin_queues')
-      .select('id')
-      .eq('company_id', companyId)
-      .eq('source', 'facebook')
+      .from("round_robin_queues")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("source", "facebook")
       .single()
 
     setQueueId(queue?.id ?? null)
 
     if (queue) {
       const { data: membersData } = await (supabase as any)
-        .from('round_robin_members')
-        .select('*, profile:profiles(full_name, email)')
-        .eq('queue_id', queue.id)
-        .order('position')
+        .from("round_robin_members")
+        .select("id, user_id, position, is_active, leads_assigned, profile:profiles(full_name, email)")
+        .eq("queue_id", queue.id)
+        .order("position")
 
       const { data: stateData } = await (supabase as any)
-        .from('round_robin_state')
-        .select('current_position, total_assigned')
-        .eq('queue_id', queue.id)
+        .from("round_robin_state")
+        .select("current_position, total_assigned")
+        .eq("queue_id", queue.id)
         .single()
 
-      setMembers(membersData ?? [])
-      setStats(stateData)
+      setMembers((membersData as QueueMember[] | null) ?? [])
+      setStats((stateData as QueueStats) ?? null)
+    } else {
+      setMembers([])
+      setStats(null)
     }
 
-    setAgents(profiles ?? [])
+    setAgents((profiles as AgentProfile[] | null) ?? [])
     setLoading(false)
   }
 
+  useEffect(() => {
+    void loadData()
+  }, [companyId])
+
   async function createQueue() {
-    const { data } = await (supabase as any).from('round_robin_queues').insert({
-      company_id: companyId, name: 'Cola Facebook Leads', source: 'facebook'
-    }).select().single()
-    if (data) { setQueueId(data.id); loadData() }
+    const { data } = await (supabase as any)
+      .from("round_robin_queues")
+      .insert({
+        company_id: companyId,
+        name: "Cola Facebook Leads",
+        source: "facebook",
+      })
+      .select()
+      .single()
+
+    if (data) {
+      setQueueId(data.id)
+      await loadData()
+    }
   }
 
   async function addAgent(userId: string) {
     if (!queueId) return
-    const nextPos = (members.length > 0 ? Math.max(...members.map((m: any) => m.position)) : 0) + 1
-    await (supabase as any).from('round_robin_members').insert({
-      queue_id: queueId, company_id: companyId, user_id: userId, position: nextPos
+
+    const nextPos = (members.length > 0 ? Math.max(...members.map((member) => member.position)) : 0) + 1
+    await (supabase as any).from("round_robin_members").insert({
+      queue_id: queueId,
+      company_id: companyId,
+      user_id: userId,
+      position: nextPos,
     })
-    loadData()
+    await loadData()
   }
 
   async function removeAgent(memberId: string) {
-    await (supabase as any).from('round_robin_members').delete().eq('id', memberId)
-    loadData()
+    await (supabase as any).from("round_robin_members").delete().eq("id", memberId)
+    await loadData()
   }
 
   async function toggleAgent(memberId: string, isActive: boolean) {
-    await (supabase as any).from('round_robin_members')
+    await (supabase as any)
+      .from("round_robin_members")
       .update({ is_active: !isActive })
-      .eq('id', memberId)
-    loadData()
+      .eq("id", memberId)
+    await loadData()
   }
 
-  const memberIds = members.map((m: any) => m.user_id)
-  const availableAgents = agents.filter(a => !memberIds.includes(a.id))
+  const memberIds = members.map((member) => member.user_id)
+  const availableAgents = agents.filter((agent) => !memberIds.includes(agent.id))
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="w-5 h-5 text-flugzz-accent animate-spin" />
-    </div>
-  )
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-5 h-5 text-flugzz-accent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
+          <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4">
             <p className="text-2xl font-semibold text-zinc-100">{stats.total_assigned}</p>
-            <p className="text-xs text-zinc-500 mt-1">Leads asignados en total</p>
+            <p className="mt-1 text-xs text-zinc-500">Leads asignados en total</p>
           </div>
-          <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800/50">
-            <p className="text-2xl font-semibold text-flugzz-accent">{members.filter((m: any) => m.is_active).length}</p>
-            <p className="text-xs text-zinc-500 mt-1">Agentes activos en rotación</p>
+          <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/50 p-4">
+            <p className="text-2xl font-semibold text-flugzz-accent">
+              {members.filter((member) => member.is_active).length}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">Agentes activos en rotacion</p>
           </div>
         </div>
       )}
 
-      {/* Sin cola creada */}
       {!queueId ? (
         <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900">
             <Shuffle className="w-6 h-6 text-zinc-500" />
           </div>
           <div>
-            <p className="text-zinc-200 font-medium">Sin cola configurada</p>
-            <p className="text-zinc-500 text-sm mt-1">Crea una cola para empezar la rotación automática</p>
+            <p className="font-medium text-zinc-200">Sin cola configurada</p>
+            <p className="mt-1 text-sm text-zinc-500">Crea una cola para empezar la rotacion automatica</p>
           </div>
           <Button onClick={createQueue} className="bg-flugzz-accent text-zinc-950 hover:bg-cyan-300">
             <Plus className="w-4 h-4 mr-2" /> Crear cola de Facebook
@@ -374,41 +537,48 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
         </div>
       ) : (
         <>
-          {/* Agentes en la cola */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-zinc-300">Orden de rotación</p>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium text-zinc-300">Orden de rotacion</p>
               <span className="text-xs text-zinc-500">{members.length} agentes</span>
             </div>
 
             {members.length === 0 && (
-              <p className="text-sm text-zinc-600 text-center py-4">Añade agentes a la rotación</p>
+              <p className="py-4 text-center text-sm text-zinc-600">Anade agentes a la rotacion</p>
             )}
 
-            {members.map((member: any, i: number) => (
-              <div key={member.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
-                  member.is_active ? 'bg-zinc-900/40 border-zinc-800/50' : 'bg-zinc-950/40 border-zinc-800/20 opacity-50'
-                }`}>
+            {members.map((member, index) => (
+              <div
+                key={member.id}
+                className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                  member.is_active ? "border-zinc-800/50 bg-zinc-900/40" : "border-zinc-800/20 bg-zinc-950/40 opacity-50"
+                }`}
+              >
                 <GripVertical className="w-4 h-4 text-zinc-700 cursor-grab" />
-                <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400 shrink-0">
-                  {i + 1}
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-bold text-zinc-400">
+                  {index + 1}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-200 truncate">{member.profile?.full_name}</p>
-                  <p className="text-xs text-zinc-500 truncate">{member.profile?.email}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-200">{member.profile?.full_name}</p>
+                  <p className="truncate text-xs text-zinc-500">{member.profile?.email}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-xs text-zinc-400 font-medium">{member.leads_assigned}</p>
+                  <p className="text-xs font-medium text-zinc-400">{member.leads_assigned}</p>
                   <p className="text-[10px] text-zinc-600">asignados</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => toggleAgent(member.id, member.is_active)}
-                    className={`p-1.5 rounded-lg transition-colors ${member.is_active ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-zinc-600 hover:bg-zinc-800'}`}>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => void toggleAgent(member.id, member.is_active)}
+                    className={`rounded-lg p-1.5 transition-colors ${
+                      member.is_active ? "text-emerald-400 hover:bg-emerald-500/10" : "text-zinc-600 hover:bg-zinc-800"
+                    }`}
+                  >
                     {member.is_active ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                   </button>
-                  <button onClick={() => removeAgent(member.id)}
-                    className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                  <button
+                    onClick={() => void removeAgent(member.id)}
+                    className="rounded-lg p-1.5 text-zinc-600 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -416,21 +586,23 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
             ))}
           </div>
 
-          {/* Agregar agentes */}
           {availableAgents.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs text-zinc-500 uppercase tracking-wider font-medium">Agregar a la rotación</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {availableAgents.map(agent => (
-                  <button key={agent.id} onClick={() => addAgent(agent.id)}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-dashed border-zinc-800 hover:border-flugzz-accent/40 hover:bg-zinc-900/30 transition-all text-left group">
-                    <div className="w-7 h-7 rounded-full bg-zinc-900 flex items-center justify-center text-xs font-bold text-zinc-400 shrink-0">
-                      {agent.full_name.substring(0,2).toUpperCase()}
+              <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Agregar a la rotacion</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {availableAgents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    onClick={() => void addAgent(agent.id)}
+                    className="group flex items-center gap-3 rounded-xl border border-dashed border-zinc-800 p-3 text-left transition-all hover:border-flugzz-accent/40 hover:bg-zinc-900/30"
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-zinc-400">
+                      {agent.full_name.substring(0, 2).toUpperCase()}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-300 truncate group-hover:text-zinc-100">{agent.full_name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-zinc-300 group-hover:text-zinc-100">{agent.full_name}</p>
                     </div>
-                    <Plus className="w-4 h-4 text-zinc-600 group-hover:text-flugzz-accent transition-colors shrink-0" />
+                    <Plus className="w-4 h-4 shrink-0 text-zinc-600 transition-colors group-hover:text-flugzz-accent" />
                   </button>
                 ))}
               </div>
@@ -442,15 +614,15 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
   )
 }
 
-// ── Página principal ──────────────────────────────────────────
 export default function IntegracionesPage() {
   const router = useRouter()
   const { can, loading: authLoading, role } = useAuth()
-  const [tab, setTab] = useState<'facebook' | 'roundrobin'>('facebook')
-  const [integration, setIntegration] = useState<any>(null)
+  const [tab, setTab] = useState<"facebook" | "roundrobin">("facebook")
+  const [integration, setIntegration] = useState<FacebookIntegration | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+
   const roleName = role?.name?.toLowerCase() ?? ""
   const canOpenIntegrations =
     can("can_manage_users") ||
@@ -461,32 +633,47 @@ export default function IntegracionesPage() {
     roleName.includes("gerente") ||
     (role?.level ?? 99) <= 2
 
+  async function loadIntegration() {
+    setLoading(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user!.id)
+      .single()
+
+    setCompanyId(profile?.company_id ?? null)
+
+    if (profile?.company_id) {
+      const { data } = await (supabase as any)
+        .from("facebook_integrations")
+        .select("id, company_id, page_id, page_name, access_token, verify_token, is_active")
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      setIntegration((data as FacebookIntegration | null) ?? null)
+    } else {
+      setIntegration(null)
+    }
+
+    setLoading(false)
+  }
+
   useEffect(() => {
     if (!authLoading && !canOpenIntegrations) {
       router.push("/dashboard")
       return
     }
+
     if (!authLoading && canOpenIntegrations) {
       void loadIntegration()
     }
-  }, [authLoading, can, role?.name, router])
+  }, [authLoading, canOpenIntegrations, router])
 
-  async function loadIntegration() {
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single()
-    setCompanyId(profile?.company_id ?? null)
-
-    if (profile) {
-      const { data } = await (supabase as any)
-        .from('facebook_integrations')
-        .select('*')
-        .eq('company_id', profile.company_id)
-        .single()
-      setIntegration(data)
-    }
-    setLoading(false)
-  }
+  const captureReady = Boolean(integration?.page_id && integration?.access_token && integration?.verify_token)
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -494,63 +681,58 @@ export default function IntegracionesPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
           Integraciones<span className="text-flugzz-accent">.</span>
         </h1>
-        <p className="text-sm text-zinc-400 mt-1">Conecta tus fuentes de captación y configura la distribución automática.</p>
+        <p className="mt-1 text-sm text-zinc-400">
+          Conecta tus fuentes de captacion y configura la distribucion automatica.
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-zinc-900/60 border border-zinc-800/50 rounded-xl w-fit">
+      <div className="flex gap-1 rounded-xl border border-zinc-800/50 bg-zinc-900/60 p-1 w-fit">
         {[
-          { id: 'facebook', label: 'Facebook Leads', icon: Globe },
-          { id: 'roundrobin', label: 'Round Robin', icon: Shuffle },
+          { id: "facebook", label: "Facebook Leads", icon: Globe },
+          { id: "roundrobin", label: "Round Robin", icon: Shuffle },
         ].map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              tab === id ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-400 hover:text-zinc-200'
-            }`}>
+          <button
+            key={id}
+            onClick={() => setTab(id as "facebook" | "roundrobin")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+              tab === id ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
             <Icon className="w-4 h-4" />{label}
           </button>
         ))}
       </div>
 
-      {/* Panel */}
-      <div className="p-6 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl">
+      <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="w-5 h-5 text-flugzz-accent animate-spin" />
           </div>
-        ) : tab === 'facebook' ? (
+        ) : tab === "facebook" ? (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/30 bg-blue-600/20">
                   <Globe className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="font-medium text-zinc-100">Facebook Lead Ads</p>
-                  {integration ? (
-                    <p className="text-xs text-zinc-400">{integration.page_name || integration.page_id}</p>
-                  ) : (
-                    <p className="text-xs text-zinc-500">Sin configurar</p>
-                  )}
+                  <p className="text-xs text-zinc-400">
+                    {integration?.page_name || integration?.page_id || "Configuracion escalonada"}
+                  </p>
                 </div>
               </div>
               <StatusBadge active={integration?.is_active ?? false} />
             </div>
 
-            {integration ? (
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center gap-2 text-emerald-400 text-sm">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  Webhook activo · Los leads de Facebook se asignan automáticamente
-                </div>
-                <button onClick={() => setIntegration(null)}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                  Reconfigurar integración
-                </button>
+            {captureReady && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                La integracion ya tiene webhook y captura de leads configurados.
               </div>
-            ) : (
-              <FacebookSetupForm onSaved={loadIntegration} />
             )}
+
+            <FacebookSetupForm integration={integration} onSaved={() => void loadIntegration()} />
           </div>
         ) : (
           companyId && <RoundRobinManager companyId={companyId} />

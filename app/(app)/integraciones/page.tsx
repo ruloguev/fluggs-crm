@@ -13,6 +13,49 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 
+const FACEBOOK_DRAFT_KEY = "flugzz:facebook-integration-draft"
+
+const DEFAULT_FACEBOOK_FORM = {
+  page_id: '',
+  page_name: '',
+  access_token: '',
+  verify_token: '',
+}
+
+function getInitialFacebookDraft() {
+  if (typeof window === "undefined") {
+    return {
+      form: DEFAULT_FACEBOOK_FORM,
+      restored: false,
+    }
+  }
+
+  const raw = window.localStorage.getItem(FACEBOOK_DRAFT_KEY)
+  if (!raw) {
+    return {
+      form: DEFAULT_FACEBOOK_FORM,
+      restored: false,
+    }
+  }
+
+  try {
+    const savedDraft = JSON.parse(raw) as typeof DEFAULT_FACEBOOK_FORM
+    return {
+      form: {
+        ...DEFAULT_FACEBOOK_FORM,
+        ...savedDraft,
+      },
+      restored: true,
+    }
+  } catch {
+    window.localStorage.removeItem(FACEBOOK_DRAFT_KEY)
+    return {
+      form: DEFAULT_FACEBOOK_FORM,
+      restored: false,
+    }
+  }
+}
+
 // ── Sección: Estado de conexión ───────────────────────────────
 function StatusBadge({ active }: { active: boolean }) {
   return active ? (
@@ -30,12 +73,24 @@ function StatusBadge({ active }: { active: boolean }) {
 
 // ── Formulario de integración Facebook ───────────────────────
 function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
-  const [form, setForm] = useState({
-    page_id: '', page_name: '', access_token: '', verify_token: ''
-  })
+  const initialDraft = getInitialFacebookDraft()
+  const [form, setForm] = useState(initialDraft.form)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftRestored] = useState(initialDraft.restored)
   const supabase = createClient()
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const hasContent = Object.values(form).some((value) => value.trim().length > 0)
+    if (!hasContent) {
+      window.localStorage.removeItem(FACEBOOK_DRAFT_KEY)
+      return
+    }
+
+    window.localStorage.setItem(FACEBOOK_DRAFT_KEY, JSON.stringify(form))
+  }, [form])
 
   // Generar un verify_token aleatorio
   function generateToken() {
@@ -66,6 +121,9 @@ function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
 
     setSaving(false)
     if (err) { setError(err.message); return }
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(FACEBOOK_DRAFT_KEY)
+    }
     onSaved()
   }
 
@@ -85,6 +143,12 @@ function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
           <li>Copia el Page ID y el Page Access Token de tu página de Facebook</li>
         </ol>
       </div>
+
+      {draftRestored && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+          Recuperamos tu borrador automÃ¡ticamente para que no pierdas lo que ya habÃ­as capturado.
+        </div>
+      )}
 
       {/* URL del webhook */}
       <div className="space-y-1.5">

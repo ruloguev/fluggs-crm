@@ -150,41 +150,72 @@ function FacebookSetupForm({ onSaved }: { onSaved: () => void }) {
         </div>
       )}
 
-      {/* URL del webhook */}
-      <div className="space-y-1.5">
-        <Label className="text-zinc-400">URL del Webhook (copia esto en Meta)</Label>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-flugzz-accent truncate">
-            {webhookUrl}
-          </code>
-          <button
-            onClick={() => navigator.clipboard.writeText(webhookUrl)}
-            className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
+      <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/70 p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-zinc-100">Paso 1: Configura el webhook en Meta</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              Copia estos dos valores exactamente igual dentro de Meta Developers.
+            </p>
+          </div>
+          <div className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[11px] font-medium text-blue-300">
+            Requerido
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-zinc-400">Callback URL</Label>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-flugzz-accent truncate">
+              {webhookUrl}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(webhookUrl)}
+              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-zinc-400">Verify Token</Label>
+            <button
+              onClick={generateToken}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap text-xs"
+            >
+              {form.verify_token ? "Regenerar" : "Generar token"}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 min-h-[42px] break-all rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 font-mono text-xs text-emerald-300 flex items-center">
+              {form.verify_token || "Genera un token para copiarlo en Meta"}
+            </code>
+            <button
+              onClick={() => form.verify_token && navigator.clipboard.writeText(form.verify_token)}
+              disabled={!form.verify_token}
+              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors disabled:opacity-40"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Este token debe ser exactamente el mismo en Meta y en Flugzz.
+          </p>
         </div>
       </div>
 
-      {/* Verify Token */}
       <div className="space-y-1.5">
-        <Label className="text-zinc-400">Verify Token</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            value={form.verify_token}
-            onChange={e => setForm(f => ({ ...f, verify_token: e.target.value }))}
-            placeholder="Generar o escribir tu token"
-            className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-sm"
-          />
-          <button
-            onClick={generateToken}
-            className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap text-xs"
-          >
-            Generar
-          </button>
-        </div>
+        <Label className="text-zinc-400">Verify Token guardado</Label>
+        <Input
+          value={form.verify_token}
+          onChange={e => setForm(f => ({ ...f, verify_token: e.target.value }))}
+          placeholder="Generar o escribir tu token"
+          className="bg-zinc-900 border-zinc-800 text-zinc-100 font-mono text-sm"
+        />
         {form.verify_token && (
-          <p className="text-xs text-zinc-500">Copia este token en el campo Verify Token de Meta Webhooks</p>
+          <p className="text-xs text-zinc-500">Si cambias este valor, recuerda actualizarlo tambiÃ©n en Meta.</p>
         )}
       </div>
 

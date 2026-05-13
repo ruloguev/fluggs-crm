@@ -300,19 +300,25 @@ function StageSelector({ current, stages, leadId, companyId, contactId, onChange
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
 
-    await Promise.all([
-      (supabase as any).from("leads")
-        .update({ stage_id: newStage.id, last_activity_at: new Date().toISOString() })
-        .eq("id", leadId),
-      (supabase as any).from("activities").insert({
-        company_id: companyId, lead_id: leadId, contact_id: contactId,
-        user_id: user!.id, type: "stage_change",
-        title: `Etapa cambiada`,
-        from_stage_id: current?.id ?? null,
-        to_stage_id: newStage.id,
-        completed_at: new Date().toISOString(),
-      })
-    ])
+    // Update lead stage
+    await (supabase as any).from("leads")
+      .update({ stage_id: newStage.id, last_activity_at: new Date().toISOString() })
+      .eq("id", leadId)
+
+    // Insert activity — do separately so errors are visible
+    const { error: actError } = await (supabase as any).from("activities").insert({
+      company_id: companyId,
+      lead_id: leadId,
+      contact_id: contactId,
+      user_id: user!.id,
+      type: "stage_change",
+      title: "Etapa cambiada",
+      from_stage_id: current?.id ?? null,
+      to_stage_id: newStage.id,
+      completed_at: new Date().toISOString(),
+    })
+
+    if (actError) console.error("[changeStage] activity insert failed:", actError)
 
     setLoading(false)
     setOpen(false)

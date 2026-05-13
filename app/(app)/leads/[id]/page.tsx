@@ -115,16 +115,12 @@ function ActivityItem({ act }: { act: Activity }) {
       <div className="pb-5 flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {act.type === "stage_change" ? (
+            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
               <p className="text-sm text-zinc-300">
-                {act.from_stage
-                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
-                  : <span className="text-zinc-500">Entró en </span>
-                }
-                {act.to_stage
-                  ? <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
-                  : <span className="text-zinc-400">{act.title}</span>
-                }
+                Movido de{" "}
+                <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
+                {" → "}
+                <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
               </p>
             ) : (
               <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>
@@ -826,8 +822,7 @@ export default function LeadDetailPage() {
       (supabase as any).from("activities").select(`
         id, type, title, body, call_duration_secs, call_status,
         visit_address, file_url, file_name, created_at,
-        from_stage:pipeline_stages!from_stage_id(name, color),
-        to_stage:pipeline_stages!to_stage_id(name, color),
+        from_stage_id, to_stage_id,
         user:profiles(full_name)
       `).eq("lead_id", id).order("created_at", { ascending: false }).limit(50),
 
@@ -837,8 +832,18 @@ export default function LeadDetailPage() {
     ])
 
     setLead(leadData as any)
-    setStages(stagesData ?? [])
-    setActivities(activitiesData ?? [])
+    const stagesArr = stagesData ?? []
+    setStages(stagesArr)
+
+    // Hydrate from_stage / to_stage manually — FK join via PostgREST is unreliable
+    // when the FK is not explicitly declared in Supabase schema
+    const stageMap = Object.fromEntries(stagesArr.map((s: any) => [s.id, s]))
+    const hydratedActivities = (activitiesData ?? []).map((act: any) => ({
+      ...act,
+      from_stage: act.from_stage_id ? stageMap[act.from_stage_id] ?? null : null,
+      to_stage:   act.to_stage_id   ? stageMap[act.to_stage_id]   ?? null : null,
+    }))
+    setActivities(hydratedActivities)
     setSources((sourcesData as Source[] | null) ?? [])
     setCompanySettings((companyData as CompanySettings | null) ?? null)
     setTitleDraft(leadData?.title ?? "")
@@ -1119,16 +1124,10 @@ export default function LeadDetailPage() {
                         {/* same content without the line */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            {act.type === "stage_change" ? (
+                            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
                               <p className="text-sm text-zinc-300">
-                                {act.from_stage
-                                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
-                                  : <span className="text-zinc-500">Entró en </span>
-                                }
-                                {act.to_stage
-                                  ? <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
-                                  : <span className="text-zinc-400">{act.title}</span>
-                                }
+                                Movido de <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
+                                {" → "}<span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
                               </p>
                             ) : <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>}
                             {act.call_duration_secs != null && <p className="text-xs text-zinc-500 mt-0.5">Duración: {fmtDuration(act.call_duration_secs)}</p>}

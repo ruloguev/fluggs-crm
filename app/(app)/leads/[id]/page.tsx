@@ -115,12 +115,14 @@ function ActivityItem({ act }: { act: Activity }) {
       <div className="pb-5 flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
+            {act.type === "stage_change" ? (
               <p className="text-sm text-zinc-300">
                 Movido de{" "}
-                <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
-                {" → "}
-                <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                {act.from_stage
+                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
+                  : <span className="text-zinc-500">Entró en </span>
+                }
+                {act.to_stage && <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>}
               </p>
             ) : (
               <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>
@@ -300,25 +302,19 @@ function StageSelector({ current, stages, leadId, companyId, contactId, onChange
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
 
-    // Update lead stage
-    await (supabase as any).from("leads")
-      .update({ stage_id: newStage.id, last_activity_at: new Date().toISOString() })
-      .eq("id", leadId)
-
-    // Insert activity — do separately so errors are visible
-    const { error: actError } = await (supabase as any).from("activities").insert({
-      company_id: companyId,
-      lead_id: leadId,
-      contact_id: contactId,
-      user_id: user!.id,
-      type: "stage_change",
-      title: "Etapa cambiada",
-      from_stage_id: current?.id ?? null,
-      to_stage_id: newStage.id,
-      completed_at: new Date().toISOString(),
-    })
-
-    if (actError) console.error("[changeStage] activity insert failed:", actError)
+    await Promise.all([
+      (supabase as any).from("leads")
+        .update({ stage_id: newStage.id, last_activity_at: new Date().toISOString() })
+        .eq("id", leadId),
+      (supabase as any).from("activities").insert({
+        company_id: companyId, lead_id: leadId, contact_id: contactId,
+        user_id: user!.id, type: "stage_change",
+        title: `Etapa cambiada`,
+        from_stage_id: current?.id ?? null,
+        to_stage_id: newStage.id,
+        completed_at: new Date().toISOString(),
+      })
+    ])
 
     setLoading(false)
     setOpen(false)
@@ -834,20 +830,17 @@ export default function LeadDetailPage() {
 
       supabase.from("lead_sources").select("id, name, icon, color").eq("company_id", profile?.company_id).order("name"),
 
-      supabase.from("companies").select("default_currency, allowed_currencies").eq("id", profile?.company_id).single(),
+      supabase.from("companies").select("default_currency, allowed_currencies").eq("id", profile?.company_id).maybeSingle(),
     ])
 
     setLead(leadData as any)
     const stagesArr = stagesData ?? []
     setStages(stagesArr)
-
-    // Hydrate from_stage / to_stage manually — FK join via PostgREST is unreliable
-    // when the FK is not explicitly declared in Supabase schema
     const stageMap = Object.fromEntries(stagesArr.map((s: any) => [s.id, s]))
     const hydratedActivities = (activitiesData ?? []).map((act: any) => ({
       ...act,
-      from_stage: act.from_stage_id ? stageMap[act.from_stage_id] ?? null : null,
-      to_stage:   act.to_stage_id   ? stageMap[act.to_stage_id]   ?? null : null,
+      from_stage: act.from_stage_id ? (stageMap[act.from_stage_id] ?? null) : null,
+      to_stage:   act.to_stage_id   ? (stageMap[act.to_stage_id]   ?? null) : null,
     }))
     setActivities(hydratedActivities)
     setSources((sourcesData as Source[] | null) ?? [])
@@ -1130,10 +1123,14 @@ export default function LeadDetailPage() {
                         {/* same content without the line */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            {act.type === "stage_change" && act.from_stage && act.to_stage ? (
+                            {act.type === "stage_change" ? (
                               <p className="text-sm text-zinc-300">
-                                Movido de <span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>
-                                {" → "}<span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>
+                                Movido de{" "}
+                                {act.from_stage
+                                  ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
+                                  : <span className="text-zinc-500">Entró en </span>
+                                }
+                                {act.to_stage && <span className="font-medium" style={{ color: act.to_stage.color }}>{act.to_stage.name}</span>}
                               </p>
                             ) : <p className="text-sm font-medium text-zinc-200">{act.title || act.type}</p>}
                             {act.call_duration_secs != null && <p className="text-xs text-zinc-500 mt-0.5">Duración: {fmtDuration(act.call_duration_secs)}</p>}

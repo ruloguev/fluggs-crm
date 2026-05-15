@@ -10,12 +10,13 @@ import { useAuth } from "@/contexts/AuthContext"
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
 type Lead = {
-  id: string; title: string | null; priority: "low" | "medium" | "high"
+  id: string; title: string | null; project: string | null; priority: "low" | "medium" | "high"
   budget_max: number | null; currency: string; last_activity_at: string
-  stage_id: string | null; metadata: any; owner_id: string | null
+  stage_id: string | null; metadata: any; owner_id: string | null; source_id: string | null
   contact: { id: string; full_name: string; phone: string | null }
-  source: { name: string; icon: string | null; color: string | null } | null
+  source: { id: string; name: string; icon: string | null; color: string | null } | null
 }
+type Source = { id: string; name: string; icon: string | null; color: string | null }
 type TeamMember = { id: string; full_name: string; role_level: number }
 
 function timeAgo(d: string) {
@@ -205,6 +206,7 @@ export default function PipelinePage() {
   const [stages, setStages] = useState<Stage[]>([])
   const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [sources, setSources] = useState<Source[]>([])
   const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
   const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
@@ -229,17 +231,19 @@ export default function PipelinePage() {
   async function loadAll(companyId: string, userId: string) {
     setLoading(true)
     // Load stages + all leads + team for hierarchy
-    const [{ data: s }, { data: l }, { data: memberships }] = await Promise.all([
+    const [{ data: s }, { data: l }, { data: memberships }, { data: sourceRows }] = await Promise.all([
       supabase.from("pipeline_stages").select("*").eq("company_id", companyId).order("position"),
       supabase.from("leads").select(`
-        id,title,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,
+        id,title,project,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,source_id,
         contact:contacts(id,full_name,phone),
-        source:lead_sources(name,icon,color)
+        source:lead_sources(id,name,icon,color)
       `).eq("company_id", companyId).order("last_activity_at", { ascending: false }).limit(500),
       supabase.from("team_memberships").select("user_id, reports_to").eq("company_id", companyId),
+      supabase.from("lead_sources").select("id, name, icon, color").eq("company_id", companyId).order("name"),
     ])
     setStages(s ?? [])
-    setAllLeads((l as any) ?? [])
+    setAllLeads((l as Lead[] | null) ?? [])
+    setSources((sourceRows as Source[] | null) ?? [])
 
     // Build hierarchy tree
     if (isLeader && memberships) {
@@ -293,7 +297,7 @@ export default function PipelinePage() {
   const visibleLeads = useMemo(() => {
     return allLeads.filter(l => {
       if (!l.owner_id || !scopeIds.includes(l.owner_id)) return false
-      if (filterSource && l.source?.id !== filterSource) return false
+      if (filterSource && l.source_id !== filterSource) return false
       if (filterPriority && l.priority !== filterPriority) return false
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()

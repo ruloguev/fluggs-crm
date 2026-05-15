@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
-import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check } from "lucide-react"
+import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check, Search, X, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
@@ -208,6 +208,9 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
   const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
+  const [filterSource, setFilterSource] = useState<string | null>(null)
+  const [filterPriority, setFilterPriority] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -287,10 +290,23 @@ export default function PipelinePage() {
     return allScopeIds
   }, [profile?.id, isLeader, teamMembers, filterMemberId])
 
-  const visibleLeads = useMemo(
-    () => allLeads.filter(l => l.owner_id && scopeIds.includes(l.owner_id)),
-    [allLeads, scopeIds]
-  )
+  const visibleLeads = useMemo(() => {
+    return allLeads.filter(l => {
+      if (!l.owner_id || !scopeIds.includes(l.owner_id)) return false
+      if (filterSource && l.source?.id !== filterSource) return false
+      if (filterPriority && l.priority !== filterPriority) return false
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase()
+        return (
+          l.contact?.full_name?.toLowerCase().includes(q) ||
+          l.title?.toLowerCase().includes(q) ||
+          l.project?.toLowerCase().includes(q) ||
+          l.contact?.phone?.includes(q)
+        )
+      }
+      return true
+    })
+  }, [allLeads, scopeIds, filterSource, filterPriority, searchQuery])
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return
@@ -337,6 +353,49 @@ export default function PipelinePage() {
             <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
           </Button>
         </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar..."
+            className="w-full bg-zinc-900/60 border border-zinc-800/60 rounded-xl pl-9 pr-3 py-1.5 text-sm text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-zinc-700 transition-colors"
+          />
+        </div>
+        {sources.length > 0 && (
+          <select
+            value={filterSource ?? ""}
+            onChange={e => setFilterSource(e.target.value || null)}
+            className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
+          >
+            <option value="">Todas las fuentes</option>
+            {sources.map(s => (
+              <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
+            ))}
+          </select>
+        )}
+        <select
+          value={filterPriority ?? ""}
+          onChange={e => setFilterPriority(e.target.value || null)}
+          className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
+        >
+          <option value="">Todas las prioridades</option>
+          <option value="high">🔴 Alta</option>
+          <option value="medium">🟡 Media</option>
+          <option value="low">🟢 Baja</option>
+        </select>
+        {(filterSource || filterPriority || searchQuery) && (
+          <button
+            onClick={() => { setFilterSource(null); setFilterPriority(null); setSearchQuery("") }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800/60 hover:border-zinc-700 transition-colors"
+          >
+            <X className="w-3 h-3" /> Limpiar
+          </button>
+        )}
       </div>
 
       {loading ? (

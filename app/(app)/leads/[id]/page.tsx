@@ -48,6 +48,7 @@ type Lead = {
   currency: string; expected_close_date: string | null; lost_reason: string | null
   deal_type: DealType; last_activity_at: string; created_at: string; metadata: any
   contact: Contact; stage: Stage | null; source: Source | null
+  owner_id: string | null
   owner: { full_name: string; email: string } | null
 }
 type CompanySettings = {
@@ -795,6 +796,10 @@ export default function LeadDetailPage() {
   const [showEditLead, setShowEditLead] = useState(false)
   const [showDeleteLead, setShowDeleteLead] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string }[]>([])
+  const [canReassign, setCanReassign] = useState(false)
+  const [reassigning, setReassigning] = useState(false)
   const [activeTab, setActiveTab] = useState<"timeline" | "info" | "expediente">("timeline")
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState("")
@@ -806,8 +811,30 @@ export default function LeadDetailPage() {
   async function loadData() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user!.id).single()
+    const { data: profile } = await supabase.from("profiles").select("company_id, role_id").eq("id", user!.id).single()
     setCompanyId(profile?.company_id ?? null)
+    setUserId(user!.id)
+
+    // Load team members for reassignment
+    if (profile?.company_id) {
+      const { data: members } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("company_id", profile.company_id)
+        .eq("is_active", true)
+        .order("full_name")
+      setTeamMembers(members ?? [])
+
+      // Check if current user can reassign (role level <= 2 or has permission)
+      const { data: roleData } = await supabase
+        .from("roles")
+        .select("level, permissions")
+        .eq("id", profile.role_id ?? "")
+        .single()
+      const perms = roleData?.permissions as Record<string, unknown> ?? {}
+      const canRe = String(perms["can_reassign_leads"]) === "true" || (roleData?.level ?? 99) <= 2
+      setCanReassign(canRe)
+    }
 
     const [{ data: leadData }, { data: stagesData }, { data: activitiesData }, { data: sourcesData }, { data: companyData }] = await Promise.all([
       supabase.from("leads").select(`
@@ -816,7 +843,7 @@ export default function LeadDetailPage() {
         contact:contacts(id, full_name, phone, whatsapp, email),
         stage:pipeline_stages(*),
         source:lead_sources(id, name, icon, color),
-        owner:profiles(full_name, email)
+        owner_id, owner:profiles(full_name, email)
       `).eq("id", id).single(),
 
       supabase.from("pipeline_stages").select("*").eq("company_id", profile?.company_id).order("position"),
@@ -919,6 +946,28 @@ export default function LeadDetailPage() {
   async function deleteLead() {
     await supabase.from("leads").delete().eq("id", id)
     router.push("/pipeline")
+  }
+
+  async function reassignLead(newOwnerId: string) {
+    if (!lead || !companyId || !userId) return
+    setReassigning(true)
+    const newOwner = teamMembers.find(m => m.id === newOwnerId)
+    const now = new Date().toISOString()
+    await Promise.all([
+      (supabase as any).from("leads")
+        .update({ owner_id: newOwnerId, last_activity_at: now })
+        .eq("id", id),
+      (supabase as any).from("activities").insert({
+        company_id: companyId, lead_id: id,
+        contact_id: lead.contact.id, user_id: userId,
+        type: "system",
+        title: "Lead reasignado",
+        body: `Asignado a ${newOwner?.full_name ?? "nuevo agente"}`,
+        created_at: now,
+      }),
+    ])
+    setReassigning(false)
+    loadData()
   }
 
   if (loading) return (
@@ -1125,7 +1174,6 @@ export default function LeadDetailPage() {
                           <div className="flex-1 min-w-0">
                             {act.type === "stage_change" ? (
                               <p className="text-sm text-zinc-300">
-                                Movido de{" "}
                                 {act.from_stage
                                   ? <><span className="text-zinc-500">De </span><span className="font-medium" style={{ color: act.from_stage.color }}>{act.from_stage.name}</span>{" → "}</>
                                   : <span className="text-zinc-500">Entró en </span>
@@ -1158,6 +1206,33 @@ export default function LeadDetailPage() {
         <div className="rounded-2xl bg-zinc-900/30 border border-zinc-800/40 p-5 space-y-5">
           {/* Contact info */}
           <div>
+            {/* Agent assignment */}
+            <div className="mb-5 pb-5 border-b border-zinc-800/50">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Agente asignado</p>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300 shrink-0">
+                  {lead.owner?.full_name?.substring(0,2).toUpperCase() ?? "??"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-zinc-200">{lead.owner?.full_name ?? "Sin asignar"}</p>
+                  <p className="text-xs text-zinc-600">{lead.owner?.email ?? ""}</p>
+                </div>
+                {canReassign && teamMembers.length > 0 && (
+                  <select
+                    disabled={reassigning}
+                    defaultValue=""
+                    onChange={e => e.target.value && reassignLead(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer disabled:opacity-40"
+                  >
+                    <option value="">Reasignar...</option>
+                    {teamMembers
+                      .filter(m => m.id !== (lead.owner_id ?? ""))
+                      .map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Datos de contacto</p>
             <div className="space-y-2">
               {[
@@ -1186,7 +1261,6 @@ export default function LeadDetailPage() {
                 { label: "Proyecto", value: lead.project },
                 { label: "Presupuesto", value: (lead.budget_min || lead.budget_max) ? `${lead.budget_min ? fmtMoney(lead.budget_min, lead.currency) : ""}${lead.budget_min && lead.budget_max ? " – " : ""}${lead.budget_max ? fmtMoney(lead.budget_max, lead.currency) : ""}` : null },
                 { label: "Cierre esperado", value: lead.expected_close_date ? new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "long", year: "numeric" }).format(new Date(lead.expected_close_date)) : null },
-                { label: "Agente", value: lead.owner?.full_name },
                 { label: "Fuente", value: lead.source ? `${lead.source.icon ?? ""} ${lead.source.name}`.trim() : null },
                 { label: "Creado", value: fmt(lead.created_at) },
               ].map(({ label, value }) => value ? (

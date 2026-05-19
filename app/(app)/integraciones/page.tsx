@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 import {
   Globe, Plus, Trash2, GripVertical, CheckCircle2,
-  XCircle, Copy, Shuffle, Loader2, AlertCircle,
+  XCircle, Copy, Shuffle, Loader2, AlertCircle, Save,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +45,15 @@ type QueueStats = {
   current_position: number
   total_assigned: number
 } | null
+
+type RoundRobinQueue = {
+  id: string
+  company_id: string
+  name: string
+  source: string
+  is_active: boolean
+  reassign_after_hours: number
+}
 
 const FACEBOOK_DRAFT_KEY = "flugzz:facebook-integration-draft"
 
@@ -398,12 +407,18 @@ function FacebookSetupForm({
 }
 
 function RoundRobinManager({ companyId }: { companyId: string }) {
+  const { role } = useAuth()
   const [agents, setAgents] = useState<AgentProfile[]>([])
   const [members, setMembers] = useState<QueueMember[]>([])
   const [queueId, setQueueId] = useState<string | null>(null)
+  const [queueData, setQueueData] = useState<RoundRobinQueue | null>(null)
   const [stats, setStats] = useState<QueueStats>(null)
   const [loading, setLoading] = useState(true)
+  const [reassignHours, setReassignHours] = useState<number>(6)
+  const [savingHours, setSavingHours] = useState(false)
   const supabase = createClient()
+
+  const canEditXt = (role?.level ?? 99) <= 3
 
   async function loadData() {
     setLoading(true)
@@ -416,12 +431,16 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
 
     const { data: queue } = await (supabase as any)
       .from("round_robin_queues")
-      .select("id")
+      .select("id, company_id, name, source, is_active, reassign_after_hours")
       .eq("company_id", companyId)
       .eq("source", "facebook")
       .single()
 
     setQueueId(queue?.id ?? null)
+    setQueueData((queue as RoundRobinQueue) ?? null)
+    if (queue?.reassign_after_hours) {
+      setReassignHours(queue.reassign_after_hours)
+    }
 
     if (queue) {
       const { data: membersData } = await (supabase as any)
@@ -464,6 +483,7 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
 
     if (data) {
       setQueueId(data.id)
+      setQueueData(data as RoundRobinQueue)
       await loadData()
     }
   }
@@ -492,6 +512,21 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
       .update({ is_active: !isActive })
       .eq("id", memberId)
     await loadData()
+  }
+
+  async function saveReassignHours() {
+    if (!queueId) return
+    setSavingHours(true)
+
+    const { error } = await (supabase as any)
+      .from("round_robin_queues")
+      .update({ reassign_after_hours: reassignHours })
+      .eq("id", queueId)
+
+    setSavingHours(false)
+    if (!error) {
+      setQueueData((prev) => prev ? { ...prev, reassign_after_hours: reassignHours } : null)
+    }
   }
 
   const memberIds = members.map((member) => member.user_id)
@@ -537,6 +572,50 @@ function RoundRobinManager({ companyId }: { companyId: string }) {
         </div>
       ) : (
         <>
+          {canEditXt && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-200">Tiempo máximo sin actividad</p>
+                  <p className="mt-1 text-xs text-amber-200/70">
+                    Después de este tiempo sin actividad, el lead se reasignará automáticamente al siguiente agente.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={72}
+                    value={reassignHours}
+                    onChange={(e) => setReassignHours(Math.max(1, Math.min(72, parseInt(e.target.value) || 1)))}
+                    className="w-20 bg-zinc-900 border-zinc-800 text-zinc-100 text-center"
+                  />
+                  <span className="text-sm text-zinc-400">hrs</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={saveReassignHours}
+                    disabled={savingHours || reassignHours === queueData?.reassign_after_hours}
+                    className="text-amber-200 hover:text-amber-100 hover:bg-amber-500/10"
+                  >
+                    {savingHours ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-zinc-500">
+                Solo visible para Coordinadores y roles superiores. Rango: 1-72 horas.
+              </p>
+            </div>
+          )}
+
+          {!canEditXt && queueData?.reassign_after_hours && (
+            <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-4">
+              <p className="text-sm text-zinc-400">
+                Tiempo máximo sin actividad: <span className="font-medium text-zinc-200">{queueData.reassign_after_hours} horas</span>
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-medium text-zinc-300">Orden de rotacion</p>

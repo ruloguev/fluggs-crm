@@ -180,13 +180,27 @@ async function processLead({
 
   if (existing) return // Ya procesado
 
-  // 2. Obtener la fuente "Facebook Leads" de esta company
-  const { data: source } = await supabase
+  // 2. Obtener o crear la fuente "Facebook Leads" de esta company
+  let { data: source } = await supabase
     .from('lead_sources')
     .select('id')
     .eq('company_id', companyId)
     .ilike('name', 'facebook%')
     .single()
+
+  if (!source) {
+    const { data: newSource } = await supabase
+      .from('lead_sources')
+      .insert({
+        company_id: companyId,
+        name: 'Facebook Leads',
+        icon: 'facebook',
+        color: '#1877F2'
+      })
+      .select('id')
+      .single()
+    source = newSource
+  }
 
   // 3. Obtener la primera etapa del pipeline (etapa inicial)
   const { data: firstStage } = await supabase

@@ -1425,7 +1425,7 @@ export default function LeadDetailPage() {
                   <p className="text-sm text-zinc-200">{lead.owner?.full_name ?? "Sin asignar"}</p>
                   <p className="text-xs text-zinc-600">{lead.owner?.email ?? ""}</p>
                 </div>
-                {canReassign && teamMembers.length > 0 && lead.source_id && !lead.source?.name?.toLowerCase().includes("referido") && (
+                {canReassign && teamMembers.length > 0 && (lead.source_id || lead.metadata?.facebook_lead_id) && !lead.source?.name?.toLowerCase().includes("referido") && (
                   <select
                     disabled={reassigning}
                     defaultValue=""

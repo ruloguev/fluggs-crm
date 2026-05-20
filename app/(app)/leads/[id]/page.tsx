@@ -47,6 +47,7 @@ type Lead = {
   priority: "low" | "medium" | "high"; budget_min: number | null; budget_max: number | null
   currency: string; expected_close_date: string | null; lost_reason: string | null
   deal_type: DealType; last_activity_at: string; created_at: string; metadata: any
+  lead_tags: string[] | null
   contact: Contact; stage: Stage | null; source: Source | null
   owner_id: string | null
   owner: { full_name: string; email: string } | null
@@ -804,6 +805,9 @@ export default function LeadDetailPage() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState("")
   const titleRef = useRef<HTMLInputElement>(null)
+  const [allCompanyTags, setAllCompanyTags] = useState<string[]>([])
+  const [showTagInput, setShowTagInput] = useState(false)
+  const [newTag, setNewTag] = useState("")
 
   useEffect(() => { loadData() }, [id])
   useEffect(() => { if (editingTitle && titleRef.current) titleRef.current.focus() }, [editingTitle])
@@ -839,7 +843,7 @@ export default function LeadDetailPage() {
     const [{ data: leadData }, { data: stagesData }, { data: activitiesData }, { data: sourcesData }, { data: companyData }] = await Promise.all([
       supabase.from("leads").select(`
         id, title, project, priority, budget_min, budget_max, currency,
-        expected_close_date, lost_reason, deal_type, last_activity_at, created_at, metadata,
+        expected_close_date, lost_reason, deal_type, last_activity_at, created_at, metadata, lead_tags,
         contact:contacts(id, full_name, phone, whatsapp, email),
         stage:pipeline_stages(*),
         source:lead_sources(id, name, icon, color),
@@ -873,6 +877,23 @@ export default function LeadDetailPage() {
     setSources((sourcesData as Source[] | null) ?? [])
     setCompanySettings((companyData as CompanySettings | null) ?? null)
     setTitleDraft(leadData?.title ?? "")
+
+    // Collect all tags from company's leads for autocomplete
+    if (profile?.company_id) {
+      const { data: allLeadsWithTags } = await supabase
+        .from("leads")
+        .select("lead_tags")
+        .eq("company_id", profile.company_id)
+        .not("lead_tags", "is", null)
+      
+      const tagsSet = new Set<string>()
+      allLeadsWithTags?.forEach((l: any) => {
+        if (l.lead_tags) {
+          l.lead_tags.forEach((tag: string) => tagsSet.add(tag))
+        }
+      })
+      setAllCompanyTags(Array.from(tagsSet).sort())
+    }
 
     if (profile?.company_id && leadData) {
       const nextDealType = ((leadData as any).deal_type ?? "sale") as DealType
@@ -1030,6 +1051,72 @@ export default function LeadDetailPage() {
                   <span className="truncate">{lead.title || "Agregar título"}</span>
                   <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
+              )}
+            </div>
+
+            {/* Etiquetas */}
+            <div className="flex items-center gap-2 ml-10 mt-2 flex-wrap">
+              {lead.lead_tags && lead.lead_tags.map(tag => (
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-flugzz-accent/10 border border-flugzz-accent/20 text-xs text-flugzz-accent">
+                  {tag}
+                  {canReassign && (
+                    <button onClick={async () => {
+                      const newTags = (lead.lead_tags || []).filter(t => t !== tag)
+                      await supabase.from("leads").update({ lead_tags: newTags }).eq("id", id)
+                      loadData()
+                    }} className="hover:text-white">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              ))}
+              {canReassign && (
+                showTagInput ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={newTag}
+                      onChange={e => setNewTag(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === "Enter" && newTag.trim()) {
+                          const currentTags = lead.lead_tags || []
+                          if (!currentTags.includes(newTag.trim())) {
+                            await supabase.from("leads").update({ lead_tags: [...currentTags, newTag.trim()] }).eq("id", id)
+                            loadData()
+                          }
+                          setNewTag("")
+                          setShowTagInput(false)
+                        }
+                        if (e.key === "Escape") setShowTagInput(false)
+                      }}
+                      placeholder="Etiqueta..."
+                      className="w-24 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-zinc-100 outline-none"
+                      autoFocus
+                    />
+                    <select
+                      value=""
+                      onChange={async e => {
+                        if (e.target.value && !lead.lead_tags?.includes(e.target.value)) {
+                          await supabase.from("leads").update({ lead_tags: [...(lead.lead_tags || []), e.target.value] }).eq("id", id)
+                          loadData()
+                        }
+                        setShowTagInput(false)
+                      }}
+                      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-zinc-400 outline-none"
+                    >
+                      <option value="">Seleccionar...</option>
+                      {allCompanyTags.filter(t => !lead.lead_tags?.includes(t)).map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => setShowTagInput(false)} className="text-zinc-500 hover:text-zinc-300">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowTagInput(true)} className="text-xs text-zinc-500 hover:text-flugzz-accent transition-colors">
+                    + Etiqueta
+                  </button>
+                )
               )}
             </div>
           </div>

@@ -13,6 +13,7 @@ type Lead = {
   id: string; title: string | null; project: string | null; priority: "low" | "medium" | "high"
   budget_max: number | null; currency: string; last_activity_at: string
   stage_id: string | null; metadata: any; owner_id: string | null; source_id: string | null
+  lead_tags: string[] | null
   contact: { id: string; full_name: string; phone: string | null }
   source: { id: string; name: string; icon: string | null; color: string | null } | null
 }
@@ -212,7 +213,9 @@ export default function PipelinePage() {
   const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
   const [filterSource, setFilterSource] = useState<string | null>(null)
   const [filterPriority, setFilterPriority] = useState<string | null>(null)
+  const [filterTag, setFilterTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [allTags, setAllTags] = useState<string[]>([])
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -234,7 +237,7 @@ export default function PipelinePage() {
     const [{ data: s }, { data: l }, { data: memberships }, { data: sourceRows }] = await Promise.all([
       supabase.from("pipeline_stages").select("*").eq("company_id", companyId).order("position"),
       supabase.from("leads").select(`
-        id,title,project,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,source_id,
+        id,title,project,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,source_id,lead_tags,
         contact:contacts(id,full_name,phone),
         source:lead_sources(id,name,icon,color)
       `).eq("company_id", companyId).order("last_activity_at", { ascending: false }).limit(500),
@@ -244,6 +247,15 @@ export default function PipelinePage() {
     setStages(s ?? [])
     setAllLeads((l as Lead[] | null) ?? [])
     setSources((sourceRows as Source[] | null) ?? [])
+
+    // Collect all unique tags from leads
+    const tagsSet = new Set<string>()
+    ;(l as Lead[] | null)?.forEach(lead => {
+      if (lead.lead_tags) {
+        lead.lead_tags.forEach(tag => tagsSet.add(tag))
+      }
+    })
+    setAllTags(Array.from(tagsSet).sort())
 
     // Build hierarchy tree
     if (isLeader && memberships) {
@@ -299,6 +311,7 @@ export default function PipelinePage() {
       if (!l.owner_id || !scopeIds.includes(l.owner_id)) return false
       if (filterSource && l.source_id !== filterSource) return false
       if (filterPriority && l.priority !== filterPriority) return false
+      if (filterTag && (!l.lead_tags || !l.lead_tags.includes(filterTag))) return false
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         return (
@@ -310,7 +323,7 @@ export default function PipelinePage() {
       }
       return true
     })
-  }, [allLeads, scopeIds, filterSource, filterPriority, searchQuery])
+  }, [allLeads, scopeIds, filterSource, filterPriority, filterTag, searchQuery])
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return
@@ -392,9 +405,21 @@ export default function PipelinePage() {
           <option value="medium">🟡 Media</option>
           <option value="low">🟢 Baja</option>
         </select>
-        {(filterSource || filterPriority || searchQuery) && (
+        {allTags.length > 0 && (
+          <select
+            value={filterTag ?? ""}
+            onChange={e => setFilterTag(e.target.value || null)}
+            className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
+          >
+            <option value="">Todas las etiquetas</option>
+            {allTags.map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+        )}
+        {(filterSource || filterPriority || filterTag || searchQuery) && (
           <button
-            onClick={() => { setFilterSource(null); setFilterPriority(null); setSearchQuery("") }}
+            onClick={() => { setFilterSource(null); setFilterPriority(null); setFilterTag(null); setSearchQuery("") }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800/60 hover:border-zinc-700 transition-colors"
           >
             <X className="w-3 h-3" /> Limpiar

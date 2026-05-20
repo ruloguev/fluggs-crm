@@ -329,10 +329,28 @@ export default function PipelinePage() {
     if (!result.destination) return
     const { draggableId, destination } = result
     const newStageId = destination.droppableId === "__unassigned__" ? null : destination.droppableId
+    
+    const lead = allLeads.find(l => l.id === draggableId)
+    
     setAllLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
+    
     await (supabase as any).from("leads")
       .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
       .eq("id", draggableId)
+    
+    if (lead?.stage_id || newStageId) {
+      await (supabase as any).from("activities").insert({
+        company_id: profile?.company_id,
+        lead_id: draggableId,
+        contact_id: lead?.contact?.id,
+        user_id: profile?.id,
+        type: "stage_change",
+        title: "Etapa cambiada",
+        from_stage_id: lead?.stage_id,
+        to_stage_id: newStageId,
+        completed_at: new Date().toISOString(),
+      })
+    }
   }
 
   if (!isMounted) return null

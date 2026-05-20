@@ -1364,6 +1364,39 @@ export default function LeadDetailPage() {
             <DealTypeSelector value={lead.deal_type} onChange={updateDealType} />
           </div>
 
+          {/* Historial de etapas */}
+          {(() => {
+            const stageChanges = activities.filter(a => a.type === "stage_change").slice(0, 10)
+            if (stageChanges.length === 0) return null
+            return (
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Historial de etapas</p>
+                <div className="space-y-2">
+                  {stageChanges.map(act => (
+                    <div key={act.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-zinc-900/50 border border-zinc-800/40">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: act.to_stage?.color ?? "#666" }} />
+                        <div>
+                          <p className="text-sm text-zinc-200">
+                            {act.from_stage ? (
+                              <><span className="text-zinc-500">{act.from_stage.name}</span> → <span style={{ color: act.to_stage?.color }}>{act.to_stage?.name}</span></>
+                            ) : (
+                              <span style={{ color: act.to_stage?.color }}>{act.to_stage?.name}</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-zinc-600">{act.user?.full_name ?? "Sistema"}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-zinc-500">{fmt(act.created_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Facebook metadata */}
           {lead.metadata?.facebook_lead_id && (
             <div>

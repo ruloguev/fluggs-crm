@@ -8,7 +8,7 @@ import {
   Plus, ChevronDown, Edit2, Check, X, Loader2, FileText,
   PhoneCall, PhoneMissed, PhoneOff, Voicemail, User,
   AlertCircle, Trash2, ExternalLink,
-  Navigation, StickyNote, Calendar, Sparkles
+  Navigation, StickyNote, Calendar, Sparkles, Download
 } from "lucide-react"
 
 // ── tipos ─────────────────────────────────────────────────────
@@ -609,6 +609,9 @@ function ExpedientePanel({
   leadType,
   templateItems,
   documents,
+  availableTemplates,
+  selectedTemplateId,
+  onTemplateChange,
   onUploaded,
 }: {
   companyId: string
@@ -616,12 +619,40 @@ function ExpedientePanel({
   leadType: DealType
   templateItems: DocumentTemplateItem[]
   documents: LeadDocument[]
+  availableTemplates: { id: string; name: string; deal_type: string }[]
+  selectedTemplateId: string | null
+  onTemplateChange: (templateId: string | null) => void
   onUploaded: () => void
 }) {
   const supabase = createClient()
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [manualLabel, setManualLabel] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  async function downloadZip() {
+    if (documents.length === 0) return
+    setDownloading(true)
+    try {
+      const response = await fetch("/api/documents/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId }),
+      })
+      if (!response.ok) throw new Error("Error al descargar")
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `expediente_${leadId}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError("Error al descargar expediente")
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   async function uploadDocument(file: File, item?: DocumentTemplateItem, customLabel?: string) {
     setError(null)
@@ -678,10 +709,40 @@ function ExpedientePanel({
             {leadType === "sale" ? "Checklist de venta" : leadType === "rent" ? "Checklist de renta" : "Documentación del lead"}
           </h3>
         </div>
-        <div className="text-sm text-zinc-400">
-          {requiredCount > 0 ? `${completedCount} / ${requiredCount} obligatorios completos` : `${documents.length} documento(s) cargado(s)`}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-zinc-400">
+            {requiredCount > 0 ? `${completedCount} / ${requiredCount} obligatorios completos` : `${documents.length} documento(s) cargado(s)`}
+          </span>
+          {documents.length > 0 && (
+            <button
+              onClick={downloadZip}
+              disabled={downloading}
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Descargar ZIP
+            </button>
+          )}
         </div>
       </div>
+
+      {availableTemplates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-xs uppercase tracking-wider text-zinc-500">Plantilla:</label>
+          <select
+            value={selectedTemplateId ?? ""}
+            onChange={(e) => onTemplateChange(e.target.value || null)}
+            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+          >
+            <option value="">Sin plantilla</option>
+            {availableTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.deal_type === "sale" ? "Venta" : t.deal_type === "rent" ? "Renta" : "Otro"})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -815,6 +876,8 @@ export default function LeadDetailPage() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [templateItems, setTemplateItems] = useState<DocumentTemplateItem[]>([])
   const [documents, setDocuments] = useState<LeadDocument[]>([])
+  const [availableTemplates, setAvailableTemplates] = useState<{ id: string; name: string; deal_type: string }[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [sources, setSources] = useState<Source[]>([])
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null)
   const [loading, setLoading] = useState(true)
@@ -922,17 +985,14 @@ export default function LeadDetailPage() {
       setAllCompanyTags(Array.from(tagsSet).sort())
     }
 
-    if (profile?.company_id && leadData) {
-      const nextDealType = ((leadData as any).deal_type ?? "sale") as DealType
-
-      const [{ data: templatesData }, { data: documentsData }] = await Promise.all([
+    if (profile?.company_id) {
+      const [{ data: allTemplatesData }, { data: documentsData }, { data: leadExtraData }] = await Promise.all([
         supabase
           .from("document_templates")
-          .select("id")
+          .select("id, name, deal_type")
           .eq("company_id", profile.company_id)
-          .eq("deal_type", nextDealType)
           .eq("is_active", true)
-          .limit(1),
+          .order("name"),
         supabase
           .from("lead_documents")
           .select(`
@@ -941,14 +1001,22 @@ export default function LeadDetailPage() {
           `)
           .eq("lead_id", id)
           .order("uploaded_at", { ascending: false }),
+        supabase
+          .from("leads")
+          .select("template_id")
+          .eq("id", id)
+          .single(),
       ])
 
-      const templateId = templatesData?.[0]?.id
-      if (templateId) {
+      setAvailableTemplates((allTemplatesData as any[]) ?? [])
+      const leadTemplateId = (leadExtraData as any)?.template_id ?? null
+      setSelectedTemplateId(leadTemplateId)
+
+      if (leadTemplateId) {
         const { data: templateItemsData } = await supabase
           .from("document_template_items")
           .select("id, template_id, label, is_required, position")
-          .eq("template_id", templateId)
+          .eq("template_id", leadTemplateId)
           .order("position")
 
         setTemplateItems((templateItemsData as DocumentTemplateItem[] | null) ?? [])
@@ -969,6 +1037,8 @@ export default function LeadDetailPage() {
     } else {
       setTemplateItems([])
       setDocuments([])
+      setAvailableTemplates([])
+      setSelectedTemplateId(null)
     }
 
     setLoading(false)
@@ -989,6 +1059,14 @@ export default function LeadDetailPage() {
       setActiveTab("info")
     }
     await loadData()
+  }
+
+  async function updateLeadTemplate(templateId: string | null) {
+    await supabase.from("leads").update({ template_id: templateId }).eq("id", id)
+    setSelectedTemplateId(templateId)
+    if (activeTab === "expediente") {
+      await loadData()
+    }
   }
 
   async function deleteLead() {
@@ -1467,6 +1545,9 @@ export default function LeadDetailPage() {
           leadType={lead.deal_type}
           templateItems={templateItems}
           documents={documents}
+          availableTemplates={availableTemplates}
+          selectedTemplateId={selectedTemplateId}
+          onTemplateChange={updateLeadTemplate}
           onUploaded={loadData}
         />
       )}

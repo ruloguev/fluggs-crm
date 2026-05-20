@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import {
   Activity, ArrowRight, Building2, Cable, CircleDollarSign,
   Clock3, Loader2, PhoneOutgoing, TrendingUp, Users, Sparkles,
-  Phone, MessageCircle, Mail, CheckCircle, Clock, Download,
+  Phone, MessageCircle, Mail, CheckCircle, Clock, Download, Target,
 } from "lucide-react"
 import { NeonDonut } from "@/components/dashboard/neon-donut"
 import {
@@ -36,7 +36,7 @@ type ActivityRecord = ActivityKpi & { title: string | null; body: string | null 
 type SourceRecord = { id: string; name: string }
 type StageRecord = StageKpi & { color: string | null; position?: number }
 type IntegrationRecord = { page_id: string; page_name: string | null; is_active: boolean; last_synced_at: string | null }
-type CompanyRecord = { default_currency: string | null }
+type CompanyRecord = { default_currency: string | null; settings: Record<string, any> | null }
 
 type ScopeMetrics = { leadCount: number; staleCount: number; activities7d: number; projectedValue: number }
 type ActorCard = {
@@ -220,7 +220,7 @@ export default function DashboardPage() {
           supabase.from("lead_sources").select("id, name").eq("company_id", companyId),
           supabase.from("pipeline_stages").select("id, name, color, is_closed, position").eq("company_id", companyId).order("position"),
           supabase.from("facebook_integrations").select("page_id, page_name, is_active, last_synced_at").eq("company_id", companyId).single(),
-          supabase.from("companies").select("default_currency").eq("id", companyId).single(),
+          supabase.from("companies").select("default_currency, settings").eq("id", companyId).single(),
         ])
       if (cancelled) return
       setProfiles((profileRows as ProfileRecord[] | null) ?? [])
@@ -342,6 +342,19 @@ export default function DashboardPage() {
   const contactacionPct = useMemo(() => contactacionPercent(scopeLeadRecords, scopeActivities), [scopeLeadRecords, scopeActivities])
   const wonCount = useMemo(() => scopeLeadRecords.filter(l => l.stage_id && wonStageIds.includes(l.stage_id)).length, [scopeLeadRecords, wonStageIds])
 
+  const monthlyGoal = company?.settings?.goals?.monthly_won_leads ?? 0
+  const monthlyWonLeads = useMemo(() => {
+    if (!monthlyGoal) return 0
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+    return scopeLeadRecords.filter(l => {
+      if (!l.stage_id || !wonStageIds.includes(l.stage_id)) return false
+      const leadUpdatedAt = l.last_activity_at ? new Date(l.last_activity_at).getTime() : 0
+      return leadUpdatedAt >= startOfMonth
+    }).length
+  }, [scopeLeadRecords, wonStageIds, monthlyGoal])
+  const goalProgress = monthlyGoal > 0 ? Math.min(150, Math.round((monthlyWonLeads / monthlyGoal) * 100)) : 0
+
   // KPIs extra — solo se computan cuando aplican
   const directReportIds = useMemo(() => reportsByLeader.get(profile?.id ?? "") ?? [], [reportsByLeader, profile?.id])
 
@@ -453,6 +466,36 @@ export default function DashboardPage() {
         <MetricCard icon={Clock3} title="Leads sin seguimiento" value={String(scopeMetrics.staleCount)} hint="alerta" accentClass="bg-amber-500/10 border-amber-500/20 text-amber-300" />
         <MetricCard icon={CircleDollarSign} title="Valor proyectado" value={formatCurrency(scopeMetrics.projectedValue, currency)} hint={currency} accentClass="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
       </div>
+
+      {monthlyGoal > 0 && (
+        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-5 backdrop-blur-xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+              <Target className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-100">Meta del mes</h2>
+              <p className="text-sm text-zinc-400">{monthlyWonLeads} de {monthlyGoal} leads cerrados</p>
+            </div>
+          </div>
+          
+          <div className="relative h-4 rounded-full bg-zinc-800 overflow-hidden">
+            <div 
+              className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${
+                goalProgress >= 100 ? "bg-emerald-500" : goalProgress >= 70 ? "bg-amber-500" : "bg-red-500"
+              }`}
+              style={{ width: `${Math.min(100, goalProgress)}%` }}
+            />
+          </div>
+          
+          <div className="flex justify-between mt-2 text-sm">
+            <span className={`font-medium ${goalProgress >= 100 ? "text-emerald-400" : goalProgress >= 70 ? "text-amber-400" : "text-red-400"}`}>
+              {goalProgress >= 100 ? "✓ Meta cumplida" : goalProgress >= 70 ? "En buen camino" : "Por debajo de meta"}
+            </span>
+            <span className="text-zinc-500">{goalProgress}%</span>
+          </div>
+        </div>
+      )}
 
       {/* KPI Donuts — todos los modos los ven, distintos sets */}
       <KpiDonuts donuts={donuts} />

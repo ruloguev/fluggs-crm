@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowDown, ArrowUp, Building2, FolderOpen, KanbanSquare, Loader2,
-  Plus, Save, Trash2
+  Plus, Save, Trash2, Target
 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
@@ -14,6 +14,12 @@ type CompanySettings = {
   name: string
   default_currency: string | null
   allowed_currencies: string[] | null
+  settings: Record<string, any> | null
+}
+
+type CompanyGoals = {
+  monthly_won_leads: number
+  agent_goals: Record<string, number>
 }
 
 type Stage = {
@@ -60,6 +66,8 @@ export default function AdminSettingsPage() {
   const [templateItems, setTemplateItems] = useState<Record<string, DocumentTemplateItem[]>>({})
   const [newTemplateName, setNewTemplateName] = useState("")
   const [newTemplateType, setNewTemplateType] = useState<"sale" | "rent" | "other">("sale")
+  const [monthlyGoal, setMonthlyGoal] = useState(10)
+  const [savingGoals, setSavingGoals] = useState(false)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -81,7 +89,7 @@ export default function AdminSettingsPage() {
             await Promise.all([
               supabase
                 .from("companies")
-                .select("id, name, default_currency, allowed_currencies")
+                .select("id, name, default_currency, allowed_currencies, settings")
                 .eq("id", companyId)
                 .single(),
               supabase
@@ -106,6 +114,11 @@ export default function AdminSettingsPage() {
           setDefaultCurrency(nextCompany?.default_currency ?? "MXN")
           setAllowedCurrenciesInput((nextCompany?.allowed_currencies ?? ["MXN"]).join(", "))
           setStages((stagesData as Stage[] | null) ?? [])
+
+          const goals = nextCompany?.settings?.goals as CompanyGoals | null
+          if (goals?.monthly_won_leads) {
+            setMonthlyGoal(goals.monthly_won_leads)
+          }
           setTemplates((templatesData as DocumentTemplate[] | null) ?? [])
 
           const groupedItems: Record<string, DocumentTemplateItem[]> = {}
@@ -144,6 +157,25 @@ export default function AdminSettingsPage() {
     setDefaultCurrency(nextDefault)
     setAllowedCurrenciesInput(nextAllowed.join(", "))
     setSavingGeneral(false)
+  }
+
+  async function saveGoals() {
+    if (!company) return
+    setSavingGoals(true)
+    const currentSettings = company.settings ?? {}
+    await supabase
+      .from("companies")
+      .update({
+        settings: {
+          ...currentSettings,
+          goals: {
+            monthly_won_leads: monthlyGoal,
+            agent_goals: currentSettings?.goals?.agent_goals ?? {},
+          },
+        },
+      })
+      .eq("id", company.id)
+    setSavingGoals(false)
   }
 
   async function addStage() {
@@ -339,6 +371,44 @@ export default function AdminSettingsPage() {
           {savingGeneral ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Guardar ajustes
         </button>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+              <Target className="w-4 h-4 text-flugzz-accent" />
+            </div>
+            <div>
+              <h2 className="text-lg font-medium text-zinc-100">Metas y Cuotas</h2>
+              <p className="text-sm text-zinc-400">Define la meta mensual de leads cerrados para tu equipo.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 rounded-2xl border border-zinc-800/60 bg-zinc-950/70 p-4 md:grid-cols-[200px_1fr]">
+          <label className="space-y-2">
+            <span className="text-xs uppercase tracking-wider text-zinc-500">Meta mensual (cierres)</span>
+            <input
+              type="number"
+              min="1"
+              value={monthlyGoal}
+              onChange={(event) => setMonthlyGoal(Math.max(1, parseInt(event.target.value) || 1))}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+            />
+          </label>
+
+          <div className="flex items-end">
+            <button
+              onClick={saveGoals}
+              disabled={savingGoals}
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+            >
+              {savingGoals ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Guardar meta
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-5">

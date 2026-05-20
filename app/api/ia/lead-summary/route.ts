@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
+import { getCachedContent } from "@/lib/gemini-cache"
 
 export const runtime = "nodejs"
 
@@ -10,6 +11,15 @@ function getSupabaseAdmin() {
   if (!url || !key) return null
   return createClient(url, key)
 }
+
+const SYSTEM_PROMPT = `Eres un asistente de análisis de leads para una inmobiliaria. Tu trabajo es crear un resumen ejecutivo de un lead para que un agente pueda entender rápidamente el contexto.
+
+REGLAS:
+1. El resumen debe ser conciso (máx 300 palabras)
+2. Incluye: información del contacto, oportunidad, historial de actividades, estado actual
+3. Da sugerencias de siguiente paso al final
+4. Usa un formato legible con secciones claras
+5. Responde en español`
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,7 +35,6 @@ export async function POST(req: NextRequest) {
     if (!leadId)
       return NextResponse.json({ error: "Falta leadId." }, { status: 400 })
 
-    // Obtener datos del lead
     const { data: lead, error: leadError } = await supabase
       .from("leads")
       .select(`
@@ -42,7 +51,6 @@ export async function POST(req: NextRequest) {
     if (leadError || !lead)
       return NextResponse.json({ error: "Lead no encontrado." }, { status: 404 })
 
-    // Obtener últimas actividades
     const { data: activities } = await supabase
       .from("activities")
       .select(`
@@ -53,7 +61,6 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(20)
 
-    // Obtener cambios de etapa
     const { data: stageChanges } = await supabase
       .from("activities")
       .select(`
@@ -67,7 +74,6 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(10)
 
-    // Preparar contexto para IA
     const activitiesSummary = (activities ?? []).slice(0, 10).map(a => ({
       tipo: a.type,
       titulo: a.title,
@@ -83,20 +89,10 @@ export async function POST(req: NextRequest) {
       usuario: (s.user as any)?.[0]?.full_name ?? "Sistema",
     }))
 
-    // Construir prompt
     const contact = (lead.contact as any)?.[0]
     const stage = (lead.stage as any)?.[0]
     const source = (lead.source as any)?.[0]
     const owner = (lead.owner as any)?.[0]
-
-    const systemPrompt = `Eres un asistente de análisis de leads para una inmobiliaria. Tu trabajo es crear un resumen ejecutivo de un lead para que un agente pueda entender rápidamente el contexto.
-
-REGLAS:
-1. El resumen debe ser conciso (máx 300 palabras)
-2. Incluye: información del contacto, oportunidad, historial de actividades, estado actual
-3. Da sugerencias de siguiente paso al final
-4. Usa un formato legible con secciones claras
-5. Responde en español`
 
     const userPrompt = `
 LEAD:
@@ -123,20 +119,27 @@ ${stageHistory.map(s => `- ${s.fecha}: ${s.de} → ${s.a} (${s.usuario})`).join(
 
 Genera un resumen ejecutivo útil para el agente.`
 
-    // Llamar a Gemini
+    const body: Record<string, any> = {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 2048,
+      }
+    }
+
+    // Usar cachedContent para el system prompt estático
+    const cachedName = await getCachedContent(geminiKey, "lead-summary", SYSTEM_PROMPT)
+    if (cachedName) {
+      body.cachedContent = cachedName
+    }
+
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2048,
-          }
-        }),
+        body: JSON.stringify(body),
       }
     )
 

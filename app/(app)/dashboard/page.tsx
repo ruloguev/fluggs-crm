@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import {
   Activity, ArrowRight, Building2, Cable, CircleDollarSign,
   Clock3, Loader2, PhoneOutgoing, TrendingUp, Users, Sparkles,
-  Phone, MessageCircle, Mail, CheckCircle, Clock,
+  Phone, MessageCircle, Mail, CheckCircle, Clock, Download,
 } from "lucide-react"
 import { NeonDonut } from "@/components/dashboard/neon-donut"
 import {
@@ -201,6 +201,9 @@ export default function DashboardPage() {
   const [snapshotAt, setSnapshotAt] = useState<number>(0)
   const [aiActions, setAiActions] = useState<any[]>([])
   const [loadingAiActions, setLoadingAiActions] = useState(false)
+  const [rankingData, setRankingData] = useState<any[]>([])
+  const [velocityData, setVelocityData] = useState<any[]>([])
+  const [loadingMetrics, setLoadingMetrics] = useState(false)
 
   useEffect(() => {
     const companyId = profile?.company_id
@@ -246,6 +249,28 @@ export default function DashboardPage() {
           if (d.actions) setAiActions(d.actions)
         })
         .finally(() => setLoadingAiActions(false))
+    }
+    
+    // Cargar métricas de ranking y velocidad
+    if (companyId) {
+      setLoadingMetrics(true)
+      Promise.all([
+        fetch("/api/metrics/ranking", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyId })
+        }).then(r => r.json()),
+        fetch("/api/metrics/pipeline-velocity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyId })
+        }).then(r => r.json())
+      ])
+        .then(([rankingRes, velocityRes]) => {
+          setRankingData(rankingRes.ranking || [])
+          setVelocityData(velocityRes.velocity || [])
+        })
+        .finally(() => setLoadingMetrics(false))
     }
     
     return () => { cancelled = true }
@@ -431,6 +456,157 @@ export default function DashboardPage() {
 
       {/* KPI Donuts — todos los modos los ven, distintos sets */}
       <KpiDonuts donuts={donuts} />
+
+      {/* Exportación */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-zinc-100">Exportación de datos</h2>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            const companyId = profile?.company_id
+            if (!companyId) return
+            fetch("/api/metrics/export", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ companyId, type: "leads" })
+            }).then(r => r.blob()).then(blob => {
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement("a")
+              a.href = url
+              a.download = `leads_${new Date().toISOString().split("T")[0]}.csv`
+              a.click()
+              URL.revokeObjectURL(url)
+            })
+          }} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 text-sm hover:text-zinc-200 hover:border-zinc-700 transition-colors">
+            <Download className="w-3.5 h-3.5" /> Leads
+          </button>
+          <button onClick={() => {
+            const companyId = profile?.company_id
+            if (!companyId) return
+            fetch("/api/metrics/export", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ companyId, type: "activities" })
+            }).then(r => r.blob()).then(blob => {
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement("a")
+              a.href = url
+              a.download = `actividades_${new Date().toISOString().split("T")[0]}.csv`
+              a.click()
+              URL.revokeObjectURL(url)
+            })
+          }} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 text-sm hover:text-zinc-200 hover:border-zinc-700 transition-colors">
+            <Download className="w-3.5 h-3.5" /> Actividades
+          </button>
+          <button onClick={() => {
+            const companyId = profile?.company_id
+            if (!companyId) return
+            fetch("/api/metrics/export", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ companyId, type: "metrics" })
+            }).then(r => r.blob()).then(blob => {
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement("a")
+              a.href = url
+              a.download = `metricas_${new Date().toISOString().split("T")[0]}.csv`
+              a.click()
+              URL.revokeObjectURL(url)
+            })
+          }} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 text-sm hover:text-zinc-200 hover:border-zinc-700 transition-colors">
+            <Download className="w-3.5 h-3.5" /> Métricas
+          </button>
+        </div>
+      </div>
+
+      {/* Ranking de agentes - solo para director y gerente */}
+      {(mode === "director" || mode === "gerente") && (
+        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-100">Ranking de agentes</h2>
+              <p className="text-sm text-zinc-500 mt-1">Desempeño por agente en el período actual</p>
+            </div>
+            {loadingMetrics && <Loader2 className="w-4 h-4 text-flugzz-accent animate-spin" />}
+          </div>
+          
+          {rankingData.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-zinc-500 text-left border-b border-zinc-800">
+                    <th className="pb-3 font-medium">Agente</th>
+                    <th className="pb-3 font-medium text-center">Leads</th>
+                    <th className="pb-3 font-medium text-center">Ganados</th>
+                    <th className="pb-3 font-medium text-center">Llamadas</th>
+                    <th className="pb-3 font-medium text-center">Contactados</th>
+                    <th className="pb-3 font-medium text-center">Conversión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankingData.map((agent: any, index: number) => (
+                    <tr key={agent.agent_id} className="border-b border-zinc-800/50">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                            index === 0 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
+                            index === 1 ? "bg-zinc-400/20 text-zinc-300 border border-zinc-500/30" :
+                            index === 2 ? "bg-orange-500/20 text-orange-400 border border-orange-500/30" :
+                            "bg-zinc-800 text-zinc-500"
+                          }`}>{index + 1}</span>
+                          <span className="text-zinc-200">{agent.agent_name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 text-center text-zinc-300">{agent.total_leads}</td>
+                      <td className="py-3 text-center text-emerald-400 font-medium">{agent.won_leads}</td>
+                      <td className="py-3 text-center text-zinc-300">{agent.total_calls}</td>
+                      <td className="py-3 text-center text-zinc-300">{agent.answered_calls}</td>
+                      <td className="py-3 text-center">
+                        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                          agent.conversion_rate >= 20 ? "bg-emerald-500/10 text-emerald-400" :
+                          agent.conversion_rate >= 10 ? "bg-amber-500/10 text-amber-400" :
+                          "bg-zinc-800 text-zinc-400"
+                        }`}>{agent.conversion_rate}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : !loadingMetrics ? (
+            <p className="text-zinc-500 text-sm">No hay datos de rendimiento disponibles.</p>
+          ) : null}
+        </div>
+      )}
+
+      {/* Velocidad de pipeline */}
+      {velocityData.length > 0 && (
+        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-100">Velocidad del pipeline</h2>
+              <p className="text-sm text-zinc-500 mt-1">Tiempo promedio (días) en cada etapa</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {velocityData.map((stage: any) => (
+              <div key={stage.stage_id} className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.stage_color || "#666" }} />
+                  <span className="text-sm text-zinc-300 truncate">{stage.stage_name}</span>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-semibold text-flugzz-accent">{stage.avg_days || 0}</span>
+                  <span className="text-xs text-zinc-500">días promedio</span>
+                </div>
+                <div className="mt-2 text-xs text-zinc-600">
+                  {stage.total_leads} transiciones • {stage.current_leads} actuales
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">

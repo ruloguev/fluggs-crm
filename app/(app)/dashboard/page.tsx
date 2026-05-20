@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import {
   Activity, ArrowRight, Building2, Cable, CircleDollarSign,
-  Clock3, Loader2, PhoneOutgoing, TrendingUp, Users,
+  Clock3, Loader2, PhoneOutgoing, TrendingUp, Users, Sparkles,
+  Phone, MessageCircle, Mail, CheckCircle, Clock,
 } from "lucide-react"
 import { NeonDonut } from "@/components/dashboard/neon-donut"
 import {
@@ -198,6 +199,8 @@ export default function DashboardPage() {
   const [integration, setIntegration] = useState<IntegrationRecord | null>(null)
   const [company, setCompany] = useState<CompanyRecord | null>(null)
   const [snapshotAt, setSnapshotAt] = useState<number>(0)
+  const [aiActions, setAiActions] = useState<any[]>([])
+  const [loadingAiActions, setLoadingAiActions] = useState(false)
 
   useEffect(() => {
     const companyId = profile?.company_id
@@ -229,8 +232,24 @@ export default function DashboardPage() {
     }
 
     void loadDashboard()
+    
+    // Cargar sugerencias de IA
+    if (profile?.id && companyId) {
+      setLoadingAiActions(true)
+      fetch("/api/ia/lead-actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, userId: profile.id, limit: 5 })
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (d.actions) setAiActions(d.actions)
+        })
+        .finally(() => setLoadingAiActions(false))
+    }
+    
     return () => { cancelled = true }
-  }, [profile?.company_id, supabase])
+  }, [profile?.company_id, profile?.id, supabase])
 
   const mode = useMemo(() => getDashboardMode(role?.name ?? "", role?.permissions), [role?.name, role?.permissions])
   const currency = company?.default_currency || "MXN"
@@ -453,27 +472,64 @@ export default function DashboardPage() {
           <SignalsPanel activities={scopeActivities.slice(0, 8)} />
           <BarList title="Fuentes principales" subtitle="Origen que está empujando el pipeline en esta vista." items={sourceBars} accent="bg-gradient-to-r from-emerald-500 to-teal-400" />
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl border border-zinc-800 bg-zinc-950 flex items-center justify-center">
-                {mode === "marketing" ? <Cable className="w-5 h-5 text-zinc-300" /> : mode === "director" ? <Building2 className="w-5 h-5 text-zinc-300" /> : mode === "coordinador" ? <Users className="w-5 h-5 text-zinc-300" /> : <PhoneOutgoing className="w-5 h-5 text-zinc-300" />}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl border border-flugzz-accent/20 bg-flugzz-accent/10 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-flugzz-accent" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-zinc-100">Siguiente acción sugerida</h2>
-                <p className="text-sm text-zinc-500 mt-1">
-                  {mode === "marketing" ? "Revisa integraciones activas y compara captación por fuente."
-                    : mode === "director" ? "Ataca primero a los equipos con más leads sin seguimiento."
-                    : mode === "gerente" ? "Entra al detalle de las coordinaciones con actividad baja."
-                    : mode === "coordinador" ? "Prioriza a los agentes con más leads estancados."
-                    : "Haz seguimiento a tus leads sin actividad de más de 72 horas."}
-                </p>
+                <h2 className="text-lg font-semibold text-zinc-100">Sugerencias de IA</h2>
+                <p className="text-sm text-zinc-500 mt-1">Acciones recomendadas para hoy basadas en tu cartera.</p>
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Link href={mode === "marketing" ? "/integraciones" : "/pipeline"} className="inline-flex items-center gap-2 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-200">
-                Abrir {mode === "marketing" ? "integraciones" : "pipeline"}<ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link href={mode === "marketing" ? "/contactos" : "/ajustes/equipo"} className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 hover:border-zinc-700">
-                {mode === "marketing" ? "Ver leads captados" : "Ver equipo"}<ArrowRight className="w-4 h-4" />
+            
+            {loadingAiActions ? (
+              <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" /> Analizando leads...
+              </div>
+            ) : aiActions.length > 0 ? (
+              <div className="space-y-3">
+                {aiActions.map((action: any) => (
+                  <Link
+                    key={action.lead_id}
+                    href={`/leads/${action.lead_id}`}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-zinc-800/60 bg-zinc-950/60 hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        action.action_type === "call" ? "bg-emerald-500/10 border border-emerald-500/20" :
+                        action.action_type === "whatsapp" ? "bg-green-500/10 border border-green-500/20" :
+                        action.action_type === "email" ? "bg-blue-500/10 border border-blue-500/20" :
+                        action.action_type === "close" ? "bg-amber-500/10 border border-amber-500/20" :
+                        "bg-zinc-800/50 border border-zinc-700"
+                      }`}>
+                        {action.action_type === "call" && <Phone className="w-4 h-4 text-emerald-400" />}
+                        {action.action_type === "whatsapp" && <MessageCircle className="w-4 h-4 text-green-400" />}
+                        {action.action_type === "email" && <Mail className="w-4 h-4 text-blue-400" />}
+                        {action.action_type === "close" && <CheckCircle className="w-4 h-4 text-amber-400" />}
+                        {action.action_type === "follow_up" && <Clock className="w-4 h-4 text-zinc-400" />}
+                        {action.action_type === "waiting" && <Clock className="w-4 h-4 text-zinc-500" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">{action.contact_name}</p>
+                        <p className="text-xs text-zinc-500">{action.reason}</p>
+                      </div>
+                    </div>
+                    {action.priority === "high" && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Urgente</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-zinc-500">No hay sugerencias pendientes.</p>
+                <p className="text-xs text-zinc-600 mt-1">Todos tus leads están activos.</p>
+              </div>
+            )}
+            
+            <div className="mt-4 pt-4 border-t border-zinc-800/60">
+              <Link href="/pipeline" className="inline-flex items-center gap-2 text-sm text-flugzz-accent hover:text-cyan-300">
+                Ver todos los leads <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>

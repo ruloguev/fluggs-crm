@@ -8,7 +8,7 @@ import {
   Plus, ChevronDown, Edit2, Check, X, Loader2, FileText,
   PhoneCall, PhoneMissed, PhoneOff, Voicemail, User,
   AlertCircle, Trash2, ExternalLink,
-  Navigation, StickyNote, Calendar
+  Navigation, StickyNote, Calendar, Sparkles
 } from "lucide-react"
 
 // ── tipos ─────────────────────────────────────────────────────
@@ -808,6 +808,8 @@ export default function LeadDetailPage() {
   const [allCompanyTags, setAllCompanyTags] = useState<string[]>([])
   const [showTagInput, setShowTagInput] = useState(false)
   const [newTag, setNewTag] = useState("")
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [loadingAiSummary, setLoadingAiSummary] = useState(false)
 
   useEffect(() => { loadData() }, [id])
   useEffect(() => { if (editingTitle && titleRef.current) titleRef.current.focus() }, [editingTitle])

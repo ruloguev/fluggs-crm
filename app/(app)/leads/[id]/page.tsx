@@ -8,8 +8,10 @@ import {
   Plus, ChevronDown, Edit2, Check, X, Loader2, FileText,
   PhoneCall, PhoneMissed, PhoneOff, Voicemail, User,
   AlertCircle, Trash2, ExternalLink,
-  Navigation, StickyNote, Calendar, Sparkles, Download
+  Navigation, StickyNote, Calendar, Sparkles, Download, Copy
 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 // ── tipos ─────────────────────────────────────────────────────
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
@@ -1570,8 +1572,21 @@ export default function LeadDetailPage() {
               <span>Analizando lead...</span>
             </div>
           ) : aiSummary ? (
-            <div className="prose prose-invert prose-sm max-w-none">
-              <div className="whitespace-pre-wrap text-zinc-300 leading-relaxed">{aiSummary}</div>
+            <div className="relative">
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(aiSummary || "")
+                }}
+                className="absolute top-0 right-0 p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
+                title="Copiar resumen"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+              <div className="text-zinc-300 leading-relaxed space-y-2 markdown-content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {aiSummary}
+                </ReactMarkdown>
+              </div>
             </div>
           ) : (
             <div className="text-center py-8 text-zinc-500">

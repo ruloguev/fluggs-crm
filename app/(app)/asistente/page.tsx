@@ -3,26 +3,71 @@
 import { useState, useRef, useEffect } from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import {
-  Send, Loader2, AlertCircle, Sparkles, BookOpen
+  Send, Loader2, AlertCircle, Sparkles, BookOpen, Copy, Check
 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 type ChatMessage = { role: "user" | "assistant"; content: string }
 
 function Bubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user"
+  const [copied, setCopied] = useState(false)
+
+  async function copyToClipboard() {
+    await navigator.clipboard.writeText(msg.content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
       {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-flugzz-accent/15 border border-flugzz-accent/25 flex items-center justify-center shrink-0 mt-0.5">
+        <div className="w-7 h-7 rounded-full bg-flugzz-accent/15 border border-flugzz-accent/25 flex items-center justify-center shrink-0 mt-1">
           <Sparkles className="w-3.5 h-3.5 text-flugzz-accent" />
         </div>
       )}
-      <div className={`max-w-[88%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+      <div className={`max-w-[88%] rounded-2xl ${
         isUser
           ? "bg-zinc-100 text-zinc-900 rounded-tr-sm"
-          : "bg-zinc-900/60 border border-zinc-800/50 text-zinc-200 rounded-tl-sm"
+          : "bg-zinc-900/60 border border-zinc-800/50 rounded-tl-sm"
       }`}>
-        {msg.content}
+        {!isUser && (
+          <div className="flex justify-end px-3 pt-2">
+            <button
+              onClick={copyToClipboard}
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
+              title="Copiar respuesta"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        )}
+        <div className={`px-4 py-3 text-sm leading-relaxed ${isUser ? "" : "markdown-content"}}`}>
+          {isUser ? (
+            msg.content
+          ) : (
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="mb-2 pl-4 space-y-1">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-2 pl-4 space-y-1 list-decimal">{children}</ol>,
+                li: ({ children }) => <li className="text-zinc-300">{children}</li>,
+                strong: ({ children }) => <strong className="text-zinc-100 font-semibold">{children}</strong>,
+                em: ({ children }) => <em className="text-zinc-400">{children}</em>,
+                h1: ({ children }) => <h1 className="text-xl font-bold text-zinc-100 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-lg font-semibold text-zinc-100 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-base font-medium text-zinc-100 mb-1">{children}</h3>,
+                code: ({ children }) => <code className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs">{children}</code>,
+                pre: ({ children }) => <pre className="p-3 rounded-lg bg-zinc-800/50 overflow-x-auto mb-2">{children}</pre>,
+                blockquote: ({ children }) => <blockquote className="border-l-2 border-flugzz-accent/30 pl-3 py-1 italic text-zinc-400 mb-2">{children}</blockquote>,
+              }}
+            >
+              {msg.content}
+            </ReactMarkdown>
+          )}
+        </div>
       </div>
     </div>
   )

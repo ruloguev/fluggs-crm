@@ -801,7 +801,7 @@ export default function LeadDetailPage() {
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string }[]>([])
   const [canReassign, setCanReassign] = useState(false)
   const [reassigning, setReassigning] = useState(false)
-  const [activeTab, setActiveTab] = useState<"timeline" | "info" | "expediente">("timeline")
+  const [activeTab, setActiveTab] = useState<"timeline" | "info" | "expediente" | "ia">("timeline")
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState("")
   const titleRef = useRef<HTMLInputElement>(null)
@@ -1227,14 +1227,27 @@ export default function LeadDetailPage() {
       {/* ── TABS ── */}
       <div className="flex gap-1 p-1 bg-zinc-900/40 border border-zinc-800/40 rounded-xl w-fit mb-4">
         {(lead.deal_type === "sale"
-          ? (["timeline", "info", "expediente"] as const)
-          : (["timeline", "info"] as const)
+          ? (["timeline", "info", "expediente", "ia"] as const)
+          : (["timeline", "info", "ia"] as const)
         ).map(t => (
-          <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+          <button key={t} onClick={() => {
+            if (t === "ia" && !aiSummary && !loadingAiSummary) {
+              setLoadingAiSummary(true)
+              fetch("/api/ia/lead-summary", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ leadId: id })
+              })
+                .then(r => r.json())
+                .then(d => { if (d.summary) setAiSummary(d.summary) })
+                .finally(() => setLoadingAiSummary(false))
+            }
+            setActiveTab(t)
+          }}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
               activeTab === t ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
             }`}>
-            {t === "timeline" ? "Actividad" : t === "info" ? "Información" : "Expediente"}
+            {t === "timeline" ? "Actividad" : t === "info" ? "Información" : t === "expediente" ? "Expediente" : <><Sparkles className="w-3.5 h-3.5" /> IA</>}
           </button>
         ))}
       </div>
@@ -1431,6 +1444,51 @@ export default function LeadDetailPage() {
           documents={documents}
           onUploaded={loadData}
         />
+      )}
+
+      {activeTab === "ia" && (
+        <div className="rounded-2xl bg-zinc-900/30 border border-zinc-800/40 p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl border border-flugzz-accent/20 bg-flugzz-accent/10 flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-flugzz-accent" />
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-zinc-100">Resumen inteligente</h3>
+              <p className="text-sm text-zinc-500">Análisis de IA de este lead</p>
+            </div>
+          </div>
+
+          {loadingAiSummary ? (
+            <div className="flex items-center gap-3 py-8 text-zinc-500">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Analizando lead...</span>
+            </div>
+          ) : aiSummary ? (
+            <div className="prose prose-invert prose-sm max-w-none">
+              <div className="whitespace-pre-wrap text-zinc-300 leading-relaxed">{aiSummary}</div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-zinc-500">
+              <p>No se pudo generar el resumen.</p>
+              <button 
+                onClick={() => {
+                  setLoadingAiSummary(true)
+                  fetch("/api/ia/lead-summary", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ leadId: id })
+                  })
+                    .then(r => r.json())
+                    .then(d => { if (d.summary) setAiSummary(d.summary) })
+                    .finally(() => setLoadingAiSummary(false))
+                }}
+                className="mt-3 text-flugzz-accent hover:text-cyan-300 text-sm"
+              >
+                Intentar de nuevo
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Log Activity Sheet */}

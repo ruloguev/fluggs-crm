@@ -184,9 +184,9 @@ No devuelvas nada más que el JSON.`
       })
       .sort((a, b) => {
         // Ordenar por días inactivos (más antiguo primero) y luego por prioridad
-        const priorityOrder = { high: 0, medium: 1, low: 2 }
+        const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 }
         if (b.days_inactive !== a.days_inactive) return b.days_inactive - a.days_inactive
-        return priorityOrder[a.priority] - priorityOrder[b.priority]
+        return (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1)
       })
       .slice(0, limit)
 

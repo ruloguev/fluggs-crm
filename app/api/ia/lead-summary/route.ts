@@ -73,17 +73,22 @@ export async function POST(req: NextRequest) {
       titulo: a.title,
       detalle: a.body?.slice(0, 100),
       fecha: new Date(a.created_at).toLocaleDateString("es-MX"),
-      usuario: a.user?.full_name,
+      usuario: (a.user as any)?.[0]?.full_name ?? "Sistema",
     }))
 
     const stageHistory = (stageChanges ?? []).map(s => ({
-      de: s.from_stage?.name ?? "Inicio",
-      a: s.to_stage?.name,
+      de: (s.from_stage as any)?.[0]?.name ?? "Inicio",
+      a: (s.to_stage as any)?.[0]?.name,
       fecha: new Date(s.created_at).toLocaleDateString("es-MX"),
-      usuario: s.user?.full_name,
+      usuario: (s.user as any)?.[0]?.full_name ?? "Sistema",
     }))
 
     // Construir prompt
+    const contact = (lead.contact as any)?.[0]
+    const stage = (lead.stage as any)?.[0]
+    const source = (lead.source as any)?.[0]
+    const owner = (lead.owner as any)?.[0]
+
     const systemPrompt = `Eres un asistente de análisis de leads para una inmobiliaria. Tu trabajo es crear un resumen ejecutivo de un lead para que un agente pueda entender rápidamente el contexto.
 
 REGLAS:
@@ -95,17 +100,17 @@ REGLAS:
 
     const userPrompt = `
 LEAD:
-- Contacto: ${lead.contact?.full_name}
-- Teléfono: ${lead.contact?.phone ?? "No disponible"}
-- WhatsApp: ${lead.contact?.whatsapp ?? "No disponible"}
-- Email: ${lead.contact?.email ?? "No disponible"}
+- Contacto: ${contact?.full_name ?? "Sin nombre"}
+- Teléfono: ${contact?.phone ?? "No disponible"}
+- WhatsApp: ${contact?.whatsapp ?? "No disponible"}
+- Email: ${contact?.email ?? "No disponible"}
 - Título: ${lead.title ?? "Sin título"}
 - Proyecto: ${lead.project ?? "No especificado"}
 - Prioridad: ${lead.priority}
 - Presupuesto: ${lead.budget_min ? `$${lead.budget_min}` : ""} - ${lead.budget_max ? `$${lead.budget_max}` : ""} ${lead.currency}
-- Etapa actual: ${lead.stage?.name ?? "Sin etapa"}
-- Fuente: ${lead.source?.name ?? "Desconocida"}
-- Agente: ${lead.owner?.full_name ?? "Sin asignar"}
+- Etapa actual: ${stage?.name ?? "Sin etapa"}
+- Fuente: ${source?.name ?? "Desconocida"}
+- Agente: ${owner?.full_name ?? "Sin asignar"}
 - Creado: ${new Date(lead.created_at).toLocaleDateString("es-MX")}
 - Última actividad: ${lead.last_activity_at ? new Date(lead.last_activity_at).toLocaleString("es-MX") : "Sin actividad"}
 - Tipo de operación: ${lead.deal_type === "sale" ? "Venta" : lead.deal_type === "rent" ? "Renta" : "Otro"}

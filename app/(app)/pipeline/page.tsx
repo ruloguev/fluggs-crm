@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { computeScope } from "@/lib/role-scope"
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
 type Lead = {
@@ -221,9 +222,8 @@ export default function PipelinePage() {
   const router = useRouter()
   const { profile, role } = useAuth()
 
-  const myLevel = role?.level ?? 99
-  // Coordinator: level 3, Manager: level 2, Director: level 1
-  const isLeader = myLevel <= 3
+  const scope = computeScope(profile?.id ?? null, role ?? null, teamMembers)
+  const isLeader = scope.isLeader || scope.isTransversal
 
   useEffect(() => {
     setIsMounted(true)
@@ -259,7 +259,7 @@ export default function PipelinePage() {
     setAllTags(Array.from(tagsSet).sort())
 
     // Build hierarchy tree
-    if (isLeader && memberships) {
+    if ((isLeader || scope.canViewTeam) && memberships) {
       const reportsByLeader = new Map<string, string[]>()
       memberships.forEach((m: any) => {
         if (!m.reports_to) return
@@ -295,17 +295,23 @@ export default function PipelinePage() {
     setLoading(false)
   }
 
-  // Compute scope user ids based on hierarchy + filter
+  // Compute scope user ids based on permissions + hierarchy + filter
   const scopeIds = useMemo(() => {
     if (!profile?.id) return []
     if (!isLeader) return [profile.id] // agente: only self
+    
+    // Transversal: ve todos los miembros de la empresa
+    if (scope.isTransversal) {
+      return [profile.id, ...teamMembers.map(m => m.id)]
+    }
+    
+    // Líder con jerarquía: ve su equipo
     const allScopeIds = [profile.id, ...teamMembers.map(m => m.id)]
     if (filterMemberId) {
-      // Show only the selected member and their descendants (approx via teamMembers sub-filter)
       return [filterMemberId]
     }
     return allScopeIds
-  }, [profile?.id, isLeader, teamMembers, filterMemberId])
+  }, [profile?.id, isLeader, scope.isTransversal, teamMembers, filterMemberId])
 
   const visibleLeads = useMemo(() => {
     return allLeads.filter(l => {
@@ -361,8 +367,8 @@ export default function PipelinePage() {
   // Filter options for dropdown
   const filterOptions = teamMembers.map(m => ({ id: m.id, name: m.full_name }))
 
-  const filterLabel = myLevel === 1 ? "Gerente/Coordinador"
-    : myLevel === 2 ? "Coordinador"
+  const filterLabel = role?.level === 1 ? "Gerente/Coordinador"
+    : role?.level === 2 ? "Coordinador"
     : "Agente"
 
   return (

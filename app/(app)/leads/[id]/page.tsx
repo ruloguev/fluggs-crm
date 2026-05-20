@@ -49,7 +49,7 @@ type Lead = {
   priority: "low" | "medium" | "high"; budget_min: number | null; budget_max: number | null
   currency: string; expected_close_date: string | null; lost_reason: string | null
   deal_type: DealType; last_activity_at: string; created_at: string; metadata: any
-  lead_tags: string[] | null
+  lead_tags: string[] | null; source_id: string | null
   contact: Contact; stage: Stage | null; source: Source | null
   owner_id: string | null
   owner: { full_name: string; email: string } | null
@@ -927,6 +927,7 @@ export default function LeadDetailPage() {
         .select("level, permissions")
         .eq("id", profile.role_id ?? "")
         .single()
+      
       const perms = roleData?.permissions as Record<string, unknown> ?? {}
       const canRe = String(perms["can_reassign_leads"]) === "true" || (roleData?.level ?? 99) <= 2
       setCanReassign(canRe)
@@ -1424,7 +1425,7 @@ export default function LeadDetailPage() {
                   <p className="text-sm text-zinc-200">{lead.owner?.full_name ?? "Sin asignar"}</p>
                   <p className="text-xs text-zinc-600">{lead.owner?.email ?? ""}</p>
                 </div>
-                {canReassign && teamMembers.length > 0 && (
+                {canReassign && teamMembers.length > 0 && lead.source_id && !lead.source?.name?.toLowerCase().includes("referido") && (
                   <select
                     disabled={reassigning}
                     defaultValue=""

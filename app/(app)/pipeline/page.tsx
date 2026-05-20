@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
-import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check, Search, X, Filter } from "lucide-react"
+import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check, Search, X, Filter, LayoutGrid, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
@@ -154,7 +154,7 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
             </div>
           </div>
         </div>
-      )}
+)}
     </Draggable>
   )
 }
@@ -216,6 +216,7 @@ export default function PipelinePage() {
   const [filterTag, setFilterTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [allTags, setAllTags] = useState<string[]>([])
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -376,6 +377,24 @@ export default function PipelinePage() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 rounded-xl border border-zinc-800/60 bg-zinc-900/60 p-1">
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                viewMode === "kanban" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" /> Kanban
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                viewMode === "list" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <List className="w-4 h-4" /> Lista
+            </button>
+          </div>
           {isLeader && filterOptions.length > 0 && (
             <ScopeDropdown
               label={filterLabel}
@@ -521,6 +540,81 @@ export default function PipelinePage() {
               )}
             </div>
           </DragDropContext>
+        </div>
+      )}
+
+      {/* Vista de lista (tabla) */}
+      {viewMode === "list" && (
+        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-zinc-500 text-left">
+                  <th className="px-4 py-3 font-medium">Contacto</th>
+                  <th className="px-4 py-3 font-medium">Título</th>
+                  <th className="px-4 py-3 font-medium">Etapa</th>
+                  <th className="px-4 py-3 font-medium">Prioridad</th>
+                  <th className="px-4 py-3 font-medium">Presupuesto</th>
+                  <th className="px-4 py-3 font-medium">Última actividad</th>
+                  <th className="px-4 py-3 font-medium">Fuente</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
+                      No hay leads que mostrar
+                    </td>
+                  </tr>
+                ) : (
+                  visibleLeads.map(lead => {
+                    const leadStage = stages.find(s => s.id === lead.stage_id)
+                    return (
+                      <tr 
+                        key={lead.id} 
+                        onClick={() => router.push(`/leads/${lead.id}`)}
+                        className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
+                              {lead.contact?.full_name?.substring(0, 2).toUpperCase() ?? "??"}
+                            </div>
+                            <span className="text-zinc-200 font-medium">{lead.contact?.full_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">{lead.title || lead.project || "-"}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: leadStage?.color ?? "#666" }} />
+                            <span className="text-zinc-400 text-xs">{leadStage?.name ?? "Sin etapa"}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-1 rounded-md border ${
+                            lead.priority === "high" ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                            lead.priority === "medium" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                            "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          }`}>
+                            {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300 font-mono text-xs">
+                          {lead.budget_max ? `$${lead.budget_max.toLocaleString()}` : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs">{timeAgo(lead.last_activity_at)}</td>
+                        <td className="px-4 py-3">
+                          {lead.source && (
+                            <span className="text-xs text-zinc-400">{lead.source.name}</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -204,6 +204,31 @@ function LogActivitySheet({
 
     await (supabase as any).from("activities").insert(payload)
 
+    // Detectar menciones @ y crear notificaciones
+    if ((type === "note" || type === "call") && note) {
+      const mentionRegex = /@(\w+(?:\s+\w+)*)/g
+      const mentions = [...note.matchAll(mentionRegex)].map(m => m[1].trim())
+      
+      if (mentions.length > 0 && companyId) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("company_id", companyId)
+          .ilike("full_name", `%${mentions[0]}%`)
+        
+        for (const profile of profiles ?? []) {
+          await supabase.from("notifications").insert({
+            company_id: companyId,
+            user_id: profile.id,
+            lead_id: leadId,
+            type: "mention",
+            title: "📣 Te mencionaron",
+            body: `${user?.email?.split("@")[0] ?? "Alguien"} te mencionó en una nota: "${note.slice(0, 80)}..."`,
+          })
+        }
+      }
+    }
+
     // Solo avanzar si el lead está en la primera columna (sacarlo del estado inicial)
     let nextStageId: string | null = null
     if (type === "call" && stages.length > 0 && currentStageId) {

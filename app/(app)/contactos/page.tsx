@@ -14,14 +14,17 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
+import { computeScope } from "@/lib/role-scope"
 import {
-  ArrowUpRight, Download, Filter, Loader2, Mail, Phone, Plus, Search,
+  ArrowUpRight, Check, ChevronDown, Download, Filter, Loader2, Mail, Phone, Plus, Search, X,
 } from "lucide-react"
 
 type Stage = { id: string; name: string; color: string | null; position: number; is_closed: boolean }
 type Source = { id: string; name: string }
+type TeamMember = { id: string; full_name: string; role_level: number }
 type LeadRow = {
   id: string
+  owner_id: string | null
   title: string | null
   priority: "low" | "medium" | "high"
   budget_max: number | null
@@ -36,7 +39,7 @@ type LeadRow = {
   } | null
   stage: { name: string; color: string | null } | null
   source: { name: string } | null
-  owner: { full_name: string } | null
+  owner: { id: string; full_name: string } | null
 }
 
 type CompanySettings = {
@@ -68,12 +71,14 @@ function formatMoney(value: number | null, currency = "MXN") {
 export default function ContactosPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [leads, setLeads] = useState<LeadRow[]>([])
   const [stages, setStages] = useState<Stage[]>([])
   const [sources, setSources] = useState<Source[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -93,18 +98,21 @@ export default function ContactosPage() {
     deal_type: "sale" as "sale" | "rent" | "other",
   })
 
+  const scope = computeScope(profile?.id ?? null, role ?? null, teamMembers)
+  const isLeader = scope.isLeader || scope.isTransversal
+
   const loadData = useCallback(async (companyId: string) => {
     setLoading(true)
 
-    const [{ data: leadRows }, { data: stageRows }, { data: sourceRows }, { data: companyRow }] = await Promise.all([
+    const [{ data: leadRows }, { data: stageRows }, { data: sourceRows }, { data: companyRow }, { data: memberships }] = await Promise.all([
       supabase
         .from("leads")
         .select(`
-          id, title, priority, budget_max, currency, deal_type, created_at,
+          id, owner_id, title, priority, budget_max, currency, deal_type, created_at,
           contact:contacts(id, full_name, email, phone),
           stage:pipeline_stages(name, color),
           source:lead_sources(name),
-          owner:profiles(full_name)
+          owner:profiles(id, full_name)
         `)
         .eq("company_id", companyId)
         .order("created_at", { ascending: false })
@@ -124,6 +132,10 @@ export default function ContactosPage() {
         .select("default_currency, allowed_currencies")
         .eq("id", companyId)
         .single(),
+      supabase
+        .from("team_memberships")
+        .select("user_id, reports_to")
+        .eq("company_id", companyId),
     ])
 
     const settings = (companyRow as CompanySettings | null) ?? null
@@ -134,6 +146,40 @@ export default function ContactosPage() {
     setStages(nextStages)
     setSources(nextSources)
     setCompanySettings(settings)
+
+    // Build hierarchy tree for filter dropdown
+    if (profile?.id && (isLeader || scope.canViewTeam) && memberships) {
+      const reportsByLeader = new Map<string, string[]>()
+      memberships.forEach((m: any) => {
+        if (!m.reports_to) return
+        reportsByLeader.set(m.reports_to, [...(reportsByLeader.get(m.reports_to) ?? []), m.user_id])
+      })
+      function getDescendants(id: string): string[] {
+        const q = [...(reportsByLeader.get(id) ?? [])]
+        const res: string[] = []
+        while (q.length) {
+          const cur = q.shift()!
+          if (res.includes(cur)) continue
+          res.push(cur)
+          q.push(...(reportsByLeader.get(cur) ?? []))
+        }
+        return res
+      }
+      const descendants = getDescendants(profile.id)
+      if (descendants.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, role_id, role:roles(level)")
+          .in("id", descendants)
+        const members: TeamMember[] = (profiles ?? []).map((p: any) => ({
+          id: p.id,
+          full_name: p.full_name,
+          role_level: p.role?.level ?? 99,
+        }))
+        setTeamMembers(members)
+      }
+    }
+
     setFormData((prev) => ({
       ...prev,
       source_id: prev.source_id || nextSources[0]?.id || "",
@@ -141,7 +187,7 @@ export default function ContactosPage() {
       currency: settings?.default_currency || "MXN",
     }))
     setLoading(false)
-  }, [supabase])
+  }, [supabase, profile?.id, isLeader, scope.canViewTeam])
 
   useEffect(() => {
     if (profile?.company_id) {
@@ -296,21 +342,41 @@ export default function ContactosPage() {
     router.push(`/leads/${leadData.id}`)
   }
 
+  // Filter options for dropdown
+  const filterOptions = [
+    { id: profile?.id ?? "", name: "Yo", isSelf: true },
+    ...teamMembers.map(m => ({ id: m.id, name: m.full_name, isSelf: false })),
+  ]
+
+  // Compute scope user ids
+  const scopeIds = useMemo(() => {
+    if (!profile?.id) return []
+    if (!isLeader) return [profile.id]
+    if (filterMemberId) return [filterMemberId]
+    if (scope.isTransversal) return [profile.id, ...teamMembers.map(m => m.id)]
+    return [profile.id, ...teamMembers.map(m => m.id)]
+  }, [profile?.id, isLeader, scope.isTransversal, teamMembers, filterMemberId])
+
   const filteredLeads = useMemo(() => {
     const query = searchTerm.trim().toLowerCase()
-    if (!query) return leads
     return leads.filter((lead) => {
-      const values = [
-        lead.contact?.full_name,
-        lead.contact?.email,
-        lead.contact?.phone,
-        lead.title,
-        lead.source?.name,
-        lead.owner?.full_name,
-      ]
-      return values.some((value) => value?.toLowerCase().includes(query))
+      // Filter by user scope
+      if (!lead.owner_id || !scopeIds.includes(lead.owner_id)) return false
+      // Filter by search query
+      if (query) {
+        const values = [
+          lead.contact?.full_name,
+          lead.contact?.email,
+          lead.contact?.phone,
+          lead.title,
+          lead.source?.name,
+          lead.owner?.full_name,
+        ]
+        if (!values.some((value) => value?.toLowerCase().includes(query))) return false
+      }
+      return true
     })
-  }, [leads, searchTerm])
+  }, [leads, searchTerm, scopeIds])
 
   const allowedCurrencies = companySettings?.allowed_currencies?.length
     ? companySettings.allowed_currencies
@@ -460,19 +526,34 @@ export default function ContactosPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-sm">
-        <div className="relative w-full md:max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <Input
-            placeholder="Buscar por nombre, correo, teléfono o lead..."
-            className="pl-10 bg-zinc-950/50 border-zinc-800 focus-visible:ring-zinc-700"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <Input
+              placeholder="Buscar por nombre, correo, teléfono o lead..."
+              className="pl-10 bg-zinc-950/50 border-zinc-800 focus-visible:ring-zinc-700"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+          </div>
+          {filterOptions.length > 1 && (
+            <ScopeDropdown
+              label="Agente"
+              options={filterOptions}
+              selectedId={filterMemberId}
+              onSelect={setFilterMemberId}
+            />
+          )}
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button variant="outline" size="sm" className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800">
-            <Filter className="w-4 h-4 mr-2" /> Filtros
-          </Button>
+        <div className="flex items-center gap-2">
+          {(filterMemberId || searchTerm) && (
+            <button
+              onClick={() => { setFilterMemberId(null); setSearchTerm("") }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800/60 hover:border-zinc-700 transition-colors"
+            >
+              <X className="w-3 h-3" /> Limpiar
+            </button>
+          )}
         </div>
       </div>
 
@@ -559,6 +640,56 @@ export default function ContactosPage() {
           </Table>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Scope filter dropdown ───────────────────────────────────────
+function ScopeDropdown({ label, options, selectedId, onSelect }: {
+  label: string
+  options: { id: string; name: string; isSelf?: boolean }[]
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const current = options.find(o => o.id === selectedId)
+  if (options.length === 0) return null
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors whitespace-nowrap">
+        <span className="text-zinc-400 text-xs">{label}:</span>
+        <span className="text-zinc-200 font-medium">{current?.name ?? "Todos"}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+            <button onClick={() => { onSelect(null); setOpen(false) }}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+              Todos
+              {!selectedId && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
+            </button>
+            {options.map(o => (
+              <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+                {o.isSelf ? (
+                  <div className="w-6 h-6 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
+                    Yo
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                    {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+                  </div>
+                )}
+                <span className="truncate">{o.name}</span>
+                {selectedId === o.id && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

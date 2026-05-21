@@ -163,7 +163,7 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
 // ── Scope filter dropdown ───────────────────────────────────────
 function ScopeDropdown({ label, options, selectedId, onSelect }: {
   label: string
-  options: { id: string; name: string }[]
+  options: { id: string; name: string; isSelf?: boolean }[]
   selectedId: string | null
   onSelect: (id: string | null) => void
 }) {
@@ -189,9 +189,15 @@ function ScopeDropdown({ label, options, selectedId, onSelect }: {
             {options.map(o => (
               <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
-                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
-                  {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
-                </div>
+                {o.isSelf ? (
+                  <div className="w-6 h-6 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
+                    Yo
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                    {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
+                  </div>
+                )}
                 <span className="truncate">{o.name}</span>
                 {selectedId === o.id && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
               </button>
@@ -298,19 +304,22 @@ export default function PipelinePage() {
   // Compute scope user ids based on permissions + hierarchy + filter
   const scopeIds = useMemo(() => {
     if (!profile?.id) return []
-    if (!isLeader) return [profile.id] // agente: only self
+    
+    // Agente (nivel 4+): solo sus propios leads
+    if (!isLeader) return [profile.id]
+    
+    // PRIMERO: si hay filtro activo por usuario, respetarlo SIEMPRE
+    if (filterMemberId) {
+      return [filterMemberId]
+    }
     
     // Transversal: ve todos los miembros de la empresa
     if (scope.isTransversal) {
       return [profile.id, ...teamMembers.map(m => m.id)]
     }
     
-    // Líder con jerarquía: ve su equipo
-    const allScopeIds = [profile.id, ...teamMembers.map(m => m.id)]
-    if (filterMemberId) {
-      return [filterMemberId]
-    }
-    return allScopeIds
+    // Líder con jerarquía: ve sus propios leads + equipo
+    return [profile.id, ...teamMembers.map(m => m.id)]
   }, [profile?.id, isLeader, scope.isTransversal, teamMembers, filterMemberId])
 
   const visibleLeads = useMemo(() => {
@@ -364,8 +373,11 @@ export default function PipelinePage() {
   const activeStages = stages.filter(s => !s.is_closed)
   const unassignedLeads = visibleLeads.filter(l => !l.stage_id)
 
-  // Filter options for dropdown
-  const filterOptions = teamMembers.map(m => ({ id: m.id, name: m.full_name }))
+  // Filter options for dropdown - incluir "Yo" + todos los miembros del equipo
+  const filterOptions = [
+    { id: profile?.id ?? "", name: "Yo", isSelf: true },
+    ...teamMembers.map(m => ({ id: m.id, name: m.full_name, isSelf: false })),
+  ]
 
   const filterLabel = role?.level === 1 ? "Gerente/Coordinador"
     : role?.level === 2 ? "Coordinador"
@@ -401,7 +413,7 @@ export default function PipelinePage() {
               <List className="w-4 h-4" /> Lista
             </button>
           </div>
-          {isLeader && filterOptions.length > 0 && (
+          {filterOptions.length > 1 && (
             <ScopeDropdown
               label={filterLabel}
               options={filterOptions}
@@ -477,11 +489,11 @@ export default function PipelinePage() {
       ) : (
         <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
+            <div className="kanban-container flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
               {activeStages.map(stage => {
                 const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
                 return (
-                  <div key={stage.id} className="w-72 flex-shrink-0 flex flex-col gap-3">
+                  <div key={stage.id} className="kanban-column w-72 flex-shrink-0 flex flex-col gap-3">
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
@@ -553,9 +565,9 @@ export default function PipelinePage() {
       {viewMode === "list" && (
         <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm mobile-table-cards">
               <thead>
-                <tr className="border-b border-zinc-800 text-zinc-500 text-left">
+                <tr className="border-b border-zinc-800 text-zinc-500 text-left hidden sm:table-row">
                   <th className="px-4 py-3 font-medium">Contacto</th>
                   <th className="px-4 py-3 font-medium">Título</th>
                   <th className="px-4 py-3 font-medium">Etapa</th>
@@ -581,7 +593,7 @@ export default function PipelinePage() {
                         onClick={() => router.push(`/leads/${lead.id}`)}
                         className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer transition-colors"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3" data-label="Contacto">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
                               {lead.contact?.full_name?.substring(0, 2).toUpperCase() ?? "??"}
@@ -589,14 +601,14 @@ export default function PipelinePage() {
                             <span className="text-zinc-200 font-medium">{lead.contact?.full_name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-zinc-300">{lead.title || lead.project || "-"}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-zinc-300" data-label="Título">{lead.title || lead.project || "-"}</td>
+                        <td className="px-4 py-3" data-label="Etapa">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: leadStage?.color ?? "#666" }} />
                             <span className="text-zinc-400 text-xs">{leadStage?.name ?? "Sin etapa"}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3" data-label="Prioridad">
                           <span className={`text-xs px-2 py-1 rounded-md border ${
                             lead.priority === "high" ? "bg-red-500/10 text-red-400 border-red-500/20" :
                             lead.priority === "medium" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
@@ -605,11 +617,11 @@ export default function PipelinePage() {
                             {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-zinc-300 font-mono text-xs">
+                        <td className="px-4 py-3 text-zinc-300 font-mono text-xs" data-label="Presupuesto">
                           {lead.budget_max ? `$${lead.budget_max.toLocaleString()}` : "-"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-500 text-xs">{timeAgo(lead.last_activity_at)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-zinc-500 text-xs" data-label="Actividad">{timeAgo(lead.last_activity_at)}</td>
+                        <td className="px-4 py-3" data-label="Fuente">
                           {lead.source && (
                             <span className="text-xs text-zinc-400">{lead.source.name}</span>
                           )}

@@ -176,3 +176,108 @@
   mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
 }
+
+/* ════════════════════════════════════════════════════
+   MOBILE PWA UX IMPROVEMENTS
+   ════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* Prevent tap highlight */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  /* Prevent horizontal scroll bounce */
+  body {
+    overscroll-behavior-x: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Smooth vertical scroll only */
+  .scroll-container {
+    overscroll-behavior-y: contain;
+    scroll-behavior: smooth;
+  }
+  
+  /* Kanban: vertical stacking on mobile */
+  .kanban-container {
+    flex-direction: column !important;
+    min-width: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  
+  .kanban-column {
+    width: 100% !important;
+    flex-shrink: 0 !important;
+    margin-bottom: 1rem;
+  }
+  
+  /* Table: card-like display on mobile */
+  .mobile-table-cards thead {
+    display: none;
+  }
+  
+  .mobile-table-cards tbody,
+  .mobile-table-cards tr,
+  .mobile-table-cards td {
+    display: block;
+    width: 100%;
+  }
+  
+  .mobile-table-cards tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid rgba(63, 63, 70, 0.5);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(24, 24, 27, 0.5);
+  }
+  
+  .mobile-table-cards td {
+    padding: 0.25rem 0;
+    border: none;
+    text-align: left;
+  }
+  
+  .mobile-table-cards td::before {
+    content: attr(data-label);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #71717a;
+    display: block;
+    margin-bottom: 0.125rem;
+  }
+  
+  /* Dashboard: compact spacing on mobile */
+  .dashboard-section {
+    margin-bottom: 1rem;
+  }
+  
+  /* Prevent text selection during touch gestures */
+  .no-select-touch {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Scroll snap for horizontal scrolling containers */
+.scroll-snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-x > * {
+  scroll-snap-align: start;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

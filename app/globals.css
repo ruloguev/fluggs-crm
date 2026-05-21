@@ -207,7 +207,7 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: Tinder-style with snap + peek */
+  /* Kanban: Tinder-style with snap + peek + ghost mode */
   .kanban-board {
     scroll-snap-type: x mandatory !important;
     scroll-behavior: smooth !important;
@@ -215,6 +215,11 @@
     overflow-x: auto !important;
     overflow-y: visible !important;
     position: relative;
+  }
+  
+  /* Disable snap during drag */
+  .kanban-board.snap-none {
+    scroll-snap-type: none !important;
   }
   
   /* Subtle gradient on right edge to indicate more content */
@@ -238,21 +243,20 @@
     min-height: 0 !important;
   }
   
+  /* Ghost mode: compress columns during drag */
+  .kanban-container.ghost-mode {
+    gap: 0.5rem !important;
+  }
+  
   .kanban-column {
-    min-width: 90vw !important;
-    max-width: 400px !important;
-    flex-shrink: 0 !important;
-    scroll-snap-align: start !important;
     display: flex !important;
     flex-direction: column !important;
-    height: 100% !important;
+    height: calc(100vh - 280px) !important;
     min-height: 0 !important;
   }
   
   .kanban-header {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 10 !important;
+    /* No sticky needed - header is outside scrollable area */
   }
   
   .kanban-cards {
@@ -261,10 +265,21 @@
     scrollbar-width: none !important;
     flex: 1 !important;
     min-height: 0 !important;
+    transition: all 0.3s ease !important;
   }
   
   .kanban-cards::-webkit-scrollbar {
     display: none !important;
+  }
+  
+  /* Ghost mode column hover highlight */
+  .ghost-mode .kanban-column:hover {
+    opacity: 1 !important;
+    border-color: rgba(34, 211, 238, 0.5) !important;
+  }
+  
+  .ghost-mode .kanban-cards {
+    pointer-events: none !important;
   }
   
   /* Allow both scroll directions but prevent bounce */

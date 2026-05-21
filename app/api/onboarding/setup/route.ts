@@ -145,8 +145,15 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", userId)
 
-    // 4. Pipeline stages
-    await supabase.from("pipeline_stages").insert([
+    // 4. Pipeline stages (prevenir duplicados)
+    const { data: existingStages } = await supabase
+      .from("pipeline_stages")
+      .select("name")
+      .eq("company_id", companyId)
+    
+    const existingStageNames = new Set(existingStages?.map(s => s.name) || [])
+    
+    const defaultStages = [
       { company_id: companyId, name: "Nuevo Lead",    color: "#64748b", position: 1, is_closed: false, is_won: false },
       { company_id: companyId, name: "Contactado",    color: "#22d3ee", position: 2, is_closed: false, is_won: false },
       { company_id: companyId, name: "Calificado",    color: "#a78bfa", position: 3, is_closed: false, is_won: false },
@@ -154,10 +161,23 @@ export async function POST(req: NextRequest) {
       { company_id: companyId, name: "Negociación",   color: "#fbbf24", position: 5, is_closed: false, is_won: false },
       { company_id: companyId, name: "Venta Cerrada", color: "#34d399", position: 6, is_closed: true,  is_won: true  },
       { company_id: companyId, name: "Perdido",       color: "#f87171", position: 7, is_closed: true,  is_won: false },
-    ])
+    ]
+    
+    const stagesToInsert = defaultStages.filter(s => !existingStageNames.has(s.name))
+    
+    if (stagesToInsert.length > 0) {
+      await supabase.from("pipeline_stages").insert(stagesToInsert)
+    }
 
-    // 5. Lead sources
-    await supabase.from("lead_sources").insert([
+    // 5. Lead sources (prevenir duplicados)
+    const { data: existingSources } = await supabase
+      .from("lead_sources")
+      .select("name")
+      .eq("company_id", companyId)
+    
+    const existingSourceNames = new Set(existingSources?.map(s => s.name) || [])
+    
+    const defaultSources = [
       { company_id: companyId, name: "WhatsApp",        icon: "💬", color: "#25D366", is_active: true },
       { company_id: companyId, name: "Inmuebles24",     icon: "🏠", color: "#E84040", is_active: true },
       { company_id: companyId, name: "Propiedades.com", icon: "🔑", color: "#0066CC", is_active: true },
@@ -166,21 +186,40 @@ export async function POST(req: NextRequest) {
       { company_id: companyId, name: "Referido",        icon: "🤝", color: "#0F6E56", is_active: true },
       { company_id: companyId, name: "Campo / Evento",  icon: "📍", color: "#854F0B", is_active: true },
       { company_id: companyId, name: "Manual",          icon: "✏️",  color: "#888780", is_active: true },
-    ])
+    ]
+    
+    const sourcesToInsert = defaultSources.filter(s => !existingSourceNames.has(s.name))
+    
+    if (sourcesToInsert.length > 0) {
+      await supabase.from("lead_sources").insert(sourcesToInsert)
+    }
 
     // 6. Team membership
     await supabase.from("team_memberships").upsert({
       company_id: companyId, user_id: userId, reports_to: null,
     })
 
-    // 7. Drive folders
-    await supabase.from("drive_folders").insert([
+    // 7. Drive folders (prevenir duplicados)
+    const { data: existingFolders } = await supabase
+      .from("drive_folders")
+      .select("name")
+      .eq("company_id", companyId)
+    
+    const existingFolderNames = new Set(existingFolders?.map(f => f.name) || [])
+    
+    const defaultFolders = [
       { company_id: companyId, name: "Fichas técnicas",    position: 1 },
       { company_id: companyId, name: "Renders y galería",  position: 2 },
       { company_id: companyId, name: "Videos",             position: 3 },
       { company_id: companyId, name: "Plantillas mensaje", position: 4 },
       { company_id: companyId, name: "Presentaciones",     position: 5 },
-    ])
+    ]
+    
+    const foldersToInsert = defaultFolders.filter(f => !existingFolderNames.has(f.name))
+    
+    if (foldersToInsert.length > 0) {
+      await supabase.from("drive_folders").insert(foldersToInsert)
+    }
 
     return NextResponse.json({ ok: true, companyId })
 

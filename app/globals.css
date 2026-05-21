@@ -200,13 +200,12 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: horizontal scroll locked (no diagonal) */
+  /* Kanban: horizontal scroll, vertical scroll on parent */
   .kanban-container {
     flex-direction: row !important;
     min-width: max-content !important;
     overflow-x: auto !important;
-    overflow-y: hidden !important;
-    touch-action: pan-x !important;
+    overflow-y: visible !important;
     -webkit-overflow-scrolling: touch;
   }
   
@@ -216,9 +215,8 @@
     flex-shrink: 0 !important;
   }
   
-  /* Lock horizontal scroll containers to x-axis only */
+  /* Allow both scroll directions but prevent bounce */
   .overflow-x-auto {
-    touch-action: pan-x !important;
     -webkit-overflow-scrolling: touch;
   }
   

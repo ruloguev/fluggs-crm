@@ -248,8 +248,11 @@ export default function PipelinePage() {
   const [allTags, setAllTags] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
   const [activeStageIndex, setActiveStageIndex] = useState(0)
-  const [isDragging, setIsDragging] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [draggingLead, setDraggingLead] = useState<{
+    id: string;
+    name: string;
+    sourceStageId: string | null;
+  } | null>(null)
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -259,10 +262,6 @@ export default function PipelinePage() {
 
   useEffect(() => {
     setIsMounted(true)
-    // Detect mobile
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
     // Restore filter from sessionStorage (iOS fix)
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('pipeline-filter')
@@ -271,56 +270,9 @@ export default function PipelinePage() {
     if (profile?.company_id && profile?.id) {
       void loadAll(profile.company_id, profile.id)
     }
-    return () => window.removeEventListener('resize', checkMobile)
   }, [profile?.company_id, profile?.id])
 
-  // Track active column for dots indicator (mobile)
-  useEffect(() => {
-    if (!isMounted || stages.length <= 1) return
-    
-    // Wait for DOM to render
-    const timer = setTimeout(() => {
-      const board = document.querySelector('.kanban-board')
-      if (!board) return
-      
-      const columns = document.querySelectorAll('.kanban-column[data-stage-index]')
-      if (columns.length === 0) return
-      
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-              const index = parseInt(entry.target.getAttribute('data-stage-index') || '0')
-              setActiveStageIndex(index)
-            }
-          })
-        },
-        { root: board, threshold: 0.5 }
-      )
-      
-      columns.forEach(col => observer.observe(col))
-      
-      // Fallback: track scroll position
-      const handleScroll = () => {
-        const scrollLeft = board.scrollLeft
-        const columnWidth = board.clientWidth * 0.9 // 90vw
-        const gap = 12 // gap between columns
-        const newIndex = Math.round(scrollLeft / (columnWidth + gap))
-        if (newIndex !== activeStageIndex && newIndex >= 0 && newIndex < stages.length) {
-          setActiveStageIndex(newIndex)
-        }
-      }
-      
-      board.addEventListener('scroll', handleScroll, { passive: true })
-      
-      return () => {
-        observer.disconnect()
-        board.removeEventListener('scroll', handleScroll)
-      }
-    }, 100)
-    
-    return () => clearTimeout(timer)
-  }, [isMounted, stages])
+
 
   async function loadAll(companyId: string, userId: string) {
     setLoading(true)
@@ -453,6 +405,34 @@ export default function PipelinePage() {
     }
   }
 
+  // Move lead to stage via modal (mobile)
+  async function moveLeadToStage(leadId: string, newStageId: string) {
+    const lead = allLeads.find(l => l.id === leadId)
+    if (!lead) return
+    
+    setAllLeads(prev => prev.map(l => 
+      l.id === leadId ? { ...l, stage_id: newStageId } : l
+    ))
+    
+    await (supabase as any).from("leads")
+      .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
+      .eq("id", leadId)
+    
+    if (lead?.stage_id || newStageId) {
+      await (supabase as any).from("activities").insert({
+        company_id: profile?.company_id,
+        lead_id: leadId,
+        contact_id: lead?.contact?.id,
+        user_id: profile?.id,
+        type: "stage_change",
+        title: "Etapa cambiada",
+        from_stage_id: lead?.stage_id,
+        to_stage_id: newStageId,
+        completed_at: new Date().toISOString(),
+      })
+    }
+  }
+
   if (!isMounted) return null
   const activeStages = stages.filter(s => !s.is_closed)
   const unassignedLeads = visibleLeads.filter(l => !l.stage_id)
@@ -572,127 +552,49 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex flex-col flex-1">
-          {/* Progress dots indicator - MOBILE ONLY */}
-          {isMobile && activeStages.length > 1 && (
-            <div className="flex items-center justify-center gap-2 py-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/60 shadow-lg">
-                {activeStages.map((stage, i) => (
-                  <button
-                    key={stage.id}
-                    onClick={() => {
-                      const col = document.querySelector(`.kanban-column[data-stage-index="${i}"]`)
-                      col?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
-                    }}
-                    className={`transition-all duration-200 rounded-full flex-shrink-0 ${
-                      i === activeStageIndex 
-                        ? 'w-3.5 h-3.5 bg-flugzz-accent shadow-[0_0_10px_rgba(34,211,238,0.7)]' 
-                        : 'w-2.5 h-2.5 bg-zinc-400 hover:bg-zinc-300'
-                    }`}
-                    aria-label={`Ir a ${stage.name}`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className={`flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board min-h-0 ${isMobile && isDragging ? 'snap-none' : 'snap-x snap-mandatory'}`}>
-            <DragDropContext 
-              onDragStart={() => isMobile && setIsDragging(true)}
-              onDragEnd={(result) => {
-                if (isMobile) setIsDragging(false)
-                onDragEnd(result)
-              }}
-            >
-              <div className={`kanban-container flex gap-3 h-full items-start px-4 ${isMobile && isDragging ? 'ghost-mode transition-all duration-300' : ''}`}>
-                {activeStages.map((stage, index) => {
-                  const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
-                  return (
-                    <div 
-                      key={stage.id} 
-                      data-stage-index={index}
-                      className={`kanban-column flex-shrink-0 snap-start flex flex-col ${
-                        isMobile && isDragging 
-                          ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50 transition-all duration-300' 
-                          : isMobile 
-                            ? 'min-w-[90vw] max-w-[400px]' 
-                            : 'w-72 flex-shrink-0'
-                      }`}
-                    >
-                      <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 ${
-                        isMobile && isDragging 
-                          ? 'bg-zinc-900/60 border-zinc-800/30 transition-all duration-300' 
-                          : 'bg-zinc-900/95 border-zinc-800/50'
-                      }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                          <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
-                          <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{stageLeads.length}</span>
-                        </div>
-                        {!(isMobile && isDragging) && (
-                          <button className="text-zinc-500 hover:text-zinc-200 p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" onClick={() => router.push("/contactos?new=1")}><Plus className="w-4 h-4" /></button>
-                        )}
-                      </div>
-                      <Droppable droppableId={stage.id}>
-                        {(provided, snapshot) => (
-                          <div {...provided.droppableProps} ref={provided.innerRef}
-                            className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
-                              isMobile && isDragging ? 'pointer-events-none transition-all duration-300' : ''
-                            } ${
-                              snapshot.isDraggingOver 
-                                ? "bg-zinc-800/50 border-flugzz-accent/40 shadow-[0_0_20px_rgba(34,211,238,0.15)]" 
-                                : "bg-zinc-900/30 border-zinc-800/40"
-                            }`}>
-                            {stageLeads.map((lead, i) => (
-                              <LeadCard key={lead.id} lead={lead} index={i}
-                                stages={stages} supabase={supabase}
-                                profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
-                                onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
-                              />
-                            ))}
-                            {provided.placeholder}
-                            {stageLeads.length === 0 && !snapshot.isDraggingOver && (
-                              <div className="flex-1 flex items-center justify-center py-12">
-                                <p className="text-xs text-zinc-600">Arrastra aquí</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </Droppable>
-                    </div>
-                  )
-                })}
-
-                {unassignedLeads.length > 0 && (
-                  <div className={`kanban-column flex-shrink-0 snap-start flex flex-col ${
-                    isMobile && isDragging 
-                      ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50 transition-all duration-300' 
-                      : isMobile 
-                        ? 'min-w-[90vw] max-w-[400px]' 
-                        : 'w-72 flex-shrink-0'
-                  }`}>
-                    <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 ${
-                      isMobile && isDragging 
-                        ? 'bg-zinc-900/60 border-zinc-800/30 transition-all duration-300' 
-                        : 'bg-zinc-900/95 border-zinc-800/50'
-                    }`}>
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
+          <DragDropContext 
+            onDragStart={(start) => {
+              const lead = allLeads.find(l => l.id === start.draggableId)
+              if (lead) {
+                setDraggingLead({
+                  id: lead.id,
+                  name: lead.contact.full_name,
+                  sourceStageId: lead.stage_id,
+                })
+              }
+            }}
+            onDragEnd={(result) => {
+              setDraggingLead(null)
+              onDragEnd(result)
+            }}
+          >
+            <div className="kanban-container flex gap-3 h-full items-start px-4">
+              {activeStages.map((stage, index) => {
+                const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
+                return (
+                  <div 
+                    key={stage.id} 
+                    data-stage-index={index}
+                    className="kanban-column w-72 flex-shrink-0 snap-start flex flex-col"
+                  >
+                    <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
-                        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">Sin etapa</span>
-                        <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{unassignedLeads.length}</span>
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
+                        <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{stageLeads.length}</span>
                       </div>
+                      <button className="text-zinc-500 hover:text-zinc-200 p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" onClick={() => router.push("/contactos?new=1")}><Plus className="w-4 h-4" /></button>
                     </div>
-                    <Droppable droppableId="__unassigned__">
+                    <Droppable droppableId={stage.id}>
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
                           className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
-                            isMobile && isDragging ? 'pointer-events-none transition-all duration-300' : ''
-                          } ${
                             snapshot.isDraggingOver 
                               ? "bg-zinc-800/50 border-flugzz-accent/40 shadow-[0_0_20px_rgba(34,211,238,0.15)]" 
                               : "bg-zinc-900/30 border-zinc-800/40"
                           }`}>
-                          {unassignedLeads.map((lead, i) => (
+                          {stageLeads.map((lead, i) => (
                             <LeadCard key={lead.id} lead={lead} index={i}
                               stages={stages} supabase={supabase}
                               profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
@@ -700,16 +602,121 @@ export default function PipelinePage() {
                             />
                           ))}
                           {provided.placeholder}
+                          {stageLeads.length === 0 && !snapshot.isDraggingOver && (
+                            <div className="flex-1 flex items-center justify-center py-12">
+                              <p className="text-xs text-zinc-600">Arrastra aquí</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </Droppable>
                   </div>
-                )}
-              </div>
-            </DragDropContext>
-          </div>
+                )
+              })}
+
+              {unassignedLeads.length > 0 && (
+                <div className="kanban-column w-72 flex-shrink-0 snap-start flex flex-col">
+                  <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
+                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">Sin etapa</span>
+                      <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{unassignedLeads.length}</span>
+                    </div>
+                  </div>
+                  <Droppable droppableId="__unassigned__">
+                    {(provided, snapshot) => (
+                      <div {...provided.droppableProps} ref={provided.innerRef}
+                        className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
+                          snapshot.isDraggingOver 
+                            ? "bg-zinc-800/50 border-flugzz-accent/40 shadow-[0_0_20px_rgba(34,211,238,0.15)]" 
+                            : "bg-zinc-900/30 border-zinc-800/40"
+                        }`}>
+                        {unassignedLeads.map((lead, i) => (
+                          <LeadCard key={lead.id} lead={lead} index={i}
+                            stages={stages} supabase={supabase}
+                            profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
+                            onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
+                          />
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              )}
+            </div>
+          </DragDropContext>
         </div>
       ) : null}
+
+      {/* Stage Selector Modal - MOBILE ONLY */}
+      {draggingLead && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-100">Mover lead</h3>
+                <p className="text-sm text-zinc-400 mt-0.5">{draggingLead.name}</p>
+              </div>
+              <button 
+                onClick={() => setDraggingLead(null)}
+                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+              {activeStages.map(stage => {
+                const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
+                const isSource = stage.id === draggingLead.sourceStageId
+                return (
+                  <button
+                    key={stage.id}
+                    disabled={isSource}
+                    onClick={() => {
+                      moveLeadToStage(draggingLead.id, stage.id)
+                    }}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
+                      isSource 
+                        ? 'border-zinc-800 bg-zinc-950/30 opacity-40 cursor-not-allowed' 
+                        : 'border-zinc-800 bg-zinc-950/50 hover:border-flugzz-accent/50 hover:bg-zinc-800/50'
+                    }`}
+                  >
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: stage.color }} />
+                    <span className="text-xs text-zinc-300 text-center truncate w-full">{stage.name}</span>
+                    <span className="text-xs text-zinc-500">{stageLeads.length} leads</span>
+                  </button>
+                )
+              })}
+              {unassignedLeads.length > 0 && (
+                <button
+                  disabled={draggingLead.sourceStageId === null}
+                  onClick={() => {
+                    moveLeadToStage(draggingLead.id, "")
+                  }}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
+                    draggingLead.sourceStageId === null
+                      ? 'border-zinc-800 bg-zinc-950/30 opacity-40 cursor-not-allowed' 
+                      : 'border-zinc-800 bg-zinc-950/50 hover:border-flugzz-accent/50 hover:bg-zinc-800/50'
+                  }`}
+                >
+                  <div className="w-4 h-4 rounded-full bg-zinc-500" />
+                  <span className="text-xs text-zinc-300 text-center truncate w-full">Sin etapa</span>
+                  <span className="text-xs text-zinc-500">{unassignedLeads.length} leads</span>
+                </button>
+              )}
+            </div>
+            
+            <button 
+              onClick={() => setDraggingLead(null)}
+              className="w-full mt-4 py-3 text-sm text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-xl hover:bg-zinc-800/50 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Vista de lista (tabla) */}
       {viewMode === "list" && (

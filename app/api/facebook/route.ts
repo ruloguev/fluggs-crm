@@ -13,10 +13,8 @@ type FacebookLeadWebhookValue = {
 
 type FacebookLeadDetails = {
   id: string
-  /** Webhook payloads may use numeric timestamps; Graph returns ISO strings. */
   created_time?: string | number
   field_data?: Array<{ name?: string; values?: string[] }>
-  /** Webhook values are often numeric; Graph returns string IDs. */
   ad_id?: string | number
   campaign_id?: string | number
   adgroup_id?: string | number
@@ -34,7 +32,6 @@ type FacebookWebhookPayload = {
   }>
 }
 
-// Service role client — bypass RLS for webhook processing
 function getAdminClient(): SupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -66,7 +63,7 @@ async function fetchFacebookLeadDetails(leadId: string, accessToken: string) {
   return await response.json() as FacebookLeadDetails
 }
 
-// ── GET: Verificación del webhook (Facebook requiere esto primero) ──
+// ── GET: Verificacion del webhook ──
 export async function GET(request: NextRequest) {
   const supabase = getAdminClient()
   const { searchParams } = new URL(request.url)
@@ -79,7 +76,6 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Bad Request', { status: 400 })
   }
 
-  // Buscamos si el verify_token corresponde a alguna integración activa
   const { data: integration } = await supabase
     .from('facebook_integrations')
     .select('id')
@@ -91,11 +87,10 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 
-  // Facebook exige que respondamos con hub.challenge para confirmar
   return new NextResponse(challenge, { status: 200 })
 }
 
-// ── POST: Recibir eventos de Lead Ads ────────────────────────
+// ── POST: Recibir eventos de Lead Ads ──
 export async function POST(request: NextRequest) {
   const supabase = getAdminClient()
   let body: FacebookWebhookPayload
@@ -103,17 +98,16 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
+    console.error('[facebook-webhook] Invalid JSON received')
     return new NextResponse('Invalid JSON', { status: 400 })
   }
 
-  // Facebook envía un array de entries
   const entries = body?.entry ?? []
 
   for (const entry of entries) {
     const pageId = entry.id ?? ""
     const changes = entry.changes ?? []
 
-    // Buscar la integración correspondiente a este Page ID
     const { data: integration } = await supabase
       .from('facebook_integrations')
       .select('id, company_id, form_ids, access_token')
@@ -121,7 +115,10 @@ export async function POST(request: NextRequest) {
       .eq('is_active', true)
       .single()
 
-    if (!integration) continue
+    if (!integration) {
+      console.warn(`[facebook-webhook] No integration found for page_id: ${pageId}`)
+      continue
+    }
 
     for (const change of changes) {
       if (change.field !== 'leadgen') continue
@@ -129,29 +126,104 @@ export async function POST(request: NextRequest) {
       const leadgenData = (change.value ?? {}) as FacebookLeadWebhookValue
       const formId      = leadgenData.form_id?.toString() ?? ""
 
-      // Si tenemos form_ids configurados, filtramos por ellos
       if (
         integration.form_ids?.length > 0 &&
         !integration.form_ids.includes(formId)
       ) continue
 
-      await processLead({
-        companyId:      integration.company_id,
-        facebookLeadId: leadgenData.leadgen_id?.toString() ?? "",
-        pageId,
-        formId,
-        accessToken:    integration.access_token,
-        rawData:        leadgenData,
-        supabase,
-      })
+      // Process each lead independently — errors in one don't block others
+      try {
+        await processLead({
+          companyId:      integration.company_id,
+          facebookLeadId: leadgenData.leadgen_id?.toString() ?? "",
+          pageId,
+          formId,
+          accessToken:    integration.access_token,
+          rawData:        leadgenData,
+          supabase,
+        })
+      } catch (error) {
+        console.error('[facebook-webhook] Unexpected error processing lead:', error)
+        // Log to failed table even for unexpected errors
+        await logFailedLead({
+          supabase,
+          companyId: integration.company_id,
+          facebookLeadId: leadgenData.leadgen_id?.toString() ?? "unknown",
+          pageId,
+          formId,
+          rawData: leadgenData,
+          errorMessage: error instanceof Error ? error.message : 'Error desconocido',
+          errorDetails: error instanceof Error ? { stack: error.stack } : {},
+        })
+      }
     }
   }
 
-  // Facebook espera un 200 rápido — siempre respondemos OK
+  // Facebook expects a 200 — always respond OK
   return NextResponse.json({ status: 'ok' })
 }
 
-// ── Procesar un lead individual ───────────────────────────────
+// ── Log failed lead to database ──
+async function logFailedLead({
+  supabase,
+  companyId,
+  facebookLeadId,
+  pageId,
+  formId,
+  rawData,
+  errorMessage,
+  errorDetails,
+}: {
+  supabase: SupabaseClient
+  companyId: string
+  facebookLeadId: string
+  pageId: string
+  formId: string
+  rawData: FacebookLeadWebhookValue
+  errorMessage: string
+  errorDetails: Record<string, unknown>
+}) {
+  try {
+    await supabase.from('facebook_leads_failed').insert({
+      company_id: companyId,
+      facebook_lead_id: facebookLeadId,
+      page_id: pageId,
+      form_id: formId,
+      error_message: errorMessage,
+      error_details: errorDetails,
+      raw_payload: rawData,
+    })
+
+    // Notify admins about the failure
+    const { data: admins } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+
+    if (admins) {
+      for (const admin of admins) {
+        try {
+          await supabase.from('notifications').insert({
+            company_id: companyId,
+            user_id: admin.id,
+            type: 'system',
+            title: '⚠️ Error al procesar lead de Facebook',
+            body: `Lead ${facebookLeadId} no se pudo procesar: ${errorMessage}`,
+          })
+        } catch {}
+      }
+    }
+
+    console.error(
+      `[facebook-webhook] Lead failed: ${facebookLeadId} | ${errorMessage}`
+    )
+  } catch (logError) {
+    console.error('[facebook-webhook] Failed to log error:', logError)
+  }
+}
+
+// ── Procesar un lead individual ──
 async function processLead({
   companyId,
   facebookLeadId,
@@ -171,16 +243,16 @@ async function processLead({
 }) {
   if (!facebookLeadId) return
 
-  // 1. Verificar que no sea duplicado
+  // 1. Verificar duplicado
   const { data: existing } = await supabase
     .from('round_robin_log')
     .select('id')
     .eq('facebook_lead_id', facebookLeadId)
     .single()
 
-  if (existing) return // Ya procesado
+  if (existing) return
 
-  // 2. Obtener o crear la fuente "Facebook Leads" de esta company
+  // 2. Obtener o crear fuente "Facebook Leads"
   let { data: source } = await supabase
     .from('lead_sources')
     .select('id')
@@ -189,7 +261,7 @@ async function processLead({
     .single()
 
   if (!source) {
-    const { data: newSource } = await supabase
+    const { data: newSource, error: sourceError } = await supabase
       .from('lead_sources')
       .insert({
         company_id: companyId,
@@ -199,11 +271,20 @@ async function processLead({
       })
       .select('id')
       .single()
+
+    if (sourceError || !newSource) {
+      await logFailedLead({
+        supabase, companyId, facebookLeadId, pageId, formId, rawData,
+        errorMessage: 'No se pudo crear la fuente Facebook Leads',
+        errorDetails: { error: sourceError },
+      })
+      return
+    }
     source = newSource
   }
 
-  // 3. Obtener la primera etapa del pipeline (etapa inicial)
-  const { data: firstStage } = await supabase
+  // 3. Obtener primera etapa del pipeline
+  const { data: firstStage, error: stageError } = await supabase
     .from('pipeline_stages')
     .select('id')
     .eq('company_id', companyId)
@@ -212,7 +293,16 @@ async function processLead({
     .limit(1)
     .single()
 
-  // 4. Obtener la cola Round Robin de Facebook
+  if (stageError || !firstStage) {
+    await logFailedLead({
+      supabase, companyId, facebookLeadId, pageId, formId, rawData,
+      errorMessage: 'No se encontro etapa inicial del pipeline',
+      errorDetails: { error: stageError },
+    })
+    return
+  }
+
+  // 4. Obtener cola Round Robin
   const { data: queue } = await supabase
     .from('round_robin_queues')
     .select('id')
@@ -221,16 +311,21 @@ async function processLead({
     .eq('is_active', true)
     .single()
 
-  // 5. Asignar el siguiente agente (función atómica en Supabase)
+  // 5. Asignar agente
   let assignedUserId: string | null = null
 
   if (queue) {
-    const { data: assignedId } = await supabase
+    const { data: assignedId, error: assignError } = await supabase
       .rpc('assign_next_agent', { p_queue_id: queue.id })
 
-    assignedUserId = assignedId
+    if (assignError) {
+      console.error('[facebook-webhook] Error assigning agent:', assignError)
+    } else {
+      assignedUserId = assignedId
+    }
   }
 
+  // 6. Obtener detalles del lead si es necesario
   let resolvedLead: FacebookLeadWebhookValue & Partial<FacebookLeadDetails> = rawData
   let resolvedFieldData = rawData.field_data
 
@@ -244,12 +339,12 @@ async function processLead({
       }
       resolvedFieldData = graphLead.field_data
     } catch (graphError) {
-      console.error('Error consultando lead en Meta Graph API:', graphError)
+      console.error('[facebook-webhook] Error fetching Graph API:', graphError)
+      // Continue with webhook data — may still have enough info
     }
   }
 
-  // 6. Extraer campos del formulario de Facebook
-  // Facebook envía los campos como array [{name, values:[...]}]
+  // 7. Extraer campos
   const fields: Record<string, string> = {}
   if (Array.isArray(resolvedFieldData)) {
     for (const field of resolvedFieldData) {
@@ -263,7 +358,7 @@ async function processLead({
   const email    = fields['email'] || fields['correo'] || null
   const phone    = fields['phone_number'] || fields['telefono'] || fields['phone'] || null
 
-  // 7. Crear el contacto
+  // 8. Crear contacto
   const { data: contact, error: contactError } = await supabase
     .from('contacts')
     .insert({
@@ -280,11 +375,15 @@ async function processLead({
     .single()
 
   if (contactError || !contact) {
-    console.error('Error creando contacto:', contactError)
+    await logFailedLead({
+      supabase, companyId, facebookLeadId, pageId, formId, rawData,
+      errorMessage: 'Error creando contacto',
+      errorDetails: { error: contactError, fields: { fullName, email, phone } },
+    })
     return
   }
 
-  // 8. Crear el lead
+  // 9. Crear lead
   const { data: lead, error: leadError } = await supabase
     .from('leads')
     .insert({
@@ -311,11 +410,17 @@ async function processLead({
     .single()
 
   if (leadError || !lead) {
-    console.error('Error creando lead:', leadError)
+    try { await supabase.from('contacts').delete().eq('id', contact.id).throwOnError() } catch {}
+
+    await logFailedLead({
+      supabase, companyId, facebookLeadId, pageId, formId, rawData,
+      errorMessage: 'Error creando lead',
+      errorDetails: { error: leadError, contact_id: contact.id },
+    })
     return
   }
 
-  // 9. Registrar actividad inicial
+  // 10. Registrar actividad
   await supabase.from('activities').insert({
     company_id: companyId,
     lead_id:    lead.id,
@@ -323,10 +428,10 @@ async function processLead({
     user_id:    assignedUserId,
     type:       'system',
     title:      'Lead recibido desde Facebook Lead Ads',
-    body:       `Formulario: ${formId}. Asignado automáticamente por Round Robin.`,
+    body:       `Formulario: ${formId}. Asignado automaticamente por Round Robin.`,
   })
 
-  // 10. Crear notificación para el agente asignado
+  // 11. Notificar al agente
   if (assignedUserId) {
     await supabase.from('notifications').insert({
       company_id: companyId,
@@ -334,11 +439,11 @@ async function processLead({
       lead_id:    lead.id,
       type:       'lead_assigned',
       title:      '🎯 Nuevo lead de Facebook',
-      body:       `${fullName} está esperando tu contacto.`,
+      body:       `${fullName} esta esperando tu contacto.`,
     })
   }
 
-  // 11. Registrar en el log del Round Robin
+  // 12. Log de Round Robin
   await supabase.from('round_robin_log').insert({
     queue_id:        queue?.id ?? null,
     company_id:      companyId,

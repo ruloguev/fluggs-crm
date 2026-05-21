@@ -181,6 +181,13 @@
    MOBILE PWA UX IMPROVEMENTS
    ════════════════════════════════════════════════════ */
 
+/* iOS viewport fix */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available !important;
+  }
+}
+
 @media (max-width: 768px) {
   /* Prevent tap highlight */
   html {
@@ -200,26 +207,42 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: horizontal scroll with vertical scroll per column */
-  .kanban-container {
-    flex-direction: row !important;
-    min-width: max-content !important;
+  /* Kanban: Trello-style horizontal scroll */
+  .kanban-board {
     overflow-x: auto !important;
     overflow-y: visible !important;
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  .kanban-container {
+    flex-direction: row !important;
+    min-width: max-content !important;
+    gap: 0.75rem !important;
   }
   
   .kanban-column {
     width: 85vw !important;
     max-width: 320px !important;
+    min-width: 280px !important;
     flex-shrink: 0 !important;
-    max-height: calc(100vh - 200px) !important;
+    height: calc(100vh - 280px) !important;
   }
   
   .kanban-header {
     position: sticky !important;
     top: 0 !important;
     z-index: 10 !important;
+  }
+  
+  .kanban-cards {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+  }
+  
+  .kanban-cards::-webkit-scrollbar {
+    display: none !important;
   }
   
   /* Allow both scroll directions but prevent bounce */
@@ -230,6 +253,11 @@
   /* Prevent diagonal scroll on main content */
   main {
     overscroll-behavior: contain;
+  }
+  
+  /* Touch targets minimum 44x44px */
+  button, [role="button"], a {
+    min-height: 44px;
   }
   
   /* Table: card-like display on mobile */
@@ -279,6 +307,12 @@
     user-select: none;
   }
 }
+
+/* Safe area insets for iPhone notch/home indicator */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-right { padding-right: env(safe-area-inset-right); }
 
 /* Scroll snap for horizontal scrolling containers */
 .scroll-snap-x {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
 import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check, Search, X, Filter, LayoutGrid, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -34,7 +34,7 @@ const P_STYLES = {
   low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 }
 
-function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate }: {
+const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate }: {
   lead: Lead; index: number
   stages: Stage[]
   supabase: ReturnType<typeof createClient>
@@ -158,43 +158,66 @@ function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadU
 )}
     </Draggable>
   )
-}
+})
 
 // ── Scope filter dropdown ───────────────────────────────────────
-function ScopeDropdown({ label, options, selectedId, onSelect }: {
+function ScopeDropdown({ label, options, selectedId, onSelect, storageKey }: {
   label: string
   options: { id: string; name: string; isSelf?: boolean }[]
   selectedId: string | null
   onSelect: (id: string | null) => void
+  storageKey?: string
 }) {
   const [open, setOpen] = useState(false)
   const current = options.find(o => o.id === selectedId)
+  
+  // Persist filter selection in sessionStorage for iOS
+  useEffect(() => {
+    if (storageKey && typeof window !== 'undefined') {
+      if (selectedId !== null) {
+        sessionStorage.setItem(storageKey, selectedId)
+      } else {
+        sessionStorage.removeItem(storageKey)
+      }
+    }
+  }, [selectedId, storageKey])
+  
   if (options.length === 0) return null
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors">
+        className="flex items-center gap-2 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors min-h-[44px]"
+        style={{ touchAction: 'manipulation' }}>
         <span className="text-zinc-400 text-xs">{label}:</span>
         <span className="text-zinc-200 font-medium">{current?.name ?? "Todos"}</span>
         <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
       </button>
       {open && (
-        <><div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+        <>
+          <div 
+            className="fixed inset-0 z-30" 
+            onClick={() => setOpen(false)}
+            style={{ willChange: 'opacity', WebkitTapHighlightColor: 'transparent' }}
+          />
+          <div 
+            className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[200px] max-h-[70vh] overflow-y-auto"
+            style={{ willChange: 'transform' }}
+          >
             <button onClick={() => { onSelect(null); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+              className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
               Todos
               {!selectedId && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
             </button>
             {options.map(o => (
               <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+                className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}
+                style={{ touchAction: 'manipulation' }}>
                 {o.isSelf ? (
-                  <div className="w-6 h-6 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
                     Yo
                   </div>
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
                     {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
                   </div>
                 )}
@@ -233,6 +256,11 @@ export default function PipelinePage() {
 
   useEffect(() => {
     setIsMounted(true)
+    // Restore filter from sessionStorage (iOS fix)
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('pipeline-filter')
+      if (saved) setFilterMemberId(saved)
+    }
     if (profile?.company_id && profile?.id) {
       void loadAll(profile.company_id, profile.id)
     }
@@ -419,6 +447,7 @@ export default function PipelinePage() {
               options={filterOptions}
               selectedId={filterMemberId}
               onSelect={setFilterMemberId}
+              storageKey="pipeline-filter"
             />
           )}
           <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200" onClick={() => router.push("/contactos?new=1")}>
@@ -487,26 +516,26 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex-1 overflow-x-auto overflow-y-auto pb-4 scrollbar-hide">
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board">
           <DragDropContext onDragEnd={onDragEnd}>
-            <div className="kanban-container flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
+            <div className="kanban-container flex gap-4 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
               {activeStages.map(stage => {
                 const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
                 return (
-                  <div key={stage.id} className="kanban-column w-72 flex-shrink-0 flex flex-col gap-3 max-h-full">
-                    <div className="kanban-header sticky top-0 z-10 flex items-center justify-between px-1 py-2 bg-zinc-950/90 backdrop-blur-sm rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
-                        <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{stage.name}</span>
-                        <span className="text-xs text-zinc-600 bg-zinc-900/75 px-1.5 py-0.5 rounded-full">{stageLeads.length}</span>
+                  <div key={stage.id} className="kanban-column w-72 flex-shrink-0 flex flex-col gap-2">
+                    <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
+                        <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{stageLeads.length}</span>
                       </div>
-                      <button className="text-zinc-600 hover:text-zinc-300 p-1" onClick={() => router.push("/contactos?new=1")}><Plus className="w-3.5 h-3.5" /></button>
+                      <button className="text-zinc-500 hover:text-zinc-200 p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" onClick={() => router.push("/contactos?new=1")}><Plus className="w-4 h-4" /></button>
                     </div>
                     <Droppable droppableId={stage.id}>
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
-                          className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors overflow-y-auto ${
-                            snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
+                          className={`kanban-cards flex-1 flex flex-col gap-2 p-2 rounded-xl border min-h-[200px] overflow-y-auto ${
+                            snapshot.isDraggingOver ? "bg-zinc-800/40 border-flugzz-accent/30" : "bg-zinc-900/30 border-zinc-800/40"
                           }`}>
                           {stageLeads.map((lead, i) => (
                             <LeadCard key={lead.id} lead={lead} index={i}
@@ -517,8 +546,8 @@ export default function PipelinePage() {
                           ))}
                           {provided.placeholder}
                           {stageLeads.length === 0 && !snapshot.isDraggingOver && (
-                            <div className="flex-1 flex items-center justify-center py-8">
-                              <p className="text-xs text-zinc-700">Arrastra aquí</p>
+                            <div className="flex-1 flex items-center justify-center py-12">
+                              <p className="text-xs text-zinc-600">Arrastra aquí</p>
                             </div>
                           )}
                         </div>
@@ -529,19 +558,19 @@ export default function PipelinePage() {
               })}
 
               {unassignedLeads.length > 0 && (
-                <div className="w-72 flex-shrink-0 flex flex-col gap-3 max-h-full">
-                  <div className="kanban-header sticky top-0 z-10 flex items-center justify-between px-1 py-2 bg-zinc-950/90 backdrop-blur-sm rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-zinc-500" />
-                      <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Sin etapa</span>
-                      <span className="text-xs text-zinc-600 bg-zinc-900/75 px-1.5 py-0.5 rounded-full">{unassignedLeads.length}</span>
+                <div className="w-72 flex-shrink-0 flex flex-col gap-2">
+                  <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
+                      <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">Sin etapa</span>
+                      <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{unassignedLeads.length}</span>
                     </div>
                   </div>
                   <Droppable droppableId="__unassigned__">
                     {(provided, snapshot) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}
-                        className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors overflow-y-auto ${
-                          snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
+                        className={`kanban-cards flex-1 flex flex-col gap-2 p-2 rounded-xl border min-h-[200px] overflow-y-auto ${
+                          snapshot.isDraggingOver ? "bg-zinc-800/40 border-flugzz-accent/30" : "bg-zinc-900/30 border-zinc-800/40"
                         }`}>
                         {unassignedLeads.map((lead, i) => (
                           <LeadCard key={lead.id} lead={lead} index={i}

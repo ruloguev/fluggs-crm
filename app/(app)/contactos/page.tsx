@@ -190,6 +190,11 @@ export default function ContactosPage() {
   }, [supabase, profile?.id, isLeader, scope.canViewTeam])
 
   useEffect(() => {
+    // Restore filter from sessionStorage (iOS fix)
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('contactos-filter')
+      if (saved) setFilterMemberId(saved)
+    }
     if (profile?.company_id) {
       const companyId = profile.company_id
       const timeoutId = window.setTimeout(() => {
@@ -542,6 +547,7 @@ export default function ContactosPage() {
               options={filterOptions}
               selectedId={filterMemberId}
               onSelect={setFilterMemberId}
+              storageKey="contactos-filter"
             />
           )}
         </div>
@@ -645,41 +651,62 @@ export default function ContactosPage() {
 }
 
 // ── Scope filter dropdown ───────────────────────────────────────
-function ScopeDropdown({ label, options, selectedId, onSelect }: {
+function ScopeDropdown({ label, options, selectedId, onSelect, storageKey }: {
   label: string
   options: { id: string; name: string; isSelf?: boolean }[]
   selectedId: string | null
   onSelect: (id: string | null) => void
+  storageKey?: string
 }) {
   const [open, setOpen] = useState(false)
   const current = options.find(o => o.id === selectedId)
+  
+  useEffect(() => {
+    if (storageKey && typeof window !== 'undefined') {
+      if (selectedId !== null) {
+        sessionStorage.setItem(storageKey, selectedId)
+      } else {
+        sessionStorage.removeItem(storageKey)
+      }
+    }
+  }, [selectedId, storageKey])
+  
   if (options.length === 0) return null
   return (
     <div className="relative">
       <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors whitespace-nowrap">
+        className="flex items-center gap-2 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors whitespace-nowrap min-h-[44px]"
+        style={{ touchAction: 'manipulation' }}>
         <span className="text-zinc-400 text-xs">{label}:</span>
         <span className="text-zinc-200 font-medium">{current?.name ?? "Todos"}</span>
         <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+          <div 
+            className="fixed inset-0 z-30" 
+            onClick={() => setOpen(false)}
+            style={{ willChange: 'opacity', WebkitTapHighlightColor: 'transparent' }}
+          />
+          <div 
+            className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[200px] max-h-[70vh] overflow-y-auto"
+            style={{ willChange: 'transform' }}
+          >
             <button onClick={() => { onSelect(null); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+              className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
               Todos
               {!selectedId && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
             </button>
             {options.map(o => (
               <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+                className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}
+                style={{ touchAction: 'manipulation' }}>
                 {o.isSelf ? (
-                  <div className="w-6 h-6 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
                     Yo
                   </div>
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
                     {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
                   </div>
                 )}

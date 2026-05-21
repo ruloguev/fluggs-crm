@@ -249,6 +249,7 @@ export default function PipelinePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
   const [activeStageIndex, setActiveStageIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -258,6 +259,10 @@ export default function PipelinePage() {
 
   useEffect(() => {
     setIsMounted(true)
+    // Detect mobile
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
     // Restore filter from sessionStorage (iOS fix)
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('pipeline-filter')
@@ -266,6 +271,7 @@ export default function PipelinePage() {
     if (profile?.company_id && profile?.id) {
       void loadAll(profile.company_id, profile.id)
     }
+    return () => window.removeEventListener('resize', checkMobile)
   }, [profile?.company_id, profile?.id])
 
   // Track active column for dots indicator (mobile)
@@ -567,8 +573,8 @@ export default function PipelinePage() {
         </div>
       ) : viewMode === "kanban" ? (
         <div className="flex flex-col flex-1">
-          {/* Progress dots indicator */}
-          {activeStages.length > 1 && (
+          {/* Progress dots indicator - MOBILE ONLY */}
+          {isMobile && activeStages.length > 1 && (
             <div className="flex items-center justify-center gap-2 py-2.5 shrink-0">
               <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/60 shadow-lg">
                 {activeStages.map((stage, i) => (
@@ -590,30 +596,32 @@ export default function PipelinePage() {
             </div>
           )}
           
-          <div className={`flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board min-h-0 ${isDragging ? 'snap-none' : 'snap-x snap-mandatory'}`}>
+          <div className={`flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board min-h-0 ${isMobile && isDragging ? 'snap-none' : 'snap-x snap-mandatory'}`}>
             <DragDropContext 
-              onDragStart={() => setIsDragging(true)}
+              onDragStart={() => isMobile && setIsDragging(true)}
               onDragEnd={(result) => {
-                setIsDragging(false)
+                if (isMobile) setIsDragging(false)
                 onDragEnd(result)
               }}
             >
-              <div className={`kanban-container flex gap-3 h-full items-start px-4 transition-all duration-300 ${isDragging ? 'ghost-mode' : ''}`}>
+              <div className={`kanban-container flex gap-3 h-full items-start px-4 ${isMobile && isDragging ? 'ghost-mode transition-all duration-300' : ''}`}>
                 {activeStages.map((stage, index) => {
                   const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
                   return (
                     <div 
                       key={stage.id} 
                       data-stage-index={index}
-                      className={`kanban-column flex-shrink-0 snap-start flex flex-col transition-all duration-300 ${
-                        isDragging 
-                          ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50' 
-                          : 'min-w-[90vw] max-w-[400px]'
+                      className={`kanban-column flex-shrink-0 snap-start flex flex-col ${
+                        isMobile && isDragging 
+                          ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50 transition-all duration-300' 
+                          : isMobile 
+                            ? 'min-w-[90vw] max-w-[400px]' 
+                            : 'w-72 flex-shrink-0'
                       }`}
                     >
-                      <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-300 ${
-                        isDragging 
-                          ? 'bg-zinc-900/60 border-zinc-800/30' 
+                      <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 ${
+                        isMobile && isDragging 
+                          ? 'bg-zinc-900/60 border-zinc-800/30 transition-all duration-300' 
                           : 'bg-zinc-900/95 border-zinc-800/50'
                       }`}>
                         <div className="flex items-center gap-2 min-w-0">
@@ -621,15 +629,15 @@ export default function PipelinePage() {
                           <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
                           <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{stageLeads.length}</span>
                         </div>
-                        {!isDragging && (
+                        {!(isMobile && isDragging) && (
                           <button className="text-zinc-500 hover:text-zinc-200 p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" onClick={() => router.push("/contactos?new=1")}><Plus className="w-4 h-4" /></button>
                         )}
                       </div>
                       <Droppable droppableId={stage.id}>
                         {(provided, snapshot) => (
                           <div {...provided.droppableProps} ref={provided.innerRef}
-                            className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto transition-all duration-300 ${
-                              isDragging ? 'pointer-events-none' : ''
+                            className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
+                              isMobile && isDragging ? 'pointer-events-none transition-all duration-300' : ''
                             } ${
                               snapshot.isDraggingOver 
                                 ? "bg-zinc-800/50 border-flugzz-accent/40 shadow-[0_0_20px_rgba(34,211,238,0.15)]" 
@@ -656,14 +664,16 @@ export default function PipelinePage() {
                 })}
 
                 {unassignedLeads.length > 0 && (
-                  <div className={`kanban-column flex-shrink-0 snap-start flex flex-col transition-all duration-300 ${
-                    isDragging 
-                      ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50' 
-                      : 'min-w-[90vw] max-w-[400px]'
+                  <div className={`kanban-column flex-shrink-0 snap-start flex flex-col ${
+                    isMobile && isDragging 
+                      ? 'min-w-[60vw] max-w-[200px] opacity-60 hover:opacity-100 hover:border-flugzz-accent/50 transition-all duration-300' 
+                      : isMobile 
+                        ? 'min-w-[90vw] max-w-[400px]' 
+                        : 'w-72 flex-shrink-0'
                   }`}>
-                    <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-300 ${
-                      isDragging 
-                        ? 'bg-zinc-900/60 border-zinc-800/30' 
+                    <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 ${
+                      isMobile && isDragging 
+                        ? 'bg-zinc-900/60 border-zinc-800/30 transition-all duration-300' 
                         : 'bg-zinc-900/95 border-zinc-800/50'
                     }`}>
                       <div className="flex items-center gap-2 min-w-0">
@@ -675,8 +685,8 @@ export default function PipelinePage() {
                     <Droppable droppableId="__unassigned__">
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
-                          className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto transition-all duration-300 ${
-                            isDragging ? 'pointer-events-none' : ''
+                          className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
+                            isMobile && isDragging ? 'pointer-events-none transition-all duration-300' : ''
                           } ${
                             snapshot.isDraggingOver 
                               ? "bg-zinc-800/50 border-flugzz-accent/40 shadow-[0_0_20px_rgba(34,211,238,0.15)]" 

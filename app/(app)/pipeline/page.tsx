@@ -248,11 +248,7 @@ export default function PipelinePage() {
   const [allTags, setAllTags] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
   const [activeStageIndex, setActiveStageIndex] = useState(0)
-  const [draggingLead, setDraggingLead] = useState<{
-    id: string;
-    name: string;
-    sourceStageId: string | null;
-  } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -405,34 +401,6 @@ export default function PipelinePage() {
     }
   }
 
-  // Move lead to stage via modal (mobile)
-  async function moveLeadToStage(leadId: string, newStageId: string) {
-    const lead = allLeads.find(l => l.id === leadId)
-    if (!lead) return
-    
-    setAllLeads(prev => prev.map(l => 
-      l.id === leadId ? { ...l, stage_id: newStageId } : l
-    ))
-    
-    await (supabase as any).from("leads")
-      .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
-      .eq("id", leadId)
-    
-    if (lead?.stage_id || newStageId) {
-      await (supabase as any).from("activities").insert({
-        company_id: profile?.company_id,
-        lead_id: leadId,
-        contact_id: lead?.contact?.id,
-        user_id: profile?.id,
-        type: "stage_change",
-        title: "Etapa cambiada",
-        from_stage_id: lead?.stage_id,
-        to_stage_id: newStageId,
-        completed_at: new Date().toISOString(),
-      })
-    }
-  }
-
   if (!isMounted) return null
   const activeStages = stages.filter(s => !s.is_closed)
   const unassignedLeads = visibleLeads.filter(l => !l.stage_id)
@@ -552,20 +520,11 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
+        <div className={`flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board min-h-0 ${isDragging ? 'snap-none' : 'snap-x snap-mandatory'}`}>
           <DragDropContext 
-            onDragStart={(start) => {
-              const lead = allLeads.find(l => l.id === start.draggableId)
-              if (lead) {
-                setDraggingLead({
-                  id: lead.id,
-                  name: lead.contact.full_name,
-                  sourceStageId: lead.stage_id,
-                })
-              }
-            }}
+            onDragStart={() => setIsDragging(true)}
             onDragEnd={(result) => {
-              setDraggingLead(null)
+              setIsDragging(false)
               onDragEnd(result)
             }}
           >
@@ -576,7 +535,7 @@ export default function PipelinePage() {
                   <div 
                     key={stage.id} 
                     data-stage-index={index}
-                    className="kanban-column w-72 flex-shrink-0 snap-start flex flex-col"
+                    className="kanban-column snap-start flex flex-col"
                   >
                     <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                       <div className="flex items-center gap-2 min-w-0">
@@ -615,7 +574,7 @@ export default function PipelinePage() {
               })}
 
               {unassignedLeads.length > 0 && (
-                <div className="kanban-column w-72 flex-shrink-0 snap-start flex flex-col">
+                <div className="kanban-column snap-start flex flex-col">
                   <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
@@ -648,75 +607,6 @@ export default function PipelinePage() {
           </DragDropContext>
         </div>
       ) : null}
-
-      {/* Stage Selector Modal - MOBILE ONLY */}
-      {draggingLead && (
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-100">Mover lead</h3>
-                <p className="text-sm text-zinc-400 mt-0.5">{draggingLead.name}</p>
-              </div>
-              <button 
-                onClick={() => setDraggingLead(null)}
-                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
-              {activeStages.map(stage => {
-                const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
-                const isSource = stage.id === draggingLead.sourceStageId
-                return (
-                  <button
-                    key={stage.id}
-                    disabled={isSource}
-                    onClick={() => {
-                      moveLeadToStage(draggingLead.id, stage.id)
-                    }}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                      isSource 
-                        ? 'border-zinc-800 bg-zinc-950/30 opacity-40 cursor-not-allowed' 
-                        : 'border-zinc-800 bg-zinc-950/50 hover:border-flugzz-accent/50 hover:bg-zinc-800/50'
-                    }`}
-                  >
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: stage.color }} />
-                    <span className="text-xs text-zinc-300 text-center truncate w-full">{stage.name}</span>
-                    <span className="text-xs text-zinc-500">{stageLeads.length} leads</span>
-                  </button>
-                )
-              })}
-              {unassignedLeads.length > 0 && (
-                <button
-                  disabled={draggingLead.sourceStageId === null}
-                  onClick={() => {
-                    moveLeadToStage(draggingLead.id, "")
-                  }}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                    draggingLead.sourceStageId === null
-                      ? 'border-zinc-800 bg-zinc-950/30 opacity-40 cursor-not-allowed' 
-                      : 'border-zinc-800 bg-zinc-950/50 hover:border-flugzz-accent/50 hover:bg-zinc-800/50'
-                  }`}
-                >
-                  <div className="w-4 h-4 rounded-full bg-zinc-500" />
-                  <span className="text-xs text-zinc-300 text-center truncate w-full">Sin etapa</span>
-                  <span className="text-xs text-zinc-500">{unassignedLeads.length} leads</span>
-                </button>
-              )}
-            </div>
-            
-            <button 
-              onClick={() => setDraggingLead(null)}
-              className="w-full mt-4 py-3 text-sm text-zinc-500 hover:text-zinc-300 border border-zinc-800 rounded-xl hover:bg-zinc-800/50 transition-colors"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Vista de lista (tabla) */}
       {viewMode === "list" && (

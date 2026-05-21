@@ -235,6 +235,7 @@
     gap: 0.75rem !important;
     padding-left: 1rem !important;
     padding-right: 4rem !important;
+    min-height: 0 !important;
   }
   
   .kanban-column {
@@ -242,7 +243,10 @@
     max-width: 400px !important;
     flex-shrink: 0 !important;
     scroll-snap-align: start !important;
-    height: calc(100vh - 320px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
   }
   
   .kanban-header {
@@ -255,7 +259,8 @@
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
-    flex: 1;
+    flex: 1 !important;
+    min-height: 0 !important;
   }
   
   .kanban-cards::-webkit-scrollbar {

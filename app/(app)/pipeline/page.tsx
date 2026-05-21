@@ -541,28 +541,30 @@ export default function PipelinePage() {
         </div>
       ) : viewMode === "kanban" ? (
         <div className="flex flex-col flex-1">
-          {/* Progress dots indicator (mobile) */}
+          {/* Progress dots indicator */}
           {activeStages.length > 1 && (
-            <div className="flex items-center justify-center gap-2 py-2 shrink-0">
-              {activeStages.map((stage, i) => (
-                <button
-                  key={stage.id}
-                  onClick={() => {
-                    const col = document.querySelector(`.kanban-column[data-stage-index="${i}"]`)
-                    col?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
-                  }}
-                  className={`transition-all duration-200 rounded-full ${
-                    i === activeStageIndex 
-                      ? 'w-6 h-2 bg-flugzz-accent' 
-                      : 'w-2 h-2 bg-zinc-700 hover:bg-zinc-600'
-                  }`}
-                  aria-label={`Ir a ${stage.name}`}
-                />
-              ))}
+            <div className="flex items-center justify-center gap-2 py-2.5 shrink-0">
+              <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/60 shadow-lg">
+                {activeStages.map((stage, i) => (
+                  <button
+                    key={stage.id}
+                    onClick={() => {
+                      const col = document.querySelector(`.kanban-column[data-stage-index="${i}"]`)
+                      col?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
+                    }}
+                    className={`transition-all duration-200 rounded-full ${
+                      i === activeStageIndex 
+                        ? 'w-3 h-3 bg-flugzz-accent shadow-[0_0_8px_rgba(34,211,238,0.6)]' 
+                        : 'w-2 h-2 bg-zinc-500 hover:bg-zinc-400'
+                    }`}
+                    aria-label={`Ir a ${stage.name}`}
+                  />
+                ))}
+              </div>
             </div>
           )}
           
-          <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory">
+          <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="kanban-container flex gap-3 h-full items-start px-4">
                 {activeStages.map((stage, index) => {
@@ -571,7 +573,7 @@ export default function PipelinePage() {
                     <div 
                       key={stage.id} 
                       data-stage-index={index}
-                      className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 flex flex-col gap-2 snap-start"
+                      className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 snap-start"
                     >
                       <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                         <div className="flex items-center gap-2 min-w-0">
@@ -584,7 +586,7 @@ export default function PipelinePage() {
                       <Droppable droppableId={stage.id}>
                         {(provided, snapshot) => (
                           <div {...provided.droppableProps} ref={provided.innerRef}
-                            className={`kanban-cards flex-1 flex flex-col gap-2 p-2 rounded-xl border min-h-[200px] overflow-y-auto ${
+                            className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
                               snapshot.isDraggingOver ? "bg-zinc-800/40 border-flugzz-accent/30" : "bg-zinc-900/30 border-zinc-800/40"
                             }`}>
                             {stageLeads.map((lead, i) => (
@@ -608,7 +610,7 @@ export default function PipelinePage() {
                 })}
 
                 {unassignedLeads.length > 0 && (
-                  <div className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 flex flex-col gap-2 snap-start">
+                  <div className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 snap-start">
                     <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
@@ -619,7 +621,7 @@ export default function PipelinePage() {
                     <Droppable droppableId="__unassigned__">
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
-                          className={`kanban-cards flex-1 flex flex-col gap-2 p-2 rounded-xl border min-h-[200px] overflow-y-auto ${
+                          className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto ${
                             snapshot.isDraggingOver ? "bg-zinc-800/40 border-flugzz-accent/30" : "bg-zinc-900/30 border-zinc-800/40"
                           }`}>
                           {unassignedLeads.map((lead, i) => (

@@ -254,14 +254,17 @@ export default function ContactosPage() {
     }
 
     // Crear notificación de nuevo lead
-    await supabase.from("notifications").insert({
-      company_id: profile.company_id,
-      user_id: userId,
-      lead_id: leadData.id,
-      type: "lead_created",
-      title: "📋 Nuevo lead asignado",
-      body: `Se te ha asignado el lead ${formData.full_name.trim()} (${formData.priority === "high" ? "prioridad alta" : "prioridad normal"})`,
-    })
+    if (userId) {
+      const { createNotificationWithPush } = await import('@/lib/push-notifications')
+      await createNotificationWithPush({
+        company_id: profile.company_id,
+        user_id: userId,
+        lead_id: leadData.id,
+        type: "lead_created",
+        title: "📋 Nuevo lead asignado",
+        body: `Se te ha asignado el lead ${formData.full_name.trim()} (${formData.priority === "high" ? "prioridad alta" : "prioridad normal"})`,
+      })
+    }
 
     await supabase.from("activities").insert({
       company_id: profile.company_id,

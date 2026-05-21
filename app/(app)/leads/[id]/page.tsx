@@ -219,7 +219,8 @@ function LogActivitySheet({
           .ilike("full_name", `%${mentions[0]}%`)
         
         for (const profile of profiles ?? []) {
-          await supabase.from("notifications").insert({
+          const { createNotificationWithPush } = await import('@/lib/push-notifications')
+          await createNotificationWithPush({
             company_id: companyId,
             user_id: profile.id,
             lead_id: leadId,

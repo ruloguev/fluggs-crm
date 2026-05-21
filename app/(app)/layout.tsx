@@ -10,6 +10,7 @@ import {
   CheckCheck, AlertCircle, TrendingUp, Phone, MessageCircle, Mail,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { registerPushSubscription, unregisterPushSubscription, getPushSubscriptionStatus } from "@/lib/push-notifications"
 
 type NotificationRecord = {
   id: string
@@ -75,6 +76,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [loadingNotifs, setLoadingNotifs] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushSupported, setPushSupported] = useState(true)
   const notifRef = useRef<HTMLDivElement>(null)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
@@ -114,6 +117,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadNotifications()
   }, [profile?.id])
+
+  // Push notifications registration
+  useEffect(() => {
+    if (!profile?.id) return
+    getPushSubscriptionStatus().then(status => {
+      setPushSupported(status.supported)
+      setPushEnabled(status.permission === 'granted' && status.subscribed)
+    })
+  }, [profile?.id])
+
+  async function togglePush() {
+    if (pushEnabled) {
+      await unregisterPushSubscription()
+      setPushEnabled(false)
+    } else {
+      const success = await registerPushSubscription()
+      if (success) setPushEnabled(true)
+    }
+  }
 
   // Real-time subscription
   useEffect(() => {
@@ -342,6 +364,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       ))
                     )}
                   </div>
+
+                  {pushSupported && (
+                    <div className="px-4 py-3 border-t border-zinc-800/60 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-zinc-500" />
+                        <span className="text-xs text-zinc-400">Notificaciones push</span>
+                      </div>
+                      <button
+                        onClick={togglePush}
+                        className={`relative w-10 h-5.5 rounded-full border transition-all ${
+                          pushEnabled ? "bg-emerald-500/20 border-emerald-500/40" : "bg-zinc-800 border-zinc-700"
+                        }`}
+                        style={{ height: "22px" }}
+                      >
+                        <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
+                          pushEnabled ? "left-5 bg-emerald-400" : "left-0.5 bg-zinc-600"
+                        }`} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

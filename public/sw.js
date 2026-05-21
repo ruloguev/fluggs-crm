@@ -1,60 +1,63 @@
-// Service Worker para Flugzz PWA
-// Estrategia: Network First para API, Cache First para assets estáticos
+// Service Worker para Push Notifications
+// Maneja eventos push y muestra notificaciones nativas del navegador
 
-const CACHE_NAME = "flugzz-v1"
-const STATIC_ASSETS = ["/", "/pipeline", "/dashboard", "/contactos"]
+const ICON_DEFAULT = '/Flugzz.svg'
+const BADGE_ICON = '/badge-96.png'
 
-// Instalar — cachear assets clave
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(STATIC_ASSETS).catch(() => {})
-    )
-  )
-  self.skipWaiting()
+self.addEventListener('push', function(event) {
+  if (!event.data) return
+
+  let data
+  try {
+    data = event.data.json()
+  } catch {
+    data = { title: 'Flugzz CRM', body: event.data.text() }
+  }
+
+  const title = data.title || 'Flugzz CRM'
+  const options = {
+    body: data.body || '',
+    icon: ICON_DEFAULT,
+    badge: BADGE_ICON,
+    tag: data.tag || 'fluggs-notification',
+    renotify: true,
+    data: {
+      url: data.url || '/dashboard',
+      notificationId: data.notificationId || null,
+    },
+    actions: data.actions || [
+      { action: 'view', title: 'Ver', icon: ICON_DEFAULT },
+      { action: 'dismiss', title: 'Cerrar' },
+    ],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
-// Activar — limpiar caches viejos
-self.addEventListener("activate", (event) => {
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close()
+
+  if (event.action === 'dismiss') return
+
+  const urlToOpen = event.notification.data?.url || '/dashboard'
+
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-      )
-    )
-  )
-  self.clients.claim()
-})
-
-// Fetch — Network First para todo
-self.addEventListener("fetch", (event) => {
-  // Ignorar requests que no son GET o son de otras origins
-  if (event.request.method !== "GET") return
-  if (!event.request.url.startsWith(self.location.origin)) return
-
-  // API calls: siempre red, sin cache
-  if (event.request.url.includes("/api/")) return
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cachear respuestas exitosas
-        if (response.ok) {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      // Si ya hay una ventana abierta, navegar ahi
+      for (const client of clientList) {
+        if (client.url.includes(urlToOpen) && 'focus' in client) {
+          return client.focus()
         }
-        return response
-      })
-      .catch(() =>
-        // Offline: servir desde cache si existe
-        caches.match(event.request).then((cached) => {
-          if (cached) return cached
-          // Fallback para navegación
-          if (event.request.mode === "navigate") {
-            return caches.match("/") 
-          }
-          return new Response("Offline", { status: 503 })
-        })
-      )
+      }
+      // Si no, abrir nueva ventana
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen)
+      }
+    })
   )
+})
+
+self.addEventListener('pushsubscriptionchange', function(event) {
+  // La subscription expiro o cambio - el cliente se re-registra automaticamente
+  console.log('[SW] Push subscription changed')
 })

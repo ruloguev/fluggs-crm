@@ -204,7 +204,8 @@ async function logFailedLead({
     if (admins) {
       for (const admin of admins) {
         try {
-          await supabase.from('notifications').insert({
+          const { createNotificationWithPush } = await import('@/lib/push-notifications')
+          await createNotificationWithPush({
             company_id: companyId,
             user_id: admin.id,
             type: 'system',
@@ -433,7 +434,8 @@ async function processLead({
 
   // 11. Notificar al agente
   if (assignedUserId) {
-    await supabase.from('notifications').insert({
+    const { createNotificationWithPush } = await import('@/lib/push-notifications')
+    await createNotificationWithPush({
       company_id: companyId,
       user_id:    assignedUserId,
       lead_id:    lead.id,

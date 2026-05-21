@@ -207,7 +207,7 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: mobile swipe with peek (MOBILE ONLY) */
+  /* Kanban: Tinder-style with snap + peek */
   .kanban-board {
     scroll-snap-type: x mandatory !important;
     scroll-behavior: smooth !important;
@@ -215,11 +215,6 @@
     overflow-x: auto !important;
     overflow-y: visible !important;
     position: relative;
-  }
-  
-  /* Disable snap during drag so scrolling works */
-  .kanban-board.snap-none {
-    scroll-snap-type: none !important;
   }
   
   /* Subtle gradient on right edge to indicate more content */
@@ -244,21 +239,32 @@
   }
   
   .kanban-column {
+    min-width: 90vw !important;
+    max-width: 400px !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: start !important;
     display: flex !important;
     flex-direction: column !important;
-    width: 90vw !important;
-    max-width: 400px !important;
-    height: calc(100vh - 280px) !important;
+    height: 100% !important;
     min-height: 0 !important;
+  }
+  
+  .kanban-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
   }
   
   .kanban-cards {
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
-    height: calc(100vh - 360px) !important;
+    flex: 1 !important;
     min-height: 0 !important;
-    flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 1 !important;
+    overflow: hidden !important;
+    overflow-y: auto !important;
   }
   
   .kanban-cards::-webkit-scrollbar {

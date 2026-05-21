@@ -247,7 +247,6 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [allTags, setAllTags] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
-  const [activeStageIndex, setActiveStageIndex] = useState(0)
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -266,29 +265,6 @@ export default function PipelinePage() {
       void loadAll(profile.company_id, profile.id)
     }
   }, [profile?.company_id, profile?.id])
-
-  // Track active column for dots indicator (mobile)
-  useEffect(() => {
-    if (!isMounted || stages.length <= 1) return
-    
-    const board = document.querySelector('.kanban-board')
-    if (!board) return
-    
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-            const index = parseInt(entry.target.getAttribute('data-stage-index') || '0')
-            setActiveStageIndex(index)
-          }
-        })
-      },
-      { root: board, threshold: 0.5 }
-    )
-    
-    document.querySelectorAll('.kanban-column[data-stage-index]').forEach(col => observer.observe(col))
-    return () => observer.disconnect()
-  }, [isMounted, stages])
 
   async function loadAll(companyId: string, userId: string) {
     setLoading(true)
@@ -540,31 +516,7 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex flex-col flex-1">
-          {/* Progress dots indicator */}
-          {activeStages.length > 1 && (
-            <div className="flex items-center justify-center gap-2 py-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-zinc-900/80 backdrop-blur-sm border border-zinc-800/60 shadow-lg">
-                {activeStages.map((stage, i) => (
-                  <button
-                    key={stage.id}
-                    onClick={() => {
-                      const col = document.querySelector(`.kanban-column[data-stage-index="${i}"]`)
-                      col?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
-                    }}
-                    className={`transition-all duration-200 rounded-full ${
-                      i === activeStageIndex 
-                        ? 'w-3 h-3 bg-flugzz-accent shadow-[0_0_8px_rgba(34,211,238,0.6)]' 
-                        : 'w-2 h-2 bg-zinc-500 hover:bg-zinc-400'
-                    }`}
-                    aria-label={`Ir a ${stage.name}`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="kanban-container flex gap-3 h-full items-start px-4">
                 {activeStages.map((stage, index) => {
@@ -640,7 +592,6 @@ export default function PipelinePage() {
               </div>
             </DragDropContext>
           </div>
-        </div>
       ) : null}
 
       {/* Vista de lista (tabla) */}

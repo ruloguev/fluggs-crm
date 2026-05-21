@@ -219,15 +219,16 @@ function LogActivitySheet({
           .ilike("full_name", `%${mentions[0]}%`)
         
         for (const profile of profiles ?? []) {
-          const { createNotificationWithPush } = await import('@/lib/push-notifications')
-          await createNotificationWithPush({
-            company_id: companyId,
-            user_id: profile.id,
-            lead_id: leadId,
-            type: "mention",
-            title: "📣 Te mencionaron",
-            body: `${user?.email?.split("@")[0] ?? "Alguien"} te mencionó en una nota: "${note.slice(0, 80)}..."`,
-          })
+          import('@/lib/push-notifications').then(({ createNotificationWithPush }) => {
+            createNotificationWithPush({
+              company_id: companyId,
+              user_id: profile.id,
+              lead_id: leadId,
+              type: "mention",
+              title: "📣 Te mencionaron",
+              body: `${user?.email?.split("@")[0] ?? "Alguien"} te mencionó en una nota: "${note.slice(0, 80)}..."`,
+            }).catch(() => {})
+          }).catch(() => {})
         }
       }
     }

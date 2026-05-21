@@ -200,7 +200,7 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: horizontal scroll, vertical scroll on parent */
+  /* Kanban: horizontal scroll with vertical scroll per column */
   .kanban-container {
     flex-direction: row !important;
     min-width: max-content !important;
@@ -213,6 +213,13 @@
     width: 85vw !important;
     max-width: 320px !important;
     flex-shrink: 0 !important;
+    max-height: calc(100vh - 200px) !important;
+  }
+  
+  .kanban-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
   }
   
   /* Allow both scroll directions but prevent bounce */

@@ -384,8 +384,8 @@ export default function PipelinePage() {
     : "Agente"
 
   return (
-    <div className="h-full flex flex-col space-y-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="flex flex-col h-full space-y-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap shrink-0">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
             Pipeline<span className="text-flugzz-accent">.</span>
@@ -428,7 +428,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap shrink-0">
         <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
           <input
@@ -486,15 +486,15 @@ export default function PipelinePage() {
         <div className="flex items-center justify-center flex-1">
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
-      ) : (
-        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
+      ) : viewMode === "kanban" ? (
+        <div className="flex-1 overflow-x-auto overflow-y-auto pb-4 scrollbar-hide">
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="kanban-container flex gap-5 h-full items-start" style={{ minWidth: `${activeStages.length * 300}px` }}>
               {activeStages.map(stage => {
                 const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
                 return (
-                  <div key={stage.id} className="kanban-column w-72 flex-shrink-0 flex flex-col gap-3">
-                    <div className="flex items-center justify-between px-1">
+                  <div key={stage.id} className="kanban-column w-72 flex-shrink-0 flex flex-col gap-3 max-h-full">
+                    <div className="kanban-header sticky top-0 z-10 flex items-center justify-between px-1 py-2 bg-zinc-950/90 backdrop-blur-sm rounded-lg">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
                         <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{stage.name}</span>
@@ -505,7 +505,7 @@ export default function PipelinePage() {
                     <Droppable droppableId={stage.id}>
                       {(provided, snapshot) => (
                         <div {...provided.droppableProps} ref={provided.innerRef}
-                          className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
+                          className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors overflow-y-auto ${
                             snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
                           }`}>
                           {stageLeads.map((lead, i) => (
@@ -529,8 +529,8 @@ export default function PipelinePage() {
               })}
 
               {unassignedLeads.length > 0 && (
-                <div className="w-72 flex-shrink-0 flex flex-col gap-3">
-                  <div className="flex items-center justify-between px-1">
+                <div className="w-72 flex-shrink-0 flex flex-col gap-3 max-h-full">
+                  <div className="kanban-header sticky top-0 z-10 flex items-center justify-between px-1 py-2 bg-zinc-950/90 backdrop-blur-sm rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-zinc-500" />
                       <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Sin etapa</span>
@@ -540,7 +540,7 @@ export default function PipelinePage() {
                   <Droppable droppableId="__unassigned__">
                     {(provided, snapshot) => (
                       <div {...provided.droppableProps} ref={provided.innerRef}
-                        className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors ${
+                        className={`flex-1 min-h-[120px] flex flex-col gap-2.5 p-2 rounded-xl border transition-colors overflow-y-auto ${
                           snapshot.isDraggingOver ? "bg-zinc-800/55 border-flugzz-accent/35" : "bg-zinc-900/40 border-zinc-800/45"
                         }`}>
                         {unassignedLeads.map((lead, i) => (
@@ -559,11 +559,11 @@ export default function PipelinePage() {
             </div>
           </DragDropContext>
         </div>
-      )}
+      ) : null}
 
       {/* Vista de lista (tabla) */}
       {viewMode === "list" && (
-        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 overflow-hidden">
+        <div className="flex-1 overflow-y-auto rounded-2xl border border-zinc-800/50 bg-zinc-900/40">
           <div className="overflow-x-auto">
             <table className="w-full text-sm mobile-table-cards">
               <thead>

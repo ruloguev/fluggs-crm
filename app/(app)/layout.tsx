@@ -1,17 +1,27 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import {
   LayoutDashboard, Users, KanbanSquare, HardDrive, Bot,
   Menu, Bell, Search, LogOut, X, Plug, Settings, Loader2, Megaphone,
+  CheckCheck, AlertCircle, TrendingUp, Phone, MessageCircle, Mail,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
-import { useState } from "react"
 
-// Todos los nav items posibles con su permiso requerido (null = visible para todos)
+type NotificationRecord = {
+  id: string
+  user_id: string
+  lead_id: string | null
+  type: string
+  title: string
+  body: string | null
+  is_read: boolean
+  created_at: string
+}
+
 const ALL_NAV = [
   { name: "Dashboard",     href: "/dashboard",          icon: LayoutDashboard, permission: null },
   { name: "Marketing",     href: "/dashboard/marketing", icon: Megaphone,      permission: null, marketingOnly: true },
@@ -37,6 +47,24 @@ function NavSkeleton() {
   )
 }
 
+function timeAgo(dateString: string) {
+  const diff = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000)
+  if (diff < 60) return "ahora"
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  return `${Math.floor(diff / 86400)}d`
+}
+
+function notifIcon(type: string) {
+  if (type === "lead_assigned") return <TrendingUp className="w-4 h-4 text-emerald-400" />
+  if (type === "stage_change") return <TrendingUp className="w-4 h-4 text-blue-400" />
+  if (type === "call") return <Phone className="w-4 h-4 text-cyan-400" />
+  if (type === "whatsapp") return <MessageCircle className="w-4 h-4 text-green-400" />
+  if (type === "email") return <Mail className="w-4 h-4 text-violet-400" />
+  if (type === "system") return <AlertCircle className="w-4 h-4 text-amber-400" />
+  return <Bell className="w-4 h-4 text-zinc-400" />
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -44,6 +72,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([])
+  const [loadingNotifs, setLoadingNotifs] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -57,27 +89,79 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     normalizedRoleName.includes("mkt") ||
     normalizedRoleName.includes("marketing")
 
-  // Redirect to onboarding if authenticated but no company
   useEffect(() => {
     if (!loading && profile && !profile.company_id) {
       router.push("/onboarding")
     }
   }, [loading, profile])
 
-  // Load unread notifications count
-  useEffect(() => {
-    if (!profile) return
-    supabase.from("notifications")
-      .select("id", { count: "exact" })
+  // Load notifications
+  async function loadNotifications() {
+    if (!profile?.id) return
+    setLoadingNotifs(true)
+    const { data, count } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact" })
       .eq("user_id", profile.id)
       .eq("is_read", false)
-      .then(({ count }) => setNotifCount(count ?? 0))
-  }, [profile])
+      .order("created_at", { ascending: false })
+      .limit(20)
+    setNotifications((data as NotificationRecord[] | null) ?? [])
+    setNotifCount(count ?? 0)
+    setLoadingNotifs(false)
+  }
+
+  useEffect(() => {
+    loadNotifications()
+  }, [profile?.id])
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!profile?.id) return
+    const channel = supabase
+      .channel("notifications-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` },
+        () => { loadNotifications() }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [profile?.id])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    if (notifOpen) document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [notifOpen])
+
+  async function markAsRead(id: string, leadId?: string | null) {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+    setNotifCount(c => Math.max(0, c - 1))
+    if (leadId) {
+      setNotifOpen(false)
+      router.push(`/leads/${leadId}`)
+    }
+  }
+
+  async function markAllAsRead() {
+    if (!profile?.id) return
+    const ids = notifications.map(n => n.id)
+    if (ids.length === 0) return
+    await supabase.from("notifications").update({ is_read: true }).in("id", ids)
+    setNotifications([])
+    setNotifCount(0)
+  }
 
   const showMarketingNav =
     normalizedRoleName.includes("marketing") || normalizedRoleName.includes("mkt")
 
-  // Filter nav items by permission
   const navItems = ALL_NAV.filter((item) => {
     if ("marketingOnly" in item && item.marketingOnly && !showMarketingNav) return false
     if (item.href === "/integraciones") return canManageIntegrations
@@ -97,7 +181,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const Sidebar = () => (
     <aside className="flex flex-col h-full w-60 bg-zinc-950/86 border-r border-zinc-800/60 backdrop-blur-xl">
-      {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-zinc-800/60 shrink-0">
         <FlugzzIsotipo className="w-7 h-7 mr-3" />
         <span className="font-semibold text-xl tracking-tighter text-zinc-100 flex items-baseline">
@@ -108,7 +191,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
         {loading ? <NavSkeleton /> : navItems.map(item => {
           const active =
@@ -135,7 +217,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* User */}
       <div className="p-4 border-t border-zinc-800/60 shrink-0">
         {loading ? (
           <div className="flex items-center gap-2.5 animate-pulse">
@@ -168,12 +249,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen text-zinc-100 flugzz-background flex font-sans overflow-hidden">
 
-      {/* Desktop sidebar */}
       <div className="hidden md:flex">
         <Sidebar />
       </div>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
@@ -187,9 +266,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
         <header className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-800/60 bg-zinc-950/70 backdrop-blur-md shrink-0 z-10">
           <button className="md:hidden p-2 -ml-2 text-zinc-400 hover:text-zinc-100"
             onClick={() => setMobileOpen(true)}>
@@ -205,16 +282,72 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <button className="relative p-2 text-zinc-500 hover:text-zinc-100 transition-colors rounded-lg hover:bg-zinc-800">
-              <Bell className="w-5 h-5" />
-              {notifCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 border-2 border-zinc-950" />
+            {/* Notifications */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen) loadNotifications() }}
+                className="relative p-2 text-zinc-500 hover:text-zinc-100 transition-colors rounded-lg hover:bg-zinc-800"
+              >
+                <Bell className="w-5 h-5" />
+                {notifCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white px-1">
+                    {notifCount > 9 ? "9+" : notifCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-12 w-80 sm:w-96 rounded-2xl border border-zinc-800/60 bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-black/40 overflow-hidden z-50">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
+                    <h3 className="text-sm font-medium text-zinc-100">Notificaciones</h3>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={markAllAsRead}
+                        className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5" /> Marcar todas
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto">
+                    {loadingNotifs ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-5 h-5 text-flugzz-accent animate-spin" />
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <Bell className="w-8 h-8 text-zinc-700 mb-2" />
+                        <p className="text-sm text-zinc-500">Sin notificaciones</p>
+                        <p className="text-xs text-zinc-600 mt-1">Estarás al tanto de todo aquí</p>
+                      </div>
+                    ) : (
+                      notifications.map(n => (
+                        <button
+                          key={n.id}
+                          onClick={() => markAsRead(n.id, n.lead_id)}
+                          className="w-full flex items-start gap-3 px-4 py-3 border-b border-zinc-800/40 hover:bg-zinc-800/50 transition-colors text-left"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800/80 flex items-center justify-center shrink-0 mt-0.5">
+                            {notifIcon(n.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-zinc-200 font-medium truncate">{n.title}</p>
+                            {n.body && (
+                              <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{n.body}</p>
+                            )}
+                            <p className="text-[10px] text-zinc-600 mt-1">{timeAgo(n.created_at)}</p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>

@@ -501,9 +501,9 @@ export default function DashboardPage() {
       <KpiDonuts donuts={donuts} />
 
       {/* Exportación */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-100">Exportación de datos</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => {
             const companyId = profile?.company_id
             if (!companyId) return

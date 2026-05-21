@@ -200,18 +200,31 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: vertical stacking on mobile */
+  /* Kanban: horizontal scroll locked (no diagonal) */
   .kanban-container {
-    flex-direction: column !important;
-    min-width: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+    flex-direction: row !important;
+    min-width: max-content !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    touch-action: pan-x !important;
+    -webkit-overflow-scrolling: touch;
   }
   
   .kanban-column {
-    width: 100% !important;
+    width: 85vw !important;
+    max-width: 320px !important;
     flex-shrink: 0 !important;
-    margin-bottom: 1rem;
+  }
+  
+  /* Lock horizontal scroll containers to x-axis only */
+  .overflow-x-auto {
+    touch-action: pan-x !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent diagonal scroll on main content */
+  main {
+    overscroll-behavior: contain;
   }
   
   /* Table: card-like display on mobile */

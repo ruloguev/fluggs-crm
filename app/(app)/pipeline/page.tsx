@@ -95,7 +95,7 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           onClick={() => router.push(`/leads/${lead.id}`)}
-          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-all ${
+          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-colors ${
             snapshot.isDragging
               ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
               : "border-zinc-800/55 hover:border-zinc-700/75"
@@ -115,23 +115,23 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-2 mt-2">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between gap-2 mt-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               {isFb && (
-                <div className="w-4 h-4 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
                   <span className="text-[8px] font-bold text-blue-400">f</span>
                 </div>
               )}
               {lead.budget_max && (
-                <span className="text-[11px] text-zinc-500 font-mono">
+                <span className="text-[11px] text-zinc-500 font-mono shrink-0">
                   ${lead.budget_max.toLocaleString()}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
-              {stale && <AlertCircle className="w-3.5 h-3.5 text-amber-500/70" />}
-              <div className="flex items-center gap-1 text-zinc-600 text-[11px]">
-                <Clock className="w-3 h-3" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              {stale && <AlertCircle className="w-3.5 h-3.5 text-amber-500/70 shrink-0" />}
+              <div className="flex items-center gap-1 text-zinc-600 text-[11px] shrink-0">
+                <Clock className="w-3 h-3 shrink-0" />
                 {timeAgo(lead.last_activity_at)}
               </div>
               {lead.contact.phone && (
@@ -139,7 +139,7 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
                   type="button"
                   title={`Llamar a ${lead.contact.phone}`}
                   onClick={handleCall}
-                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-all"
+                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-colors shrink-0"
                 >
                   <Phone className="w-3.5 h-3.5" />
                 </button>
@@ -148,7 +148,7 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
                 type="button"
                 title="WhatsApp"
                 onClick={handleWhatsApp}
-                className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-all"
+                className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-colors shrink-0"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
               </button>

@@ -60,6 +60,15 @@ type QueueStats = {
   total_assigned: number
 } | null
 
+type QueueRecord = {
+  id: string
+  auto_reassign_enabled: boolean | null
+  auto_reassign_after_minutes: number | null
+  auto_reassign_cron: string | null
+  scheduler_job_name: string | null
+  last_reassignment_run_at: string | null
+}
+
 type FacebookFormState = {
   name: string
   scope_type: IntegrationScope
@@ -647,13 +656,21 @@ function RoundRobinManager({
 }) {
   const [members, setMembers] = useState<QueueMember[]>([])
   const [queueId, setQueueId] = useState<string | null>(null)
+  const [queueConfig, setQueueConfig] = useState<QueueRecord | null>(null)
   const [stats, setStats] = useState<QueueStats>(null)
   const [loading, setLoading] = useState(true)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [configMessage, setConfigMessage] = useState<string | null>(null)
+  const [autoReassignEnabled, setAutoReassignEnabled] = useState(false)
+  const [autoReassignAfterMinutes, setAutoReassignAfterMinutes] = useState("30")
+  const [autoReassignCron, setAutoReassignCron] = useState("*/15 * * * *")
   const supabase = createClient()
 
   async function loadData() {
     if (!integration?.id) {
       setQueueId(null)
+      setQueueConfig(null)
       setMembers([])
       setStats(null)
       setLoading(false)
@@ -664,13 +681,17 @@ function RoundRobinManager({
 
     const { data: queue } = await supabase
       .from("round_robin_queues")
-      .select("id")
+      .select("id, auto_reassign_enabled, auto_reassign_after_minutes, auto_reassign_cron, scheduler_job_name, last_reassignment_run_at")
       .eq("company_id", companyId)
       .eq("source", "facebook")
       .eq("integration_id", integration.id)
       .maybeSingle()
 
     setQueueId(queue?.id ?? null)
+    setQueueConfig((queue as QueueRecord | null) ?? null)
+    setAutoReassignEnabled(Boolean(queue?.auto_reassign_enabled))
+    setAutoReassignAfterMinutes(String(queue?.auto_reassign_after_minutes ?? 30))
+    setAutoReassignCron(queue?.auto_reassign_cron ?? "*/15 * * * *")
 
     if (queue?.id) {
       const { data: membersData } = await supabase
@@ -688,6 +709,7 @@ function RoundRobinManager({
       setMembers((membersData as QueueMember[] | null) ?? [])
       setStats((stateData as QueueStats) ?? null)
     } else {
+      setQueueConfig(null)
       setMembers([])
       setStats(null)
     }
@@ -727,6 +749,60 @@ function RoundRobinManager({
       setQueueId(data.id)
       await loadData()
     }
+  }
+
+  async function saveAutoReassignConfig() {
+    if (!queueId) return
+
+    setSavingConfig(true)
+    setConfigError(null)
+    setConfigMessage(null)
+
+    const minutes = Number(autoReassignAfterMinutes)
+    if (!Number.isFinite(minutes) || minutes < 1) {
+      setConfigError("El umbral de minutos debe ser mayor a 0.")
+      setSavingConfig(false)
+      return
+    }
+
+    const { error } = await supabase.rpc("configure_round_robin_reassignment", {
+      p_queue_id: queueId,
+      p_enabled: autoReassignEnabled,
+      p_cron: autoReassignCron,
+      p_after_minutes: minutes,
+    })
+
+    setSavingConfig(false)
+
+    if (error) {
+      setConfigError(error.message)
+      return
+    }
+
+    setConfigMessage("Configuración de reasignación guardada.")
+    await loadData()
+  }
+
+  async function runAutoReassignNow() {
+    if (!queueId) return
+
+    setSavingConfig(true)
+    setConfigError(null)
+    setConfigMessage(null)
+
+    const { data, error } = await supabase.rpc("reassign_stale_round_robin_leads", {
+      p_queue_id: queueId,
+    })
+
+    setSavingConfig(false)
+
+    if (error) {
+      setConfigError(error.message)
+      return
+    }
+
+    setConfigMessage(`Se ejecutó la reasignación. Leads movidos: ${data ?? 0}.`)
+    await loadData()
   }
 
   async function addAgent(userId: string) {
@@ -797,6 +873,104 @@ function RoundRobinManager({
             </p>
             <p className="mt-1 text-xs text-zinc-500">Agentes activos</p>
           </div>
+        </div>
+      )}
+
+      {queueId && (
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/60 p-4 space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-100">Reasignación automática con pg_cron</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Configura cada cuánto revisar leads sin actividad y reasignarlos dentro de esta cola.
+              </p>
+            </div>
+            <div className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-[11px] text-zinc-400">
+              {queueConfig?.scheduler_job_name || "Sin job configurado"}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4">
+              <span className="text-xs uppercase tracking-[0.22em] text-zinc-500">Activo</span>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-100">Encender reasignación</p>
+                  <p className="text-xs text-zinc-500">Usa pg_cron para correrla automáticamente.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAutoReassignEnabled((current) => !current)}
+                  className={`relative h-7 w-12 rounded-full transition-colors ${autoReassignEnabled ? "bg-flugzz-accent" : "bg-zinc-800"}`}
+                >
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${autoReassignEnabled ? "left-6" : "left-1"}`}
+                  />
+                </button>
+              </div>
+            </label>
+
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4">
+              <Label className="text-zinc-400">Minutos sin actividad</Label>
+              <Input
+                type="number"
+                min={1}
+                value={autoReassignAfterMinutes}
+                onChange={(event) => setAutoReassignAfterMinutes(event.target.value)}
+                className="mt-2 border-zinc-800 bg-zinc-950 text-zinc-100"
+              />
+              <p className="mt-2 text-xs text-zinc-500">Cuando un lead supera este umbral, entra a revisión.</p>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4">
+              <Label className="text-zinc-400">Expresión cron</Label>
+              <Input
+                value={autoReassignCron}
+                onChange={(event) => setAutoReassignCron(event.target.value)}
+                placeholder="*/15 * * * *"
+                className="mt-2 border-zinc-800 bg-zinc-950 font-mono text-zinc-100"
+              />
+              <p className="mt-2 text-xs text-zinc-500">Ejemplo: `*/15 * * * *` para revisar cada 15 minutos.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={() => void saveAutoReassignConfig()}
+              disabled={savingConfig}
+              className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
+            >
+              {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shuffle className="mr-2 h-4 w-4" />}
+              Guardar programación
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void runAutoReassignNow()}
+              disabled={savingConfig}
+              className="border border-zinc-800 bg-zinc-900/60 text-zinc-100 hover:bg-zinc-800"
+            >
+              Ejecutar ahora
+            </Button>
+            {queueConfig?.last_reassignment_run_at && (
+              <span className="text-xs text-zinc-500">
+                Última corrida: {new Date(queueConfig.last_reassignment_run_at).toLocaleString("es-MX")}
+              </span>
+            )}
+          </div>
+
+          {configError && (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {configError}
+            </div>
+          )}
+
+          {configMessage && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              {configMessage}
+            </div>
+          )}
         </div>
       )}
 

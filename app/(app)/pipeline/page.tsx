@@ -10,8 +10,11 @@ import {
   AlertCircle,
   Loader2,
   MoveRight,
+  Search,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -44,6 +47,7 @@ type Lead = {
   currency: string
   last_activity_at: string
   stage_id: string | null
+  owner_id: string | null
   metadata: LeadMetadata
   contact: {
     full_name: string | null
@@ -92,10 +96,34 @@ type FetchedLead = {
   currency: string | null
   last_activity_at: string
   stage_id: string | null
+  owner_id: string | null
   metadata: LeadMetadata
   contact: ContactRelation
   source: SourceRelation
 }
+
+type TeamProfile = {
+  id: string
+  full_name: string
+  role: {
+    name: string | null
+  } | null
+  team_memberships: {
+    reports_to: string | null
+  }[] | null
+}
+
+type TeamRoleRelation = { name: string | null } | Array<{ name: string | null }> | null
+type FetchedTeamProfile = {
+  id: string
+  full_name: string
+  role: TeamRoleRelation
+  team_memberships: {
+    reports_to: string | null
+  }[] | null
+}
+
+type FocusLevel = "all" | "gerente" | "coordinador" | "agente"
 
 type StageColumn = {
   id: string
@@ -168,9 +196,26 @@ function normalizeLead(lead: FetchedLead): RawLead {
     currency: lead.currency ?? "MXN",
     last_activity_at: lead.last_activity_at,
     stage_id: lead.stage_id,
+    owner_id: lead.owner_id,
     metadata: lead.metadata,
     contact: normalizeContact(lead.contact),
     source: normalizeSource(lead.source),
+  }
+}
+
+function getRoleScope(roleName: string | null | undefined): Exclude<FocusLevel, "all"> {
+  const normalized = (roleName ?? "").toLowerCase()
+  if (normalized.includes("gerente")) return "gerente"
+  if (normalized.includes("coordin")) return "coordinador"
+  return "agente"
+}
+
+function normalizeTeamProfile(profile: FetchedTeamProfile): TeamProfile {
+  return {
+    id: profile.id,
+    full_name: profile.full_name,
+    role: Array.isArray(profile.role) ? (profile.role[0] ?? null) : profile.role,
+    team_memberships: profile.team_memberships,
   }
 }
 
@@ -310,6 +355,7 @@ function LeadCard({
   }
 
   function startLongPress() {
+    if (draggable) return
     clearLongPress()
     longPressTriggeredRef.current = false
     timerRef.current = window.setTimeout(() => {
@@ -333,24 +379,28 @@ function LeadCard({
 
   const content = (
     <div
-      className={`rounded-2xl border p-4 shadow-sm transition-all ${
-        lead.stale
-          ? "border-amber-500/20 bg-zinc-900 hover:border-amber-500/40"
-          : "border-zinc-800/60 bg-zinc-900 hover:border-zinc-700"
+      className={`shadow-sm transition-all ${
+        draggable
+          ? lead.stale
+            ? "rounded-xl border border-amber-500/20 bg-zinc-900 p-4 hover:border-amber-500/40"
+            : "rounded-xl border border-zinc-800/60 bg-zinc-900 p-4 hover:border-zinc-700"
+          : lead.stale
+            ? "rounded-2xl border border-amber-500/20 bg-zinc-900 p-4 hover:border-amber-500/40"
+            : "rounded-2xl border border-zinc-800/60 bg-zinc-900 p-4 hover:border-zinc-700"
       }`}
       onClick={handleOpenLead}
-      onPointerDown={startLongPress}
-      onPointerUp={cancelLongPress}
-      onPointerLeave={cancelLongPress}
-      onPointerCancel={cancelLongPress}
-      onPointerMove={cancelLongPress}
+      onPointerDown={draggable ? undefined : startLongPress}
+      onPointerUp={draggable ? undefined : cancelLongPress}
+      onPointerLeave={draggable ? undefined : cancelLongPress}
+      onPointerCancel={draggable ? undefined : cancelLongPress}
+      onPointerMove={draggable ? undefined : cancelLongPress}
       role="button"
       tabIndex={0}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-zinc-100">{displayName}</p>
-          {lead.title && <p className="mt-1 truncate text-xs text-zinc-500">{lead.title}</p>}
+          {lead.title && !draggable && <p className="mt-1 truncate text-xs text-zinc-500">{lead.title}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {isFacebookLead && (
@@ -362,16 +412,20 @@ function LeadCard({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
+      {draggable && lead.title && (
+        <p className="mt-1 truncate text-xs text-zinc-500">{lead.title}</p>
+      )}
+
+      <div className={`flex items-center justify-between gap-3 ${draggable ? "mt-3 mb-3" : "mt-3"}`}>
         <span className={`rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wider ${PRIORITY_STYLES[lead.priority]}`}>
           {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
         </span>
         {budgetLabel && (
-          <span className="text-[11px] font-medium text-zinc-400">{budgetLabel}</span>
+          <span className={`font-medium text-zinc-400 ${draggable ? "text-[10px]" : "text-[11px]"}`}>{budgetLabel}</span>
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-zinc-800/60 pt-3">
+      <div className={`${draggable ? "" : "mt-4"} flex items-center justify-between border-t border-zinc-800/60 pt-3`}>
         <div className="flex items-center gap-1.5">
           {lead.contact?.phone && (
             <a
@@ -393,16 +447,18 @@ function LeadCard({
               <MessageCircle className="h-3.5 w-3.5" />
             </a>
           )}
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenMove(lead)
-            }}
-            className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-          >
-            <MoveRight className="h-3.5 w-3.5" />
-          </button>
+          {!draggable && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenMove(lead)
+              }}
+              className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <MoveRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-1 text-[10px] text-zinc-500">
@@ -575,11 +631,17 @@ export default function PipelinePage() {
 
   const [stages, setStages] = useState<Stage[]>([])
   const [leads, setLeads] = useState<Lead[]>([])
+  const [profiles, setProfiles] = useState<TeamProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [activeMobileStageId, setActiveMobileStageId] = useState<string>("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [priorityFilter, setPriorityFilter] = useState<"all" | Lead["priority"]>("all")
+  const [sourceFilter, setSourceFilter] = useState("all")
+  const [focusLevel, setFocusLevel] = useState<FocusLevel>("all")
+  const [focusProfileId, setFocusProfileId] = useState("all")
 
   const mobileRailRef = useRef<HTMLDivElement | null>(null)
   const mobileStageRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -589,7 +651,11 @@ export default function PipelinePage() {
     setLoading(true)
     setError(null)
 
-    const [{ data: stagesData, error: stageError }, { data: leadsData, error: leadError }] = await Promise.all([
+    const [
+      { data: stagesData, error: stageError },
+      { data: leadsData, error: leadError },
+      { data: profileRows, error: profileError },
+    ] = await Promise.all([
       supabase
         .from("pipeline_stages")
         .select("id, name, color, position, is_closed")
@@ -605,6 +671,7 @@ export default function PipelinePage() {
           currency,
           last_activity_at,
           stage_id,
+          owner_id,
           metadata,
           contact:contacts(full_name, phone),
           source:lead_sources(name, icon, color)
@@ -612,18 +679,103 @@ export default function PipelinePage() {
         .eq("company_id", companyId)
         .order("last_activity_at", { ascending: false })
         .limit(200),
+      supabase
+        .from("profiles")
+        .select(`
+          id,
+          full_name,
+          role:roles(name),
+          team_memberships(reports_to)
+        `)
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .order("full_name"),
     ])
 
-    if (stageError || leadError) {
-      setError(stageError?.message || leadError?.message || "No pudimos cargar el pipeline.")
+    if (stageError || leadError || profileError) {
+      setError(stageError?.message || leadError?.message || profileError?.message || "No pudimos cargar el pipeline.")
       setLoading(false)
       return
     }
 
     setStages((stagesData as Stage[] | null) ?? [])
     setLeads(((leadsData as FetchedLead[] | null) ?? []).map(normalizeLead).map(decorateLead))
+    setProfiles(((profileRows as FetchedTeamProfile[] | null) ?? []).map(normalizeTeamProfile))
     setLoading(false)
   }, [supabase])
+
+  const reportsToMap = useMemo(() => {
+    const map = new Map<string, string | null>()
+    profiles.forEach((item) => {
+      map.set(item.id, item.team_memberships?.[0]?.reports_to ?? null)
+    })
+    return map
+  }, [profiles])
+
+  const reportsByLeader = useMemo(() => {
+    const map = new Map<string, string[]>()
+    profiles.forEach((item) => {
+      const managerId = reportsToMap.get(item.id)
+      if (!managerId) return
+      map.set(managerId, [...(map.get(managerId) ?? []), item.id])
+    })
+    return map
+  }, [profiles, reportsToMap])
+
+  const getDescendants = useCallback((userId: string) => {
+    const queue = [...(reportsByLeader.get(userId) ?? [])]
+    const collected: string[] = []
+
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current || collected.includes(current)) continue
+      collected.push(current)
+      queue.push(...(reportsByLeader.get(current) ?? []))
+    }
+
+    return collected
+  }, [reportsByLeader])
+
+  const availableProfileOptions = useMemo(() => {
+    if (focusLevel === "all") return []
+    return profiles.filter((item) => getRoleScope(item.role?.name) === focusLevel)
+  }, [focusLevel, profiles])
+
+  const resolvedFocusProfileId =
+    focusLevel !== "all" && availableProfileOptions.some((item) => item.id === focusProfileId)
+      ? focusProfileId
+      : "all"
+
+  const scopedOwnerIds = useMemo(() => {
+    if (focusLevel === "all" || resolvedFocusProfileId === "all") return null
+    if (focusLevel === "gerente") return [resolvedFocusProfileId, ...getDescendants(resolvedFocusProfileId)]
+    if (focusLevel === "coordinador") return [resolvedFocusProfileId, ...(reportsByLeader.get(resolvedFocusProfileId) ?? [])]
+    return [resolvedFocusProfileId]
+  }, [focusLevel, getDescendants, reportsByLeader, resolvedFocusProfileId])
+
+  const filteredLeads = useMemo(() => {
+    const normalizedQuery = searchTerm.trim().toLowerCase()
+
+    return leads.filter((lead) => {
+      if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false
+      if (sourceFilter !== "all" && (lead.source?.name ?? "") !== sourceFilter) return false
+      if (scopedOwnerIds && (!lead.owner_id || !scopedOwnerIds.includes(lead.owner_id))) return false
+
+      if (!normalizedQuery) return true
+
+      const searchable = [
+        getLeadDisplayName(lead),
+        lead.title ?? "",
+        lead.source?.name ?? "",
+      ].join(" ").toLowerCase()
+
+      return searchable.includes(normalizedQuery)
+    })
+  }, [leads, priorityFilter, scopedOwnerIds, searchTerm, sourceFilter])
+
+  const sourceOptions = useMemo(() => {
+    return Array.from(new Set(leads.map((lead) => lead.source?.name).filter(Boolean))) as string[]
+  }, [leads])
 
   const stageColumns = useMemo(() => {
     const activeStages = stages.filter((stage) => !stage.is_closed)
@@ -631,10 +783,10 @@ export default function PipelinePage() {
       id: stage.id,
       name: stage.name,
       color: stage.color,
-      leads: leads.filter((lead) => lead.stage_id === stage.id),
+      leads: filteredLeads.filter((lead) => lead.stage_id === stage.id),
     }))
 
-    const unassignedLeads = leads.filter((lead) => !lead.stage_id)
+    const unassignedLeads = filteredLeads.filter((lead) => !lead.stage_id)
     if (unassignedLeads.length > 0) {
       columns.push({
         id: UNASSIGNED_STAGE_ID,
@@ -645,7 +797,7 @@ export default function PipelinePage() {
     }
 
     return columns
-  }, [leads, stages])
+  }, [filteredLeads, stages])
 
   useEffect(() => {
     if (profile?.company_id) {
@@ -761,12 +913,18 @@ export default function PipelinePage() {
     }
   }
 
-  const totalStaleLeads = leads.filter((lead) => lead.stale).length
-  const totalWithPhone = leads.filter((lead) => Boolean(lead.contact?.phone)).length
+  const totalStaleLeads = filteredLeads.filter((lead) => lead.stale).length
+  const totalWithPhone = filteredLeads.filter((lead) => Boolean(lead.contact?.phone)).length
   const resolvedActiveMobileStageId =
     stageColumns.some((stage) => stage.id === activeMobileStageId)
       ? activeMobileStageId
       : (stageColumns[0]?.id ?? "")
+  const hasDesktopFilters =
+    searchTerm.trim().length > 0 ||
+    priorityFilter !== "all" ||
+    sourceFilter !== "all" ||
+    focusLevel !== "all" ||
+    focusProfileId !== "all"
 
   return (
     <div className="flex h-full flex-col gap-5">
@@ -776,7 +934,7 @@ export default function PipelinePage() {
             Pipeline<span className="text-flugzz-accent">.</span>
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            {loading ? "Cargando..." : `${leads.length} leads activos y ${stageColumns.length} etapas visibles`}
+            {loading ? "Cargando..." : `${filteredLeads.length} leads visibles${hasDesktopFilters ? ` de ${leads.length}` : ""} y ${stageColumns.length} etapas`}
           </p>
         </div>
 
@@ -793,7 +951,7 @@ export default function PipelinePage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "Leads activos", value: leads.length.toString() },
+          { label: "Leads activos", value: filteredLeads.length.toString() },
           { label: "Sin seguimiento", value: totalStaleLeads.toString() },
           { label: "Con telefono", value: totalWithPhone.toString() },
           { label: "Etapas visibles", value: stageColumns.length.toString() },
@@ -811,6 +969,87 @@ export default function PipelinePage() {
           {error}
         </div>
       )}
+
+      <div className="hidden rounded-3xl border border-zinc-800/50 bg-zinc-900/40 p-4 md:block">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_180px_200px_180px_240px_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar lead, contacto u origen"
+              className="border-zinc-800 bg-zinc-950 pl-9 text-zinc-100"
+            />
+          </div>
+
+          <select
+            value={priorityFilter}
+            onChange={(event) => setPriorityFilter(event.target.value as typeof priorityFilter)}
+            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Todas las prioridades</option>
+            <option value="high">Alta</option>
+            <option value="medium">Media</option>
+            <option value="low">Baja</option>
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Todos los orígenes</option>
+            {sourceOptions.map((source) => (
+              <option key={source} value={source}>{source}</option>
+            ))}
+          </select>
+
+          <select
+            value={focusLevel}
+            onChange={(event) => {
+              setFocusLevel(event.target.value as FocusLevel)
+              setFocusProfileId("all")
+            }}
+            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Todo el equipo</option>
+            <option value="gerente">Gerencia</option>
+            <option value="coordinador">Coordinación</option>
+            <option value="agente">Agente</option>
+          </select>
+
+          <select
+            value={resolvedFocusProfileId}
+            onChange={(event) => setFocusProfileId(event.target.value)}
+            disabled={focusLevel === "all"}
+            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none disabled:opacity-50"
+          >
+            <option value="all">
+              {focusLevel === "all" ? "Sin filtro por responsable" : `Selecciona ${focusLevel}`}
+            </option>
+            {availableProfileOptions.map((item) => (
+              <option key={item.id} value={item.id}>{item.full_name}</option>
+            ))}
+          </select>
+
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!hasDesktopFilters}
+            className="border border-zinc-800 bg-zinc-950 text-zinc-200 hover:bg-zinc-900 disabled:opacity-40"
+            onClick={() => {
+              setSearchTerm("")
+              setPriorityFilter("all")
+              setSourceFilter("all")
+              setFocusLevel("all")
+              setFocusProfileId("all")
+            }}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Limpiar
+          </Button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center">

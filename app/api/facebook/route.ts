@@ -43,6 +43,7 @@ type ResolvedFacebookLead = {
 }
 
 // Service role client — bypass RLS for webhook processing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getAdminClient(): any {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -180,6 +181,7 @@ async function processLead({
   formId: string
   accessToken: string | null
   rawData: FacebookLeadWebhookValue
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
 }) {
   if (!facebookLeadId) return

@@ -467,15 +467,17 @@ export default function PipelinePage() {
     const lead = allLeads.find(l => l.id === leadId)
     if (!lead) return
     
+    const finalStageId = newStageId === "" ? null : newStageId
+    
     setAllLeads(prev => prev.map(l => 
-      l.id === leadId ? { ...l, stage_id: newStageId } : l
+      l.id === leadId ? { ...l, stage_id: finalStageId } : l
     ))
     
     await (supabase as any).from("leads")
-      .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
+      .update({ stage_id: finalStageId, last_activity_at: new Date().toISOString() })
       .eq("id", leadId)
     
-    if (lead?.stage_id || newStageId) {
+    if (lead?.stage_id || finalStageId) {
       await (supabase as any).from("activities").insert({
         company_id: profile?.company_id,
         lead_id: leadId,
@@ -484,12 +486,11 @@ export default function PipelinePage() {
         type: "stage_change",
         title: "Etapa cambiada",
         from_stage_id: lead?.stage_id,
-        to_stage_id: newStageId,
+        to_stage_id: finalStageId,
         completed_at: new Date().toISOString(),
       })
     }
     
-    // Flash animation on the moved lead
     setMovedLeadId(leadId)
     setTimeout(() => setMovedLeadId(null), 1500)
     

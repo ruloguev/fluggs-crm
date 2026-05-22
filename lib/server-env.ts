@@ -24,11 +24,4 @@ export function getSupabaseServiceRoleKey(): string | undefined {
   return process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined
 }
 
-/**
- * Anthropic API key used by the AI assistant route.
- * Set as ANTHROPIC_API_KEY in Vercel Environment Variables (Production).
- * Do NOT wrap the value in quotes inside the Vercel dashboard.
- */
-export function getAnthropicApiKey(): string | undefined {
-  return process.env.ANTHROPIC_API_KEY?.trim() || undefined
-}
+

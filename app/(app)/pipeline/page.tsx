@@ -929,7 +929,9 @@ export default function PipelinePage() {
   const hasMobileFilters =
     searchTerm.trim().length > 0 ||
     priorityFilter !== "all" ||
-    sourceFilter !== "all"
+    sourceFilter !== "all" ||
+    focusLevel !== "all" ||
+    focusProfileId !== "all"
 
   return (
     <div className="flex h-full flex-col gap-5">
@@ -960,8 +962,8 @@ export default function PipelinePage() {
           { label: "Sin seguimiento", value: totalStaleLeads.toString() },
           { label: "Con telefono", value: totalWithPhone.toString() },
           { label: "Etapas visibles", value: stageColumns.length.toString() },
-        ].map((item) => (
-          <div key={item.label} className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4">
+        ].map((item, index) => (
+          <div key={item.label} className={`rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4 ${index >= 2 ? "hidden md:block" : ""}`}>
             <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{item.label}</p>
             <p className="mt-2 text-2xl font-semibold text-zinc-100">{item.value}</p>
           </div>
@@ -1089,12 +1091,40 @@ export default function PipelinePage() {
           </select>
           <button
             type="button"
-            onClick={() => { setSearchTerm(""); setPriorityFilter("all"); setSourceFilter("all"); }}
+            onClick={() => { setSearchTerm(""); setPriorityFilter("all"); setSourceFilter("all"); setFocusLevel("all"); setFocusProfileId("all"); }}
             disabled={!hasMobileFilters}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={focusLevel}
+            onChange={(event) => {
+              setFocusLevel(event.target.value as FocusLevel)
+              setFocusProfileId("all")
+            }}
+            className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Todo el equipo</option>
+            <option value="gerente">Gerencia</option>
+            <option value="coordinador">Coordinación</option>
+            <option value="agente">Agente</option>
+          </select>
+          <select
+            value={resolvedFocusProfileId}
+            onChange={(event) => setFocusProfileId(event.target.value)}
+            disabled={focusLevel === "all"}
+            className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none disabled:opacity-50"
+          >
+            <option value="all">
+              {focusLevel === "all" ? "Sin filtro por responsable" : `Selecciona ${focusLevel}`}
+            </option>
+            {availableProfileOptions.map((item) => (
+              <option key={item.id} value={item.id}>{item.full_name}</option>
+            ))}
+          </select>
         </div>
       </div>
 

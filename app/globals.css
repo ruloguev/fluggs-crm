@@ -209,7 +209,7 @@
   
   /* Kanban: mobile swipe with proximity snap */
   .kanban-board {
-    scroll-snap-type: x proximity !important;
+    scroll-snap-type: x mandatory !important;
     scroll-behavior: smooth !important;
     -webkit-overflow-scrolling: touch !important;
     overflow-x: auto !important;

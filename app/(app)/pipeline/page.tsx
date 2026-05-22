@@ -516,7 +516,7 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-proximity min-h-0">
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="kanban-container flex gap-3 h-full items-start px-4">
                 {activeStages.map((stage, index) => {

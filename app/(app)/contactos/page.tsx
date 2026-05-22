@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 
 type Stage = { id: string; name: string; color: string | null; position: number; is_closed: boolean }
-type Source = { id: string; name: string }
+type Source = { id: string; name: string; icon: string | null; color: string | null }
 type TeamMember = { id: string; full_name: string; role_level: number }
 type LeadRow = {
   id: string
@@ -124,7 +124,7 @@ export default function ContactosPage() {
         .order("position"),
       supabase
         .from("lead_sources")
-        .select("id, name")
+        .select("id, name, icon, color")
         .eq("company_id", companyId)
         .order("name"),
       supabase
@@ -456,7 +456,9 @@ export default function ContactosPage() {
                       onChange={(event) => setFormData({ ...formData, source_id: event.target.value })}
                       className="w-full rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700">
                       {sources.map((source) => (
-                        <option key={source.id} value={source.id}>{source.name}</option>
+                        <option key={source.id} value={source.id}>
+                          {source.icon ? `${source.icon} ${source.name}` : source.name}
+                        </option>
                       ))}
                     </select>
                   </div>

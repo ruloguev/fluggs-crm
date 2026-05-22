@@ -774,7 +774,14 @@ export default function PipelinePage() {
   }, [leads, priorityFilter, scopedOwnerIds, searchTerm, sourceFilter])
 
   const sourceOptions = useMemo(() => {
-    return Array.from(new Set(leads.map((lead) => lead.source?.name).filter(Boolean))) as string[]
+    const map = new Map<string, { name: string; icon: string | null; color: string | null }>()
+    for (const lead of leads) {
+      const s = lead.source
+      if (s?.name && !map.has(s.name)) {
+        map.set(s.name, { name: s.name, icon: s.icon, color: s.color })
+      }
+    }
+    return Array.from(map.values())
   }, [leads])
 
   const stageColumns = useMemo(() => {
@@ -1007,7 +1014,9 @@ export default function PipelinePage() {
           >
             <option value="all">Todos los orígenes</option>
             {sourceOptions.map((source) => (
-              <option key={source} value={source}>{source}</option>
+              <option key={source.name} value={source.name}>
+                {source.icon ? `${source.icon} ${source.name}` : source.name}
+              </option>
             ))}
           </select>
 
@@ -1086,7 +1095,9 @@ export default function PipelinePage() {
           >
             <option value="all">Origen</option>
             {sourceOptions.map((source) => (
-              <option key={source} value={source}>{source}</option>
+              <option key={source.name} value={source.name}>
+                {source.icon ? `${source.icon} ${source.name}` : source.name}
+              </option>
             ))}
           </select>
           <button

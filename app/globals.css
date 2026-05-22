@@ -272,6 +272,11 @@
     contain: layout style !important;
   }
   
+  /* Cards nunca se encojan */
+  .kanban-cards > div {
+    flex-shrink: 0 !important;
+  }
+  
   .kanban-cards::-webkit-scrollbar {
     display: none !important;
   }

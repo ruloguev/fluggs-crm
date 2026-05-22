@@ -277,6 +277,13 @@
     flex-shrink: 0 !important;
   }
   
+  /* Ghost placeholder during drag */
+  .kanban-cards > [data-rfd-placeholder] {
+    opacity: 0.3 !important;
+    border: 2px dashed rgba(34, 211, 238, 0.3) !important;
+    background: rgba(34, 211, 238, 0.05) !important;
+  }
+  
   .kanban-cards::-webkit-scrollbar {
     display: none !important;
   }

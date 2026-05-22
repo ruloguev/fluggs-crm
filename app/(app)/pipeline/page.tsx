@@ -34,13 +34,15 @@ const P_STYLES = {
   low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 }
 
-const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate }: {
+const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate, onMove, isMoved }: {
   lead: Lead; index: number
   stages: Stage[]
   supabase: ReturnType<typeof createClient>
   profileId: string
   companyId: string
   onLeadUpdate: (leadId: string, patch: Partial<Lead>) => void
+  onMove?: (leadId: string, name: string, sourceStageId: string | null) => void
+  isMoved?: boolean
 }) {
   const router = useRouter()
   const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
@@ -95,10 +97,12 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
           {...provided.draggableProps}
           {...provided.dragHandleProps}
           onClick={() => router.push(`/leads/${lead.id}`)}
-          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-colors ${
-            snapshot.isDragging
-              ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
-              : "border-zinc-800/55 hover:border-zinc-700/75"
+          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-all duration-500 ${
+            isMoved
+              ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.3)] bg-flugzz-accent/5"
+              : snapshot.isDragging
+                ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                : "border-zinc-800/55 hover:border-zinc-700/75"
           }`}
         >
           <div className="flex items-start justify-between gap-2 mb-2">
@@ -110,9 +114,25 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
                 <p className="text-xs text-zinc-500 truncate mt-0.5">{lead.title}</p>
               )}
             </div>
-            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
-              {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
-            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {onMove && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onMove(lead.id, lead.contact.full_name, lead.stage_id)
+                  }}
+                  className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors md:hidden"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
+                {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-2 mt-2 shrink-0">
@@ -247,11 +267,12 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [allTags, setAllTags] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
-  const [draggingLead, setDraggingLead] = useState<{
+  const [selectedLead, setSelectedLead] = useState<{
     id: string;
     name: string;
     sourceStageId: string | null;
   } | null>(null)
+  const [movedLeadId, setMovedLeadId] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
   const { profile, role } = useAuth()
@@ -428,7 +449,11 @@ export default function PipelinePage() {
       })
     }
     
-    setDraggingLead(null)
+    // Flash animation on the moved lead
+    setMovedLeadId(leadId)
+    setTimeout(() => setMovedLeadId(null), 1500)
+    
+    setSelectedLead(null)
   }
 
   if (!isMounted) return null
@@ -552,25 +577,7 @@ export default function PipelinePage() {
       ) : viewMode === "kanban" ? (
         <>
         <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
-            <DragDropContext 
-              onDragStart={(start) => {
-                const lead = allLeads.find(l => l.id === start.draggableId)
-                if (lead) {
-                  setDraggingLead({
-                    id: lead.id,
-                    name: lead.contact.full_name,
-                    sourceStageId: lead.stage_id,
-                  })
-                }
-              }}
-              onDragEnd={(result) => {
-                if (draggingLead) {
-                  setDraggingLead(null)
-                  return
-                }
-                onDragEnd(result)
-              }}
-            >
+            <DragDropContext onDragEnd={onDragEnd}>
               <div className="kanban-container flex gap-3 h-full items-start px-4">
                 {activeStages.map((stage, index) => {
                   const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
@@ -580,7 +587,11 @@ export default function PipelinePage() {
                       data-stage-index={index}
                       className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start"
                     >
-                      <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
+                      <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-500 ${
+                        movedLeadId && stageLeads.some(l => l.id === movedLeadId)
+                          ? 'bg-flugzz-accent/10 border-flugzz-accent/40'
+                          : 'bg-zinc-900/95 border-zinc-800/50'
+                      }`}>
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
                           <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
@@ -599,6 +610,8 @@ export default function PipelinePage() {
                                 stages={stages} supabase={supabase}
                                 profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
                                 onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
+                                onMove={(id, name, stageId) => setSelectedLead({ id, name, sourceStageId: stageId })}
+                                isMoved={movedLeadId === lead.id}
                               />
                             ))}
                             {provided.placeholder}
@@ -616,7 +629,11 @@ export default function PipelinePage() {
 
                 {unassignedLeads.length > 0 && (
                   <div className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start">
-                    <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
+                    <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-500 ${
+                      movedLeadId && unassignedLeads.some(l => l.id === movedLeadId)
+                        ? 'bg-zinc-500/10 border-zinc-500/40'
+                        : 'bg-zinc-900/95 border-zinc-800/50'
+                    }`}>
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
                         <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">Sin etapa</span>
@@ -634,6 +651,8 @@ export default function PipelinePage() {
                               stages={stages} supabase={supabase}
                               profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
                               onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
+                              onMove={(id, name, stageId) => setSelectedLead({ id, name, sourceStageId: stageId })}
+                              isMoved={movedLeadId === lead.id}
                             />
                           ))}
                           {provided.placeholder}
@@ -647,16 +666,16 @@ export default function PipelinePage() {
           </div>
 
           {/* Stage Selector Modal - MOBILE ONLY */}
-          {draggingLead && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-2xl animate-in slide-in-from-bottom duration-300">
+          {selectedLead && (
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center" onClick={() => setSelectedLead(null)}>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-5 border-b border-zinc-800">
                   <div>
                     <h3 className="text-lg font-semibold text-zinc-100">Mover lead</h3>
-                    <p className="text-sm text-zinc-400 mt-0.5">{draggingLead.name}</p>
+                    <p className="text-sm text-zinc-400 mt-0.5">{selectedLead.name}</p>
                   </div>
                   <button 
-                    onClick={() => setDraggingLead(null)}
+                    onClick={() => setSelectedLead(null)}
                     className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-500 transition-colors"
                   >
                     <X className="w-5 h-5" />
@@ -666,12 +685,12 @@ export default function PipelinePage() {
                 <div className="p-5 grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
                   {activeStages.map(stage => {
                     const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
-                    const isSource = stage.id === draggingLead.sourceStageId
+                    const isSource = stage.id === selectedLead.sourceStageId
                     return (
                       <button
                         key={stage.id}
                         disabled={isSource}
-                        onClick={() => moveLeadToStage(draggingLead.id, stage.id)}
+                        onClick={() => moveLeadToStage(selectedLead.id, stage.id)}
                         className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border transition-all ${
                           isSource 
                             ? 'border-zinc-800/50 bg-zinc-950/30 opacity-30 cursor-not-allowed' 
@@ -686,10 +705,10 @@ export default function PipelinePage() {
                   })}
                   {unassignedLeads.length > 0 && (
                     <button
-                      disabled={draggingLead.sourceStageId === null}
-                      onClick={() => moveLeadToStage(draggingLead.id, "")}
+                      disabled={selectedLead.sourceStageId === null}
+                      onClick={() => moveLeadToStage(selectedLead.id, "")}
                       className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border transition-all ${
-                        draggingLead.sourceStageId === null
+                        selectedLead.sourceStageId === null
                           ? 'border-zinc-800/50 bg-zinc-950/30 opacity-30 cursor-not-allowed' 
                           : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-600 hover:bg-zinc-800/50 active:scale-95'
                       }`}
@@ -703,7 +722,7 @@ export default function PipelinePage() {
                 
                 <div className="p-4 border-t border-zinc-800">
                   <button 
-                    onClick={() => setDraggingLead(null)}
+                    onClick={() => setSelectedLead(null)}
                     className="w-full py-3 text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-950/50 rounded-xl hover:bg-zinc-800/50 transition-colors"
                   >
                     Cancelar

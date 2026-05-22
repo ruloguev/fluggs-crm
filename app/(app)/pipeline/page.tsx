@@ -516,7 +516,7 @@ export default function PipelinePage() {
           <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
+        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-proximity min-h-0">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="kanban-container flex gap-3 h-full items-start px-4">
                 {activeStages.map((stage, index) => {
@@ -525,7 +525,7 @@ export default function PipelinePage() {
                     <div 
                       key={stage.id} 
                       data-stage-index={index}
-                      className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 snap-start"
+                      className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start"
                     >
                       <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                         <div className="flex items-center gap-2 min-w-0">
@@ -562,7 +562,7 @@ export default function PipelinePage() {
                 })}
 
                 {unassignedLeads.length > 0 && (
-                  <div className="kanban-column min-w-[90vw] max-w-[400px] flex-shrink-0 snap-start">
+                  <div className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start">
                     <div className="kanban-header flex items-center justify-between px-3 py-2.5 bg-zinc-900/95 rounded-xl border border-zinc-800/50 shrink-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />

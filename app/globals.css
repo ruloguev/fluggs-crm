@@ -207,9 +207,9 @@
     scroll-behavior: smooth;
   }
   
-  /* Kanban: Tinder-style with snap + peek */
+  /* Kanban: mobile swipe with proximity snap */
   .kanban-board {
-    scroll-snap-type: x mandatory !important;
+    scroll-snap-type: x proximity !important;
     scroll-behavior: smooth !important;
     -webkit-overflow-scrolling: touch !important;
     overflow-x: auto !important;
@@ -249,7 +249,7 @@
     display: flex !important;
     flex-direction: column !important;
     height: calc(100vh - 280px) !important;
-    min-height: 0 !important;
+    min-height: calc(100vh - 280px) !important;
     contain: layout style !important;
   }
   
@@ -265,7 +265,8 @@
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
     height: calc(100vh - 340px) !important;
-    min-height: 0 !important;
+    min-height: calc(100vh - 340px) !important;
+    max-height: calc(100vh - 340px) !important;
     position: relative !important;
     z-index: 1 !important;
     contain: layout style !important;
@@ -335,6 +336,47 @@
   .no-select-touch {
     -webkit-user-select: none;
     user-select: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   DESKTOP KANBAN: revert all mobile overrides
+   ════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+  .kanban-board {
+    scroll-snap-type: none !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+  }
+  
+  .kanban-board::after {
+    display: none !important;
+  }
+  
+  .kanban-container {
+    gap: 0.75rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    height: auto !important;
+  }
+  
+  .kanban-column {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: 18rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  
+  .kanban-header {
+    position: static !important;
+  }
+  
+  .kanban-cards {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: 1 !important;
   }
 }
 

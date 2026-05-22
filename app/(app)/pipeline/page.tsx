@@ -685,7 +685,7 @@ export default function PipelinePage() {
           id,
           full_name,
           role:roles(name),
-          team_memberships(reports_to)
+          team_memberships!team_memberships_user_id_fkey(reports_to)
         `)
         .eq("company_id", companyId)
         .eq("is_active", true)

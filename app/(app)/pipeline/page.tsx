@@ -926,6 +926,11 @@ export default function PipelinePage() {
     focusLevel !== "all" ||
     focusProfileId !== "all"
 
+  const hasMobileFilters =
+    searchTerm.trim().length > 0 ||
+    priorityFilter !== "all" ||
+    sourceFilter !== "all"
+
   return (
     <div className="flex h-full flex-col gap-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1048,6 +1053,48 @@ export default function PipelinePage() {
             <X className="mr-2 h-4 w-4" />
             Limpiar
           </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 md:hidden">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar lead, contacto u origen"
+            className="border-zinc-800 bg-zinc-950 pl-9 text-zinc-100"
+          />
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value as typeof priorityFilter)}
+            className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Prioridad</option>
+            <option value="high">Alta</option>
+            <option value="medium">Media</option>
+            <option value="low">Baja</option>
+          </select>
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+          >
+            <option value="all">Origen</option>
+            {sourceOptions.map((source) => (
+              <option key={source} value={source}>{source}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => { setSearchTerm(""); setPriorityFilter("all"); setSourceFilter("all"); }}
+            disabled={!hasMobileFilters}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
 

@@ -1,141 +1,420 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from "react"
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
-import { Plus, Phone, MessageCircle, Clock, AlertCircle, Loader2, ChevronDown, Check, Search, X, Filter, LayoutGrid, List } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
+import {
+  Plus,
+  Phone,
+  MessageCircle,
+  Clock3,
+  AlertCircle,
+  Loader2,
+  MoveRight,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
-import { computeScope } from "@/lib/role-scope"
 
-type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
+const UNASSIGNED_STAGE_ID = "__unassigned__"
+const LONG_PRESS_MS = 420
+
+type Stage = {
+  id: string
+  name: string
+  color: string
+  position: number
+  is_closed: boolean
+}
+
+type LeadMetadata = Record<string, unknown> | null
+
 type Lead = {
-  id: string; title: string | null; project: string | null; priority: "low" | "medium" | "high"
-  budget_max: number | null; currency: string; last_activity_at: string
-  stage_id: string | null; metadata: any; owner_id: string | null; source_id: string | null
-  lead_tags: string[] | null
-  contact: { id: string; full_name: string; phone: string | null }
-  source: { id: string; name: string; icon: string | null; color: string | null } | null
-}
-type Source = { id: string; name: string; icon: string | null; color: string | null }
-type TeamMember = { id: string; full_name: string; role_level: number }
-
-function timeAgo(d: string) {
-  const diff = (Date.now() - new Date(d).getTime()) / 1000
-  if (diff < 3600) return `${Math.floor(diff/60)}m`
-  if (diff < 86400) return `${Math.floor(diff/3600)}h`
-  return `${Math.floor(diff/86400)}d`
-}
-
-const P_STYLES = {
-  high: "bg-red-500/10 text-red-400 border-red-500/20",
-  medium: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  low: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  id: string
+  title: string | null
+  priority: "low" | "medium" | "high"
+  budget_max: number | null
+  currency: string
+  last_activity_at: string
+  stage_id: string | null
+  metadata: LeadMetadata
+  contact: {
+    full_name: string | null
+    phone: string | null
+  } | null
+  source: {
+    name: string | null
+    icon: string | null
+    color: string | null
+  } | null
+  stale: boolean
+  activity_label: string
 }
 
-const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, profileId, companyId, onLeadUpdate, onMove, isMoved }: {
-  lead: Lead; index: number
-  stages: Stage[]
-  supabase: ReturnType<typeof createClient>
-  profileId: string
-  companyId: string
-  onLeadUpdate: (leadId: string, patch: Partial<Lead>) => void
-  onMove?: (leadId: string, name: string, sourceStageId: string | null) => void
-  isMoved?: boolean
+type RawLead = Omit<Lead, "stale" | "activity_label">
+
+type ContactRelation =
+  | {
+      full_name: string | null
+      phone: string | null
+    }
+  | Array<{
+      full_name: string | null
+      phone: string | null
+    }>
+  | null
+
+type SourceRelation =
+  | {
+      name: string | null
+      icon: string | null
+      color: string | null
+    }
+  | Array<{
+      name: string | null
+      icon: string | null
+      color: string | null
+    }>
+  | null
+
+type FetchedLead = {
+  id: string
+  title: string | null
+  priority: string | null
+  budget_max: number | null
+  currency: string | null
+  last_activity_at: string
+  stage_id: string | null
+  metadata: LeadMetadata
+  contact: ContactRelation
+  source: SourceRelation
+}
+
+type StageColumn = {
+  id: string
+  name: string
+  color: string
+  leads: Lead[]
+}
+
+const PRIORITY_STYLES = {
+  high: "border-red-500/25 bg-red-500/10 text-red-300",
+  medium: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  low: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+} as const
+
+function formatTimeAgo(timestamp: string) {
+  const diff = Math.max(0, Date.now() - new Date(timestamp).getTime())
+  const minutes = Math.floor(diff / 60000)
+
+  if (minutes < 60) return `${Math.max(1, minutes)}m`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+
+  return `${Math.floor(hours / 24)}d`
+}
+
+function decorateLead(lead: RawLead): Lead {
+  const lastActivity = new Date(lead.last_activity_at).getTime()
+  const stale = Number.isFinite(lastActivity)
+    ? Date.now() - lastActivity > 3 * 24 * 60 * 60 * 1000
+    : false
+
+  return {
+    ...lead,
+    stale,
+    activity_label: formatTimeAgo(lead.last_activity_at),
+  }
+}
+
+function normalizePriority(priority: string | null | undefined): Lead["priority"] {
+  if (priority === "high" || priority === "medium" || priority === "low") {
+    return priority
+  }
+
+  return "medium"
+}
+
+function normalizeContact(contact: ContactRelation): RawLead["contact"] {
+  if (Array.isArray(contact)) {
+    return contact[0] ?? null
+  }
+
+  return contact
+}
+
+function normalizeSource(source: SourceRelation): RawLead["source"] {
+  if (Array.isArray(source)) {
+    return source[0] ?? null
+  }
+
+  return source
+}
+
+function normalizeLead(lead: FetchedLead): RawLead {
+  return {
+    id: lead.id,
+    title: lead.title,
+    priority: normalizePriority(lead.priority),
+    budget_max: lead.budget_max,
+    currency: lead.currency ?? "MXN",
+    last_activity_at: lead.last_activity_at,
+    stage_id: lead.stage_id,
+    metadata: lead.metadata,
+    contact: normalizeContact(lead.contact),
+    source: normalizeSource(lead.source),
+  }
+}
+
+function getLeadDisplayName(lead: Lead) {
+  return lead.contact?.full_name || lead.title || "Lead sin nombre"
+}
+
+function getBudgetLabel(lead: Lead) {
+  if (!lead.budget_max) return null
+
+  const amount = new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: lead.currency || "MXN",
+    maximumFractionDigits: 0,
+  }).format(lead.budget_max)
+
+  return amount
+}
+
+function LeadQuickMoveDialog({
+  lead,
+  stages,
+  movingLeadId,
+  onOpenChange,
+  onMove,
+  onViewLead,
+}: {
+  lead: Lead | null
+  stages: StageColumn[]
+  movingLeadId: string | null
+  onOpenChange: (open: boolean) => void
+  onMove: (leadId: string, stageId: string | null) => Promise<void>
+  onViewLead: (leadId: string) => void
 }) {
-  const router = useRouter()
-  const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
-  const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes("facebook")
-  const [pressTimer, setPressTimer] = React.useState<ReturnType<typeof setTimeout> | null>(null)
-  const [isPressing, setIsPressing] = React.useState(false)
-  const wasLongPress = React.useRef(false)
-  const pressStartPos = React.useRef({ x: 0, y: 0 })
+  const currentStageId = lead?.stage_id ?? null
 
-  function handlePressStart(e: React.PointerEvent) {
-    if (e.pointerType === 'mouse') return
-    wasLongPress.current = false
-    setIsPressing(true)
-    pressStartPos.current = { x: e.clientX, y: e.clientY }
-    const timer = setTimeout(() => {
-      wasLongPress.current = true
-      if (navigator.vibrate) navigator.vibrate(50)
-      onMove?.(lead.id, lead.contact.full_name, lead.stage_id)
-      setIsPressing(false)
-    }, 500)
-    setPressTimer(timer)
-  }
+  return (
+    <Dialog open={Boolean(lead)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogHeader>
+          <DialogTitle>Mover lead</DialogTitle>
+          <DialogDescription className="text-zinc-400">
+            {lead ? `Selecciona la etapa para ${getLeadDisplayName(lead)}.` : "Selecciona una etapa."}
+          </DialogDescription>
+        </DialogHeader>
 
-  function handlePressMove(e: React.PointerEvent) {
-    if (!isPressing) return
-    const dx = Math.abs(e.clientX - pressStartPos.current.x)
-    const dy = Math.abs(e.clientY - pressStartPos.current.y)
-    if (dx > 10 || dy > 10) {
-      if (pressTimer) {
-        clearTimeout(pressTimer)
-        setPressTimer(null)
-      }
-      setIsPressing(false)
+        {lead && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-zinc-800/70 bg-zinc-900/70 p-4">
+              <p className="text-sm font-medium text-zinc-100">{getLeadDisplayName(lead)}</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Etapa actual: {stages.find((stage) => stage.id === (lead.stage_id ?? UNASSIGNED_STAGE_ID))?.name ?? "Sin etapa"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {stages.map((stage) => {
+                const isCurrent = stage.id === (currentStageId ?? UNASSIGNED_STAGE_ID)
+                const isMoving = movingLeadId === lead.id
+
+                return (
+                  <button
+                    key={stage.id}
+                    type="button"
+                    disabled={isCurrent || isMoving}
+                    onClick={() => void onMove(lead.id, stage.id === UNASSIGNED_STAGE_ID ? null : stage.id)}
+                    className={`rounded-2xl border p-3 text-left transition-all ${
+                      isCurrent
+                        ? "border-flugzz-accent/40 bg-flugzz-accent/10"
+                        : "border-zinc-800 bg-zinc-900/70 hover:border-zinc-700 hover:bg-zinc-900"
+                    } ${isMoving ? "opacity-70" : ""}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                        <span className="truncate text-sm font-medium text-zinc-100">{stage.name}</span>
+                      </div>
+                      <span className="rounded-full bg-zinc-950/80 px-2 py-0.5 text-[10px] text-zinc-500">
+                        {stage.leads.length}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      {isCurrent ? "Etapa actual" : "Mover con un toque"}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800/70 bg-zinc-900/40 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Ver detalle completo</p>
+                <p className="text-xs text-zinc-500">Abre el lead para editar, registrar actividad o subir expediente.</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="shrink-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                onClick={() => onViewLead(lead.id)}
+              >
+                Ir
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function LeadCard({
+  lead,
+  index,
+  draggable,
+  onOpenLead,
+  onOpenMove,
+}: {
+  lead: Lead
+  index: number
+  draggable: boolean
+  onOpenLead: (leadId: string) => void
+  onOpenMove: (lead: Lead) => void
+}) {
+  const timerRef = useRef<number | null>(null)
+  const longPressTriggeredRef = useRef(false)
+  const budgetLabel = getBudgetLabel(lead)
+  const displayName = getLeadDisplayName(lead)
+  const isFacebookLead =
+    Boolean(lead.metadata?.facebook_lead_id) ||
+    Boolean(lead.source?.name?.toLowerCase().includes("facebook"))
+
+  function clearLongPress() {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
     }
   }
 
-  function handlePressEnd() {
-    if (pressTimer) {
-      clearTimeout(pressTimer)
-      setPressTimer(null)
-    }
-    setIsPressing(false)
+  function startLongPress() {
+    clearLongPress()
+    longPressTriggeredRef.current = false
+    timerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true
+      onOpenMove(lead)
+    }, LONG_PRESS_MS)
   }
 
-  function handleClick(e: React.MouseEvent) {
-    if (wasLongPress.current) {
-      e.preventDefault()
-      e.stopPropagation()
-      wasLongPress.current = false
+  function cancelLongPress() {
+    clearLongPress()
+  }
+
+  function handleOpenLead() {
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false
       return
     }
-    router.push(`/leads/${lead.id}`)
+
+    onOpenLead(lead.id)
   }
 
-  async function handleCall(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!lead.contact.phone) return
-    window.location.href = `tel:${lead.contact.phone}`
-    const now = new Date().toISOString()
-    await supabase.from("activities").insert({
-      company_id: companyId,
-      user_id: profileId,
-      lead_id: lead.id,
-      contact_id: lead.contact.id,
-      type: "call",
-      title: "Llamada saliente",
-      body: `Llamada iniciada a ${lead.contact.phone}`,
-      call_status: "answered",
-      created_at: now,
-    })
-    await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
-    onLeadUpdate(lead.id, { last_activity_at: now })
-  }
+  const content = (
+    <div
+      className={`rounded-2xl border p-4 shadow-sm transition-all ${
+        lead.stale
+          ? "border-amber-500/20 bg-zinc-900 hover:border-amber-500/40"
+          : "border-zinc-800/60 bg-zinc-900 hover:border-zinc-700"
+      }`}
+      onClick={handleOpenLead}
+      onPointerDown={startLongPress}
+      onPointerUp={cancelLongPress}
+      onPointerLeave={cancelLongPress}
+      onPointerCancel={cancelLongPress}
+      onPointerMove={cancelLongPress}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-zinc-100">{displayName}</p>
+          {lead.title && <p className="mt-1 truncate text-xs text-zinc-500">{lead.title}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isFacebookLead && (
+            <span className="rounded-md border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-300">
+              fb
+            </span>
+          )}
+          {lead.stale && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+        </div>
+      </div>
 
-  async function handleWhatsApp(e: React.MouseEvent) {
-    e.stopPropagation()
-    const phone = lead.contact.phone?.replace(/\D/g, "")
-    if (!phone) return
-    window.open(`https://wa.me/${phone}`, "_blank")
-    const now = new Date().toISOString()
-    await supabase.from("activities").insert({
-      company_id: companyId,
-      user_id: profileId,
-      lead_id: lead.id,
-      contact_id: lead.contact.id,
-      type: "whatsapp",
-      title: "Mensaje de WhatsApp",
-      body: `Conversación iniciada con ${lead.contact.full_name}`,
-      created_at: now,
-    })
-    await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
-    onLeadUpdate(lead.id, { last_activity_at: now })
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className={`rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wider ${PRIORITY_STYLES[lead.priority]}`}>
+          {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
+        </span>
+        {budgetLabel && (
+          <span className="text-[11px] font-medium text-zinc-400">{budgetLabel}</span>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-zinc-800/60 pt-3">
+        <div className="flex items-center gap-1.5">
+          {lead.contact?.phone && (
+            <a
+              href={`tel:${lead.contact.phone}`}
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-flugzz-accent"
+            >
+              <Phone className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {lead.contact?.phone && (
+            <a
+              href={`https://wa.me/${lead.contact.phone.replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-emerald-400"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenMove(lead)
+            }}
+            className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <MoveRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+          <Clock3 className="h-3 w-3" />
+          {lead.activity_label}
+        </div>
+      </div>
+    </div>
+  )
+
+  if (!draggable) {
+    return content
   }
 
   return (
@@ -145,710 +424,476 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          onClick={handleClick}
-          onPointerDown={handlePressStart}
-          onPointerMove={handlePressMove}
-          onPointerUp={handlePressEnd}
-          onPointerLeave={handlePressEnd}
-          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer select-none transition-all duration-500 ${
-            isPressing
-              ? "scale-[0.98] opacity-80 border-zinc-700"
-              : isMoved
-                ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.3)] bg-flugzz-accent/5"
-                : snapshot.isDragging
-                  ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
-                  : "border-zinc-800/55 hover:border-zinc-700/75"
+          style={provided.draggableProps.style}
+          className={`cursor-grab active:cursor-grabbing ${
+            snapshot.isDragging ? "scale-[1.02] rotate-[0.6deg]" : ""
           }`}
-          style={{ touchAction: 'none' }}
         >
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-zinc-200 truncate leading-snug">
-                {lead.contact.full_name}
-              </p>
-              {lead.title && (
-                <p className="text-xs text-zinc-500 truncate mt-0.5">{lead.title}</p>
-              )}
-            </div>
-            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
-              {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 mt-2 shrink-0">
-            <div className="flex items-center gap-1.5 shrink-0">
-              {isFb && (
-                <div className="w-4 h-4 rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-[8px] font-bold text-blue-400">f</span>
-                </div>
-              )}
-              {lead.budget_max && (
-                <span className="text-[11px] text-zinc-500 font-mono shrink-0">
-                  ${lead.budget_max.toLocaleString()}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {stale && <AlertCircle className="w-3.5 h-3.5 text-amber-500/70 shrink-0" />}
-              <div className="flex items-center gap-1 text-zinc-600 text-[11px] shrink-0">
-                <Clock className="w-3 h-3 shrink-0" />
-                {timeAgo(lead.last_activity_at)}
-              </div>
-              {lead.contact.phone && (
-                <button
-                  type="button"
-                  title={`Llamar a ${lead.contact.phone}`}
-                  onClick={handleCall}
-                  className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-flugzz-accent hover:bg-zinc-800 transition-colors shrink-0"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                </button>
-              )}
-              <button
-                type="button"
-                title="WhatsApp"
-                onClick={handleWhatsApp}
-                className="p-1.5 rounded-lg bg-zinc-800/75 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-colors shrink-0"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          {content}
         </div>
-)}
+      )}
     </Draggable>
   )
-})
+}
 
-// ── Scope filter dropdown ───────────────────────────────────────
-function ScopeDropdown({ label, options, selectedId, onSelect, storageKey }: {
-  label: string
-  options: { id: string; name: string; isSelf?: boolean }[]
-  selectedId: string | null
-  onSelect: (id: string | null) => void
-  storageKey?: string
+function StageColumnDesktop({
+  stage,
+  onCreateLead,
+  onOpenLead,
+  onOpenMove,
+}: {
+  stage: StageColumn
+  onCreateLead: () => void
+  onOpenLead: (leadId: string) => void
+  onOpenMove: (lead: Lead) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const current = options.find(o => o.id === selectedId)
-  
-  // Persist filter selection in sessionStorage for iOS
-  useEffect(() => {
-    if (storageKey && typeof window !== 'undefined') {
-      if (selectedId !== null) {
-        sessionStorage.setItem(storageKey, selectedId)
-      } else {
-        sessionStorage.removeItem(storageKey)
-      }
-    }
-  }, [selectedId, storageKey])
-  
-  if (options.length === 0) return null
   return (
-    <div className="relative">
-      <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors min-h-[44px]"
-        style={{ touchAction: 'manipulation' }}>
-        <span className="text-zinc-400 text-xs">{label}:</span>
-        <span className="text-zinc-200 font-medium">{current?.name ?? "Todos"}</span>
-        <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
-      </button>
-      {open && (
-        <>
-          <div 
-            className="fixed inset-0 z-30" 
-            onClick={() => setOpen(false)}
-            style={{ willChange: 'opacity', WebkitTapHighlightColor: 'transparent' }}
-          />
-          <div 
-            className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[200px] max-h-[70vh] overflow-y-auto"
-            style={{ willChange: 'transform' }}
+    <div className="flex w-80 shrink-0 flex-col gap-3">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+          <span className="truncate text-xs font-medium uppercase tracking-[0.24em] text-zinc-400">
+            {stage.name}
+          </span>
+          <span className="rounded-full bg-zinc-900/70 px-2 py-0.5 text-[10px] text-zinc-500">
+            {stage.leads.length}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="rounded-lg p-1 text-zinc-600 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
+          onClick={onCreateLead}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      <Droppable droppableId={stage.id}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`min-h-[160px] flex-1 space-y-2.5 rounded-3xl border p-2.5 transition-colors ${
+              snapshot.isDraggingOver
+                ? "border-flugzz-accent/30 bg-zinc-800/40"
+                : "border-zinc-800/40 bg-zinc-900/20"
+            }`}
           >
-            <button onClick={() => { onSelect(null); setOpen(false) }}
-              className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${!selectedId ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
-              Todos
-              {!selectedId && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
-            </button>
-            {options.map(o => (
-              <button key={o.id} onClick={() => { onSelect(o.id); setOpen(false) }}
-                className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${selectedId === o.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}
-                style={{ touchAction: 'manipulation' }}>
-                {o.isSelf ? (
-                  <div className="w-7 h-7 rounded-full bg-flugzz-accent/20 flex items-center justify-center text-[10px] font-bold text-flugzz-accent shrink-0">
-                    Yo
-                  </div>
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shrink-0">
-                    {o.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()}
-                  </div>
-                )}
-                <span className="truncate">{o.name}</span>
-                {selectedId === o.id && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
-              </button>
+            {stage.leads.map((lead, index) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                index={index}
+                draggable
+                onOpenLead={onOpenLead}
+                onOpenMove={onOpenMove}
+              />
             ))}
+            {provided.placeholder}
+            {stage.leads.length === 0 && !snapshot.isDraggingOver && (
+              <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-zinc-800 text-xs text-zinc-700">
+                Arrastra aqui
+              </div>
+            )}
           </div>
-        </>
-      )}
+        )}
+      </Droppable>
     </div>
   )
 }
 
-// ── Main page ───────────────────────────────────────────────────
+function MobileStagePanel({
+  stage,
+  onCreateLead,
+  onOpenLead,
+  onOpenMove,
+  stageRef,
+}: {
+  stage: StageColumn
+  onCreateLead: () => void
+  onOpenLead: (leadId: string) => void
+  onOpenMove: (lead: Lead) => void
+  stageRef: (node: HTMLDivElement | null) => void
+}) {
+  return (
+    <section
+      ref={stageRef}
+      className="snap-center shrink-0 w-[calc(100vw-2rem)] rounded-[28px] border border-zinc-800/60 bg-zinc-950/60 p-4 backdrop-blur-xl"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+            <h2 className="truncate text-base font-semibold text-zinc-100">{stage.name}</h2>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            {stage.leads.length} lead{stage.leads.length === 1 ? "" : "s"} en esta etapa
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="rounded-xl border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 transition-colors hover:text-zinc-100"
+          onClick={onCreateLead}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-zinc-800/60 bg-zinc-900/50 px-3 py-2 text-[11px] text-zinc-500">
+        Desliza entre etapas. Mantén presionado un lead para moverlo rápido.
+      </div>
+
+      <div className="mt-4 max-h-[calc(100vh-18.5rem)] overflow-y-auto pr-1">
+        {stage.leads.length === 0 ? (
+          <div className="flex min-h-[220px] items-center justify-center rounded-3xl border border-dashed border-zinc-800/80 bg-zinc-900/20 px-6 text-center text-sm text-zinc-600">
+            Esta etapa está limpia por ahora.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {stage.leads.map((lead, index) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                index={index}
+                draggable={false}
+                onOpenLead={onOpenLead}
+                onOpenMove={onOpenMove}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export default function PipelinePage() {
-  const [stages, setStages] = useState<Stage[]>([])
-  const [allLeads, setAllLeads] = useState<Lead[]>([])
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
-  const [sources, setSources] = useState<Source[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isMounted, setIsMounted] = useState(false)
-  const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
-  const [filterSource, setFilterSource] = useState<string | null>(null)
-  const [filterPriority, setFilterPriority] = useState<string | null>(null)
-  const [filterTag, setFilterTag] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [allTags, setAllTags] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
-  const [selectedLead, setSelectedLead] = useState<{
-    id: string;
-    name: string;
-    sourceStageId: string | null;
-  } | null>(null)
-  const [movedLeadId, setMovedLeadId] = useState<string | null>(null)
   const supabase = createClient()
   const router = useRouter()
-  const { profile, role } = useAuth()
+  const { profile } = useAuth()
 
-  const scope = computeScope(profile?.id ?? null, role ?? null, teamMembers)
-  const isLeader = scope.isLeader || scope.isTransversal
+  const [stages, setStages] = useState<Stage[]>([])
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [movingLeadId, setMovingLeadId] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [activeMobileStageId, setActiveMobileStageId] = useState<string>("")
+
+  const mobileRailRef = useRef<HTMLDivElement | null>(null)
+  const mobileStageRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const mobileScrollTimeoutRef = useRef<number | null>(null)
+
+  const loadPipeline = useCallback(async (companyId: string) => {
+    setLoading(true)
+    setError(null)
+
+    const [{ data: stagesData, error: stageError }, { data: leadsData, error: leadError }] = await Promise.all([
+      supabase
+        .from("pipeline_stages")
+        .select("id, name, color, position, is_closed")
+        .eq("company_id", companyId)
+        .order("position"),
+      supabase
+        .from("leads")
+        .select(`
+          id,
+          title,
+          priority,
+          budget_max,
+          currency,
+          last_activity_at,
+          stage_id,
+          metadata,
+          contact:contacts(full_name, phone),
+          source:lead_sources(name, icon, color)
+        `)
+        .eq("company_id", companyId)
+        .order("last_activity_at", { ascending: false })
+        .limit(200),
+    ])
+
+    if (stageError || leadError) {
+      setError(stageError?.message || leadError?.message || "No pudimos cargar el pipeline.")
+      setLoading(false)
+      return
+    }
+
+    setStages((stagesData as Stage[] | null) ?? [])
+    setLeads(((leadsData as FetchedLead[] | null) ?? []).map(normalizeLead).map(decorateLead))
+    setLoading(false)
+  }, [supabase])
+
+  const stageColumns = useMemo(() => {
+    const activeStages = stages.filter((stage) => !stage.is_closed)
+    const columns: StageColumn[] = activeStages.map((stage) => ({
+      id: stage.id,
+      name: stage.name,
+      color: stage.color,
+      leads: leads.filter((lead) => lead.stage_id === stage.id),
+    }))
+
+    const unassignedLeads = leads.filter((lead) => !lead.stage_id)
+    if (unassignedLeads.length > 0) {
+      columns.push({
+        id: UNASSIGNED_STAGE_ID,
+        name: "Sin etapa",
+        color: "#71717a",
+        leads: unassignedLeads,
+      })
+    }
+
+    return columns
+  }, [leads, stages])
 
   useEffect(() => {
-    setIsMounted(true)
-    // Restore filter from sessionStorage (iOS fix)
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('pipeline-filter')
-      if (saved) setFilterMemberId(saved)
-    }
-    if (profile?.company_id && profile?.id) {
-      void loadAll(profile.company_id, profile.id)
-    }
-  }, [profile?.company_id, profile?.id])
+    if (profile?.company_id) {
+      const companyId = profile.company_id
+      const timeoutId = window.setTimeout(() => {
+        void loadPipeline(companyId)
+      }, 0)
 
-  async function loadAll(companyId: string, userId: string) {
-    setLoading(true)
-    // Load stages + all leads + team for hierarchy
-    const [{ data: s }, { data: l }, { data: memberships }, { data: sourceRows }] = await Promise.all([
-      supabase.from("pipeline_stages").select("*").eq("company_id", companyId).order("position"),
-      supabase.from("leads").select(`
-        id,title,project,priority,budget_max,currency,last_activity_at,stage_id,metadata,owner_id,source_id,lead_tags,
-        contact:contacts(id,full_name,phone),
-        source:lead_sources(id,name,icon,color)
-      `).eq("company_id", companyId).order("last_activity_at", { ascending: false }).limit(500),
-      supabase.from("team_memberships").select("user_id, reports_to").eq("company_id", companyId),
-      supabase.from("lead_sources").select("id, name, icon, color").eq("company_id", companyId).order("name"),
-    ])
-    setStages(s ?? [])
-    setAllLeads((l as Lead[] | null) ?? [])
-    setSources((sourceRows as Source[] | null) ?? [])
-
-    // Collect all unique tags from leads
-    const tagsSet = new Set<string>()
-    ;(l as Lead[] | null)?.forEach(lead => {
-      if (lead.lead_tags) {
-        lead.lead_tags.forEach(tag => tagsSet.add(tag))
-      }
-    })
-    setAllTags(Array.from(tagsSet).sort())
-
-    // Build hierarchy tree
-    if ((isLeader || scope.canViewTeam) && memberships) {
-      const reportsByLeader = new Map<string, string[]>()
-      memberships.forEach((m: any) => {
-        if (!m.reports_to) return
-        reportsByLeader.set(m.reports_to, [...(reportsByLeader.get(m.reports_to) ?? []), m.user_id])
-      })
-      // Recursive descendants
-      function getDescendants(id: string): string[] {
-        const q = [...(reportsByLeader.get(id) ?? [])]
-        const res: string[] = []
-        while (q.length) {
-          const cur = q.shift()!
-          if (res.includes(cur)) continue
-          res.push(cur)
-          q.push(...(reportsByLeader.get(cur) ?? []))
-        }
-        return res
-      }
-      const descendants = getDescendants(userId)
-      // Load profiles of direct reports for filter dropdown
-      if (descendants.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name, role_id, role:roles(level)")
-          .in("id", descendants)
-        const members: TeamMember[] = (profiles ?? []).map((p: any) => ({
-          id: p.id,
-          full_name: p.full_name,
-          role_level: p.role?.level ?? 99,
-        }))
-        setTeamMembers(members)
-      }
+      return () => window.clearTimeout(timeoutId)
     }
-    setLoading(false)
+  }, [loadPipeline, profile?.company_id])
+
+  function createLead() {
+    router.push("/contactos?new=1")
   }
 
-  // Compute scope user ids based on permissions + hierarchy + filter
-  const scopeIds = useMemo(() => {
-    if (!profile?.id) return []
-    
-    // Agente (nivel 4+): solo sus propios leads
-    if (!isLeader) return [profile.id]
-    
-    // PRIMERO: si hay filtro activo por usuario, respetarlo SIEMPRE
-    if (filterMemberId) {
-      return [filterMemberId]
-    }
-    
-    // Transversal: ve todos los miembros de la empresa
-    if (scope.isTransversal) {
-      return [profile.id, ...teamMembers.map(m => m.id)]
-    }
-    
-    // Líder con jerarquía: ve sus propios leads + equipo
-    return [profile.id, ...teamMembers.map(m => m.id)]
-  }, [profile?.id, isLeader, scope.isTransversal, teamMembers, filterMemberId])
+  function openLead(leadId: string) {
+    router.push(`/leads/${leadId}`)
+  }
 
-  const visibleLeads = useMemo(() => {
-    return allLeads.filter(l => {
-      if (!l.owner_id || !scopeIds.includes(l.owner_id)) return false
-      if (filterSource && l.source_id !== filterSource) return false
-      if (filterPriority && l.priority !== filterPriority) return false
-      if (filterTag && (!l.lead_tags || !l.lead_tags.includes(filterTag))) return false
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        return (
-          l.contact?.full_name?.toLowerCase().includes(q) ||
-          l.title?.toLowerCase().includes(q) ||
-          l.project?.toLowerCase().includes(q) ||
-          l.contact?.phone?.includes(q)
-        )
+  function syncActiveMobileStage() {
+    const rail = mobileRailRef.current
+    if (!rail) return
+
+    const railCenter = rail.getBoundingClientRect().left + rail.clientWidth / 2
+    let closestStageId = resolvedActiveMobileStageId
+    let closestDistance = Number.POSITIVE_INFINITY
+
+    for (const stage of stageColumns) {
+      const node = mobileStageRefs.current[stage.id]
+      if (!node) continue
+
+      const rect = node.getBoundingClientRect()
+      const cardCenter = rect.left + rect.width / 2
+      const distance = Math.abs(cardCenter - railCenter)
+
+      if (distance < closestDistance) {
+        closestDistance = distance
+        closestStageId = stage.id
       }
-      return true
-    })
-  }, [allLeads, scopeIds, filterSource, filterPriority, filterTag, searchQuery])
+    }
 
-  const onDragEnd = async (result: DropResult) => {
-    if (!result.destination) return
-    const { draggableId, destination } = result
-    const newStageId = destination.droppableId === "__unassigned__" ? null : destination.droppableId
-    
-    const lead = allLeads.find(l => l.id === draggableId)
-    
-    setAllLeads(prev => prev.map(l => l.id === draggableId ? { ...l, stage_id: newStageId } : l))
-    
-    await (supabase as any).from("leads")
-      .update({ stage_id: newStageId, last_activity_at: new Date().toISOString() })
-      .eq("id", draggableId)
-    
-    if (lead?.stage_id || newStageId) {
-      await (supabase as any).from("activities").insert({
-        company_id: profile?.company_id,
-        lead_id: draggableId,
-        contact_id: lead?.contact?.id,
-        user_id: profile?.id,
-        type: "stage_change",
-        title: "Etapa cambiada",
-        from_stage_id: lead?.stage_id,
-        to_stage_id: newStageId,
-        completed_at: new Date().toISOString(),
-      })
+    if (closestStageId && closestStageId !== resolvedActiveMobileStageId) {
+      setActiveMobileStageId(closestStageId)
     }
   }
 
-  async function moveLeadToStage(leadId: string, newStageId: string) {
-    const lead = allLeads.find(l => l.id === leadId)
-    if (!lead) return
-    
-    const finalStageId = newStageId === "" ? null : newStageId
-    
-    setAllLeads(prev => prev.map(l => 
-      l.id === leadId ? { ...l, stage_id: finalStageId } : l
-    ))
-    
-    await (supabase as any).from("leads")
-      .update({ stage_id: finalStageId, last_activity_at: new Date().toISOString() })
+  function scrollToStage(stageId: string) {
+    setActiveMobileStageId(stageId)
+    mobileStageRefs.current[stageId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    })
+  }
+
+  function handleMobileRailScroll() {
+    if (mobileScrollTimeoutRef.current) {
+      window.clearTimeout(mobileScrollTimeoutRef.current)
+    }
+
+    mobileScrollTimeoutRef.current = window.setTimeout(() => {
+      syncActiveMobileStage()
+    }, 80)
+  }
+
+  async function moveLeadToStage(leadId: string, nextStageId: string | null) {
+    const previousLeads = leads
+    const now = new Date().toISOString()
+
+    setMovingLeadId(leadId)
+    setError(null)
+    setLeads((current) =>
+      current.map((lead) =>
+        lead.id === leadId
+          ? decorateLead({
+              ...lead,
+              stage_id: nextStageId,
+              last_activity_at: now,
+            })
+          : lead,
+      ),
+    )
+
+    const { error: updateError } = await supabase
+      .from("leads")
+      .update({ stage_id: nextStageId, last_activity_at: now })
       .eq("id", leadId)
-    
-    if (lead?.stage_id || finalStageId) {
-      await (supabase as any).from("activities").insert({
-        company_id: profile?.company_id,
-        lead_id: leadId,
-        contact_id: lead?.contact?.id,
-        user_id: profile?.id,
-        type: "stage_change",
-        title: "Etapa cambiada",
-        from_stage_id: lead?.stage_id,
-        to_stage_id: finalStageId,
-        completed_at: new Date().toISOString(),
-      })
+
+    if (updateError) {
+      setLeads(previousLeads)
+      setError(updateError.message)
+    } else {
+      setSelectedLead(null)
     }
-    
-    setMovedLeadId(leadId)
-    setTimeout(() => setMovedLeadId(null), 1500)
-    
-    setSelectedLead(null)
+
+    setMovingLeadId(null)
   }
 
-  if (!isMounted) return null
-  const activeStages = stages.filter(s => !s.is_closed)
-  const unassignedLeads = visibleLeads.filter(l => !l.stage_id)
+  async function onDragEnd(result: DropResult) {
+    if (!result.destination) return
 
-  // Filter options for dropdown - incluir "Yo" + todos los miembros del equipo
-  const filterOptions = [
-    { id: profile?.id ?? "", name: "Yo", isSelf: true },
-    ...teamMembers.map(m => ({ id: m.id, name: m.full_name, isSelf: false })),
-  ]
+    const nextStageId = result.destination.droppableId === UNASSIGNED_STAGE_ID
+      ? null
+      : result.destination.droppableId
 
-  const filterLabel = role?.level === 1 ? "Gerente/Coordinador"
-    : role?.level === 2 ? "Coordinador"
-    : "Agente"
+    await moveLeadToStage(result.draggableId, nextStageId)
+  }
+
+  function setStageRef(stageId: string) {
+    return (node: HTMLDivElement | null) => {
+      mobileStageRefs.current[stageId] = node
+    }
+  }
+
+  const totalStaleLeads = leads.filter((lead) => lead.stale).length
+  const totalWithPhone = leads.filter((lead) => Boolean(lead.contact?.phone)).length
+  const resolvedActiveMobileStageId =
+    stageColumns.some((stage) => stage.id === activeMobileStageId)
+      ? activeMobileStageId
+      : (stageColumns[0]?.id ?? "")
 
   return (
-    <div className="flex flex-col h-full space-y-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap shrink-0">
+    <div className="flex h-full flex-col gap-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
             Pipeline<span className="text-flugzz-accent">.</span>
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            {loading ? "Cargando..." : `${visibleLeads.length} leads en vista`}
+          <p className="mt-1 text-sm text-zinc-400">
+            {loading ? "Cargando..." : `${leads.length} leads activos y ${stageColumns.length} etapas visibles`}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1 rounded-xl border border-zinc-800/60 bg-zinc-900/60 p-1">
-            <button
-              onClick={() => setViewMode("kanban")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                viewMode === "kanban" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" /> Kanban
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
-                viewMode === "list" ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              <List className="w-4 h-4" /> Lista
-            </button>
-          </div>
-          {filterOptions.length > 1 && (
-            <ScopeDropdown
-              label={filterLabel}
-              options={filterOptions}
-              selectedId={filterMemberId}
-              onSelect={setFilterMemberId}
-              storageKey="pipeline-filter"
-            />
-          )}
-          <Button className="bg-zinc-100 text-zinc-900 hover:bg-zinc-200" onClick={() => router.push("/contactos?new=1")}>
-            <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
+
+        <div className="flex items-center gap-2">
+          <Button
+            className="flex-1 bg-zinc-100 text-zinc-900 hover:bg-zinc-200 md:flex-none"
+            onClick={createLead}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Lead
           </Button>
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap shrink-0">
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar..."
-            className="w-full bg-zinc-900/60 border border-zinc-800/60 rounded-xl pl-9 pr-3 py-1.5 text-sm text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-zinc-700 transition-colors"
-          />
-        </div>
-        {sources.length > 0 && (
-          <select
-            value={filterSource ?? ""}
-            onChange={e => setFilterSource(e.target.value || null)}
-            className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
-          >
-            <option value="">Todas las fuentes</option>
-            {sources.map(s => (
-              <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
-            ))}
-          </select>
-        )}
-        <select
-          value={filterPriority ?? ""}
-          onChange={e => setFilterPriority(e.target.value || null)}
-          className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
-        >
-          <option value="">Todas las prioridades</option>
-          <option value="high">🔴 Alta</option>
-          <option value="medium">🟡 Media</option>
-          <option value="low">🟢 Baja</option>
-        </select>
-        {allTags.length > 0 && (
-          <select
-            value={filterTag ?? ""}
-            onChange={e => setFilterTag(e.target.value || null)}
-            className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl px-3 py-1.5 text-sm text-zinc-400 outline-none focus:border-zinc-700 cursor-pointer"
-          >
-            <option value="">Todas las etiquetas</option>
-            {allTags.map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
-        )}
-        {(filterSource || filterPriority || filterTag || searchQuery) && (
-          <button
-            onClick={() => { setFilterSource(null); setFilterPriority(null); setFilterTag(null); setSearchQuery("") }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800/60 hover:border-zinc-700 transition-colors"
-          >
-            <X className="w-3 h-3" /> Limpiar
-          </button>
-        )}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: "Leads activos", value: leads.length.toString() },
+          { label: "Sin seguimiento", value: totalStaleLeads.toString() },
+          { label: "Con telefono", value: totalWithPhone.toString() },
+          { label: "Etapas visibles", value: stageColumns.length.toString() },
+        ].map((item) => (
+          <div key={item.label} className="rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{item.label}</p>
+            <p className="mt-2 text-2xl font-semibold text-zinc-100">{item.value}</p>
+          </div>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center flex-1">
-          <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
+      {error && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
         </div>
-      ) : viewMode === "kanban" ? (
-        <>
-        <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide kanban-board snap-x snap-mandatory min-h-0">
-            <DragDropContext onDragEnd={onDragEnd}>
-              <div className="kanban-container flex gap-3 h-full items-start px-4">
-                {activeStages.map((stage, index) => {
-                  const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
-                  return (
-                    <div 
-                      key={stage.id} 
-                      data-stage-index={index}
-                      className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start"
-                    >
-                      <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-500 ${
-                        movedLeadId && stageLeads.some(l => l.id === movedLeadId)
-                          ? 'bg-flugzz-accent/10 border-flugzz-accent/40'
-                          : 'bg-zinc-900/95 border-zinc-800/50'
-                      }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
-                          <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">{stage.name}</span>
-                          <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{stageLeads.length}</span>
-                        </div>
-                        <button className="text-zinc-500 hover:text-zinc-200 p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors" onClick={() => router.push("/contactos?new=1")}><Plus className="w-4 h-4" /></button>
-                      </div>
-                      <Droppable droppableId={stage.id}>
-                        {(provided, snapshot) => (
-                          <div {...provided.droppableProps} ref={provided.innerRef}
-                            className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto relative ${
-                              snapshot.isDraggingOver ? "bg-zinc-800/30 border-flugzz-accent/20" : "bg-zinc-900/30 border-zinc-800/40"
-                            }`}>
-                            {stageLeads.map((lead, i) => (
-                              <LeadCard key={lead.id} lead={lead} index={i}
-                                stages={stages} supabase={supabase}
-                                profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
-                                onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
-                                onMove={(id, name, stageId) => setSelectedLead({ id, name, sourceStageId: stageId })}
-                                isMoved={movedLeadId === lead.id}
-                              />
-                            ))}
-                            {provided.placeholder}
-                            {stageLeads.length === 0 && !snapshot.isDraggingOver && (
-                              <div className="flex-1 flex items-center justify-center py-12">
-                                <p className="text-xs text-zinc-600">Arrastra aquí</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </Droppable>
-                    </div>
-                  )
-                })}
+      )}
 
-                {unassignedLeads.length > 0 && (
-                  <div className="kanban-column min-w-[90vw] max-w-[400px] md:min-w-0 md:max-w-none md:w-72 flex-shrink-0 snap-start">
-                    <div className={`kanban-header flex items-center justify-between px-3 py-2.5 rounded-xl border shrink-0 transition-all duration-500 ${
-                      movedLeadId && unassignedLeads.some(l => l.id === movedLeadId)
-                        ? 'bg-zinc-500/10 border-zinc-500/40'
-                        : 'bg-zinc-900/95 border-zinc-800/50'
-                    }`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-zinc-500" />
-                        <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider truncate">Sin etapa</span>
-                        <span className="text-xs text-zinc-500 bg-zinc-800/80 px-1.5 py-0.5 rounded-full shrink-0">{unassignedLeads.length}</span>
-                      </div>
-                    </div>
-                    <Droppable droppableId="__unassigned__">
-                      {(provided, snapshot) => (
-                        <div {...provided.droppableProps} ref={provided.innerRef}
-                          className={`kanban-cards flex flex-col gap-2 p-2 rounded-xl border overflow-y-auto relative ${
-                            snapshot.isDraggingOver ? "bg-zinc-800/30 border-flugzz-accent/20" : "bg-zinc-900/30 border-zinc-800/40"
-                          }`}>
-                          {unassignedLeads.map((lead, i) => (
-                            <LeadCard key={lead.id} lead={lead} index={i}
-                              stages={stages} supabase={supabase}
-                              profileId={profile?.id ?? ""} companyId={profile?.company_id ?? ""}
-                              onLeadUpdate={(id, patch) => setAllLeads(prev => prev.map(l => l.id === id ? { ...l, ...patch } as Lead : l))}
-                              onMove={(id, name, stageId) => setSelectedLead({ id, name, sourceStageId: stageId })}
-                              isMoved={movedLeadId === lead.id}
-                            />
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </div>
-                )}
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-flugzz-accent" />
+        </div>
+      ) : (
+        <>
+          <div className="md:hidden">
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {stageColumns.map((stage) => {
+                    const isActive = stage.id === resolvedActiveMobileStageId
+                return (
+                  <button
+                    key={stage.id}
+                    type="button"
+                    onClick={() => scrollToStage(stage.id)}
+                    className={`shrink-0 rounded-full border px-3 py-2 text-sm transition-all ${
+                      isActive
+                        ? "border-flugzz-accent/30 bg-flugzz-accent/10 text-zinc-100"
+                        : "border-zinc-800 bg-zinc-900/50 text-zinc-400"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                      {stage.name}
+                      <span className="rounded-full bg-zinc-950/70 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                        {stage.leads.length}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div
+              ref={mobileRailRef}
+              className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
+              onScroll={handleMobileRailScroll}
+            >
+              {stageColumns.map((stage) => (
+                <MobileStagePanel
+                  key={stage.id}
+                  stage={stage}
+                  onCreateLead={createLead}
+                  onOpenLead={openLead}
+                  onOpenMove={setSelectedLead}
+                  stageRef={setStageRef(stage.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden min-h-0 flex-1 overflow-x-auto pb-4 md:block">
+            <DragDropContext onDragEnd={(result) => void onDragEnd(result)}>
+              <div
+                className="flex h-full items-start gap-5"
+                style={{ minWidth: `${Math.max(stageColumns.length, 1) * 320}px` }}
+              >
+                {stageColumns.map((stage) => (
+                  <StageColumnDesktop
+                    key={stage.id}
+                    stage={stage}
+                    onCreateLead={createLead}
+                    onOpenLead={openLead}
+                    onOpenMove={setSelectedLead}
+                  />
+                ))}
               </div>
             </DragDropContext>
           </div>
-
-          {/* Stage Selector Modal - MOBILE ONLY */}
-          {selectedLead && (
-            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center" onClick={() => setSelectedLead(null)}>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-zinc-800">
-                  <div>
-                    <h3 className="text-lg font-semibold text-zinc-100">Mover lead</h3>
-                    <p className="text-sm text-zinc-400 mt-0.5">{selectedLead.name}</p>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedLead(null)}
-                    className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-500 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                <div className="p-5 grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
-                  {activeStages.map(stage => {
-                    const stageLeads = visibleLeads.filter(l => l.stage_id === stage.id)
-                    const isSource = stage.id === selectedLead.sourceStageId
-                    return (
-                      <button
-                        key={stage.id}
-                        disabled={isSource}
-                        onClick={() => moveLeadToStage(selectedLead.id, stage.id)}
-                        className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border transition-all ${
-                          isSource 
-                            ? 'border-zinc-800/50 bg-zinc-950/30 opacity-30 cursor-not-allowed' 
-                            : 'border-zinc-800 bg-zinc-950/60 hover:border-flugzz-accent/50 hover:bg-zinc-800/50 active:scale-95'
-                        }`}
-                      >
-                        <div className="w-5 h-5 rounded-full" style={{ backgroundColor: stage.color, boxShadow: `0 0 0 2px #09090b, 0 0 0 4px ${stage.color}` }} />
-                        <span className="text-xs font-medium text-zinc-300 text-center truncate w-full">{stage.name}</span>
-                        <span className="text-[10px] text-zinc-500">{stageLeads.length} leads</span>
-                      </button>
-                    )
-                  })}
-                  {unassignedLeads.length > 0 && (
-                    <button
-                      disabled={selectedLead.sourceStageId === null}
-                      onClick={() => moveLeadToStage(selectedLead.id, "")}
-                      className={`flex flex-col items-center gap-2.5 p-4 rounded-xl border transition-all ${
-                        selectedLead.sourceStageId === null
-                          ? 'border-zinc-800/50 bg-zinc-950/30 opacity-30 cursor-not-allowed' 
-                          : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-600 hover:bg-zinc-800/50 active:scale-95'
-                      }`}
-                    >
-                      <div className="w-5 h-5 rounded-full bg-zinc-500" style={{ boxShadow: '0 0 0 2px #09090b, 0 0 0 4px #6b7280' }} />
-                      <span className="text-xs font-medium text-zinc-300 text-center truncate w-full">Sin etapa</span>
-                      <span className="text-[10px] text-zinc-500">{unassignedLeads.length} leads</span>
-                    </button>
-                  )}
-                </div>
-                
-                <div className="p-4 border-t border-zinc-800">
-                  <button 
-                    onClick={() => setSelectedLead(null)}
-                    className="w-full py-3 text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-950/50 rounded-xl hover:bg-zinc-800/50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
-      ) : null}
-
-      {/* Vista de lista (tabla) */}
-      {viewMode === "list" && (
-        <div className="flex-1 overflow-y-auto rounded-2xl border border-zinc-800/50 bg-zinc-900/40">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm mobile-table-cards">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-500 text-left hidden sm:table-row">
-                  <th className="px-4 py-3 font-medium">Contacto</th>
-                  <th className="px-4 py-3 font-medium">Título</th>
-                  <th className="px-4 py-3 font-medium">Etapa</th>
-                  <th className="px-4 py-3 font-medium">Prioridad</th>
-                  <th className="px-4 py-3 font-medium">Presupuesto</th>
-                  <th className="px-4 py-3 font-medium">Última actividad</th>
-                  <th className="px-4 py-3 font-medium">Fuente</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleLeads.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-zinc-500">
-                      No hay leads que mostrar
-                    </td>
-                  </tr>
-                ) : (
-                  visibleLeads.map(lead => {
-                    const leadStage = stages.find(s => s.id === lead.stage_id)
-                    return (
-                      <tr 
-                        key={lead.id} 
-                        onClick={() => router.push(`/leads/${lead.id}`)}
-                        className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer transition-colors"
-                      >
-                        <td className="px-4 py-3" data-label="Contacto">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300">
-                              {lead.contact?.full_name?.substring(0, 2).toUpperCase() ?? "??"}
-                            </div>
-                            <span className="text-zinc-200 font-medium">{lead.contact?.full_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-300" data-label="Título">{lead.title || lead.project || "-"}</td>
-                        <td className="px-4 py-3" data-label="Etapa">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: leadStage?.color ?? "#666" }} />
-                            <span className="text-zinc-400 text-xs">{leadStage?.name ?? "Sin etapa"}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3" data-label="Prioridad">
-                          <span className={`text-xs px-2 py-1 rounded-md border ${
-                            lead.priority === "high" ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                            lead.priority === "medium" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                            "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                          }`}>
-                            {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-300 font-mono text-xs" data-label="Presupuesto">
-                          {lead.budget_max ? `$${lead.budget_max.toLocaleString()}` : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-zinc-500 text-xs" data-label="Actividad">{timeAgo(lead.last_activity_at)}</td>
-                        <td className="px-4 py-3" data-label="Fuente">
-                          {lead.source && (
-                            <span className="text-xs text-zinc-400">{lead.source.name}</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
+
+      <LeadQuickMoveDialog
+        lead={selectedLead}
+        stages={stageColumns}
+        movingLeadId={movingLeadId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedLead(null)
+        }}
+        onMove={moveLeadToStage}
+        onViewLead={openLead}
+      />
     </div>
   )
 }

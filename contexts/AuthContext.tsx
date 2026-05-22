@@ -32,9 +32,9 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+const supabase = createClient()
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCompany((companyResult.data as Company | null) ?? null)
     setRole((roleResult.data as Role | null) ?? null)
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -105,16 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [loadFromSession, supabase.auth])
+  }, [loadFromSession])
 
   const can = useCallback((permission: string) => {
     if (!permission) return true
-    const val = role?.permissions?.[permission]
-    // Castear a unknown primero para manejar JSONB que llega como string de Supabase
-    const raw = val as unknown
-    if (raw === "true"  || raw === true)  return true
-    if (raw === "false" || raw === false) return false
-    return Boolean(raw)
+    return Boolean(role?.permissions?.[permission])
   }, [role])
 
   const value = useMemo<AuthContextValue>(() => ({

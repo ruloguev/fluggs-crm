@@ -382,11 +382,11 @@ function LeadCard({
       className={`shadow-sm transition-all ${
         draggable
           ? lead.stale
-            ? "rounded-xl border border-amber-500/20 bg-zinc-900 p-4 hover:border-amber-500/40"
-            : "rounded-xl border border-zinc-800/60 bg-zinc-900 p-4 hover:border-zinc-700"
+            ? "rounded-xl border border-amber-500/30 bg-zinc-800/90 p-4 hover:border-amber-500/50"
+            : "rounded-xl border border-zinc-700/50 bg-zinc-800/90 p-4 hover:border-zinc-600"
           : lead.stale
-            ? "rounded-2xl border border-amber-500/20 bg-zinc-900 p-4 hover:border-amber-500/40"
-            : "rounded-2xl border border-zinc-800/60 bg-zinc-900 p-4 hover:border-zinc-700"
+            ? "rounded-2xl border border-amber-500/30 bg-zinc-800/90 p-4 hover:border-amber-500/50"
+            : "rounded-2xl border border-zinc-700/50 bg-zinc-800/90 p-4 hover:border-zinc-600"
       }`}
       onClick={handleOpenLead}
       onPointerDown={draggable ? undefined : startLongPress}
@@ -404,8 +404,10 @@ function LeadCard({
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {isFacebookLead && (
-            <span className="rounded-md border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-300">
-              fb
+            <span className="flex h-5 w-5 items-center justify-center rounded-md border border-blue-500/20 bg-blue-500/10">
+              <svg viewBox="0 0 24 24" className="h-3 w-3" fill="#1877F2">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
             </span>
           )}
           {lead.stale && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
@@ -531,8 +533,8 @@ function StageColumnDesktop({
             {...provided.droppableProps}
             className={`min-h-[160px] flex-1 space-y-2.5 rounded-3xl border p-2.5 transition-colors ${
               snapshot.isDraggingOver
-                ? "border-flugzz-accent/30 bg-zinc-800/40"
-                : "border-zinc-800/40 bg-zinc-900/20"
+                ? "border-flugzz-accent/50 bg-zinc-700/30"
+                : "border-zinc-700/30 bg-zinc-800/15"
             }`}
           >
             {stage.leads.map((lead, index) => (
@@ -547,7 +549,7 @@ function StageColumnDesktop({
             ))}
             {provided.placeholder}
             {stage.leads.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-zinc-800 text-xs text-zinc-700">
+              <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-dashed border-zinc-600 text-xs text-zinc-500">
                 Arrastra aqui
               </div>
             )}

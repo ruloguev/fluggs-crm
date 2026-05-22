@@ -47,6 +47,55 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
   const router = useRouter()
   const stale = Date.now() - new Date(lead.last_activity_at).getTime() > 3*86400*1000
   const isFb = lead.metadata?.facebook_lead_id || lead.source?.name?.toLowerCase().includes("facebook")
+  const [pressTimer, setPressTimer] = React.useState<ReturnType<typeof setTimeout> | null>(null)
+  const [isPressing, setIsPressing] = React.useState(false)
+  const wasLongPress = React.useRef(false)
+  const pressStartPos = React.useRef({ x: 0, y: 0 })
+
+  function handlePressStart(e: React.PointerEvent) {
+    if (e.pointerType === 'mouse') return
+    wasLongPress.current = false
+    setIsPressing(true)
+    pressStartPos.current = { x: e.clientX, y: e.clientY }
+    const timer = setTimeout(() => {
+      wasLongPress.current = true
+      if (navigator.vibrate) navigator.vibrate(50)
+      onMove?.(lead.id, lead.contact.full_name, lead.stage_id)
+      setIsPressing(false)
+    }, 500)
+    setPressTimer(timer)
+  }
+
+  function handlePressMove(e: React.PointerEvent) {
+    if (!isPressing) return
+    const dx = Math.abs(e.clientX - pressStartPos.current.x)
+    const dy = Math.abs(e.clientY - pressStartPos.current.y)
+    if (dx > 10 || dy > 10) {
+      if (pressTimer) {
+        clearTimeout(pressTimer)
+        setPressTimer(null)
+      }
+      setIsPressing(false)
+    }
+  }
+
+  function handlePressEnd() {
+    if (pressTimer) {
+      clearTimeout(pressTimer)
+      setPressTimer(null)
+    }
+    setIsPressing(false)
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    if (wasLongPress.current) {
+      e.preventDefault()
+      e.stopPropagation()
+      wasLongPress.current = false
+      return
+    }
+    router.push(`/leads/${lead.id}`)
+  }
 
   async function handleCall(e: React.MouseEvent) {
     e.preventDefault()
@@ -96,14 +145,21 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          onClick={() => router.push(`/leads/${lead.id}`)}
-          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer transition-all duration-500 ${
-            isMoved
-              ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.3)] bg-flugzz-accent/5"
-              : snapshot.isDragging
-                ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
-                : "border-zinc-800/55 hover:border-zinc-700/75"
+          onClick={handleClick}
+          onPointerDown={handlePressStart}
+          onPointerMove={handlePressMove}
+          onPointerUp={handlePressEnd}
+          onPointerLeave={handlePressEnd}
+          className={`group bg-zinc-950/75 border rounded-xl p-3 cursor-pointer select-none transition-all duration-500 ${
+            isPressing
+              ? "scale-[0.98] opacity-80 border-zinc-700"
+              : isMoved
+                ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.3)] bg-flugzz-accent/5"
+                : snapshot.isDragging
+                  ? "border-flugzz-accent/60 shadow-[0_0_20px_rgba(34,211,238,0.15)]"
+                  : "border-zinc-800/55 hover:border-zinc-700/75"
           }`}
+          style={{ touchAction: 'none' }}
         >
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex-1 min-w-0">
@@ -114,25 +170,9 @@ const LeadCard = React.memo(function LeadCard({ lead, index, stages, supabase, p
                 <p className="text-xs text-zinc-500 truncate mt-0.5">{lead.title}</p>
               )}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {onMove && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onMove(lead.id, lead.contact.full_name, lead.stage_id)
-                  }}
-                  className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors md:hidden"
-                >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </button>
-              )}
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
-                {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
-              </span>
-            </div>
+            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-md border font-medium ${P_STYLES[lead.priority]}`}>
+              {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
+            </span>
           </div>
 
           <div className="flex items-center justify-between gap-2 mt-2 shrink-0">

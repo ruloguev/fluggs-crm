@@ -79,20 +79,20 @@ export async function POST(req: NextRequest) {
       titulo: a.title,
       detalle: a.body?.slice(0, 100),
       fecha: new Date(a.created_at).toLocaleDateString("es-MX"),
-      usuario: (a.user as any)?.[0]?.full_name ?? "Sistema",
+      usuario: (a.user as any)?.full_name ?? "Sistema",
     }))
 
     const stageHistory = (stageChanges ?? []).map(s => ({
-      de: (s.from_stage as any)?.[0]?.name ?? "Inicio",
-      a: (s.to_stage as any)?.[0]?.name,
+      de: (s.from_stage as any)?.name ?? "Inicio",
+      a: (s.to_stage as any)?.name,
       fecha: new Date(s.created_at).toLocaleDateString("es-MX"),
-      usuario: (s.user as any)?.[0]?.full_name ?? "Sistema",
+      usuario: (s.user as any)?.full_name ?? "Sistema",
     }))
 
-    const contact = (lead.contact as any)?.[0]
-    const stage = (lead.stage as any)?.[0]
-    const source = (lead.source as any)?.[0]
-    const owner = (lead.owner as any)?.[0]
+    const contact = (lead.contact as any) ?? null
+    const stage = (lead.stage as any) ?? null
+    const source = (lead.source as any) ?? null
+    const owner = (lead.owner as any) ?? null
 
     const userPrompt = `
 LEAD:

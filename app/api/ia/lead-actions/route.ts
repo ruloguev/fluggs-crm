@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       .from("leads")
       .select(`
         id, title, priority, stage_id, last_activity_at, owner_id,
-        contact:contacts(id, full_name, phone, whatsapp),
+        contact:contacts(id, full_name, phone, whatsapp, email),
         stage:pipeline_stages(id, name, color, position, is_closed)
       `)
       .eq("company_id", companyId)
@@ -117,8 +117,9 @@ export async function POST(req: NextRequest) {
       prioridad: l.priority,
       etapa: l.stage?.name ?? "Sin etapa",
       dias_sin_actividad: l.days_inactive,
-      tiene_telefono: !!l.contact?.phone,
-      tiene_whatsapp: !!l.contact?.whatsapp,
+      telefono: l.contact?.phone ?? null,
+      whatsapp: l.contact?.whatsapp ?? null,
+      email: l.contact?.email ?? null,
     }))
 
     const userPrompt = `Analiza estos leads y dime qué acciones tomar hoy:\n\n${JSON.stringify(leadsContext, null, 2)}`

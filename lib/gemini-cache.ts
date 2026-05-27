@@ -11,7 +11,7 @@ type CacheEntry = {
 // In-memory cache (works within same server instance)
 const cacheStore = new Map<string, CacheEntry>()
 
-const CACHE_TTL = 50 * 60 * 1000 // 50 minutes (Gemini default is 1 hour)
+const CACHE_TTL = 58 * 60 * 1000 // 58 minutes (Gemini default is 1 hour)
 
 export async function getCachedContent(
   geminiKey: string,

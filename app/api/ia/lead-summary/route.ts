@@ -120,7 +120,6 @@ ${stageHistory.map(s => `- ${s.fecha}: ${s.de} → ${s.a} (${s.usuario})`).join(
 Genera un resumen ejecutivo útil para el agente.`
 
     const body: Record<string, any> = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.3,
@@ -132,6 +131,8 @@ Genera un resumen ejecutivo útil para el agente.`
     const cachedName = await getCachedContent(geminiKey, "lead-summary", SYSTEM_PROMPT)
     if (cachedName) {
       body.cachedContent = cachedName
+    } else {
+      body.systemInstruction = { parts: [{ text: SYSTEM_PROMPT }] }
     }
 
     const geminiRes = await fetch(

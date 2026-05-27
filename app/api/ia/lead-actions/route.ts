@@ -111,7 +111,10 @@ export async function POST(req: NextRequest) {
       .eq("company_id", companyId)
       .order("position")
 
-    const leadsContext = leadsWithInactiveDays.slice(0, 15).map(l => ({
+    const leadsContext = leadsWithInactiveDays
+      .filter(l => l.days_inactive >= 2)
+      .slice(0, 15)
+      .map(l => ({
       id: l.id,
       contacto: l.contact?.full_name ?? "Sin nombre",
       prioridad: l.priority,
@@ -122,10 +125,9 @@ export async function POST(req: NextRequest) {
       email: l.contact?.email ?? null,
     }))
 
-    const userPrompt = `Analiza estos leads y dime qué acciones tomar hoy:\n\n${JSON.stringify(leadsContext, null, 2)}`
+    const userPrompt = `Analiza estos leads y dime qué acciones tomar hoy:\n\n${JSON.stringify(leadsContext)}`
 
     const body: Record<string, any> = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.3,
@@ -137,6 +139,8 @@ export async function POST(req: NextRequest) {
     const cachedName = await getCachedContent(geminiKey, "lead-actions", SYSTEM_PROMPT)
     if (cachedName) {
       body.cachedContent = cachedName
+    } else {
+      body.systemInstruction = { parts: [{ text: SYSTEM_PROMPT }] }
     }
 
     const geminiRes = await fetch(

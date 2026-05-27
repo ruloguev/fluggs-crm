@@ -117,7 +117,7 @@ export default function AsistentePage() {
         body: JSON.stringify({
           message: text,
           companyId: profile.company_id,
-          history: history.slice(-12),
+          history: history.slice(-6),
         }),
       })
       const data = await res.json() as { answer?: string; error?: string }

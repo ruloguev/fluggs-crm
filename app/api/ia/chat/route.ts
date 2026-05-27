@@ -98,22 +98,15 @@ export async function POST(req: NextRequest) {
       parts: [{ text: m.content }],
     }))
 
-    formattedHistory.push({ role: "user", parts: [{ text: message }] })
+    const userMsg = contextText
+      ? `Contexto:\n${contextText}\n\nPregunta del usuario:\n${message}`
+      : message
+
+    formattedHistory.push({ role: "user", parts: [{ text: userMsg }] })
 
     const body: Record<string, any> = {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: formattedHistory,
-    }
-
-    // Usar cachedContent si hay contexto (el system prompt base se cachea)
-    if (contextText) {
-      const cacheKey = `chat:${companyId}`
-      const cachedName = await getCachedContent(geminiKey, cacheKey, BASE_SYSTEM_INSTRUCTION)
-      if (cachedName) {
-        body.cachedContent = cachedName
-        // El contexto dinámico va en contents, no en el cache
-        body.systemInstruction = { parts: [{ text: `Contexto adicional:\n${contextText}` }] }
-      }
     }
 
     const geminiRes = await fetch(

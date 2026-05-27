@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { registerPushSubscription, unregisterPushSubscription, getPushSubscriptionStatus } from "@/lib/push-notifications"
+import { PrivacyNoticeModal } from "@/components/ui/privacy-notice-modal"
 
 type NotificationRecord = {
   id: string
@@ -73,6 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [loadingNotifs, setLoadingNotifs] = useState(false)
@@ -97,6 +99,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.push("/onboarding")
     }
   }, [loading, profile])
+
+  useEffect(() => {
+    if (!loading && profile?.company_id && !profile.privacy_notice_accepted_at && pathname !== "/onboarding") {
+      setShowPrivacyNotice(true)
+    }
+  }, [loading, profile, pathname])
 
   // Load notifications
   async function loadNotifications() {
@@ -394,6 +402,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {showPrivacyNotice && profile && (
+        <PrivacyNoticeModal
+          profileId={profile.id}
+          onAccepted={() => setShowPrivacyNotice(false)}
+        />
+      )}
     </div>
   )
 }

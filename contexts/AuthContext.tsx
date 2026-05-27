@@ -9,6 +9,7 @@ type Profile = {
   full_name: string
   company_id: string | null
   role_id: string | null
+  privacy_notice_accepted_at: string | null
 }
 
 type Company = {
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("id, full_name, company_id, role_id")
+      .select("id, full_name, company_id, role_id, privacy_notice_accepted_at")
       .eq("id", session.user.id)
       .single()
 

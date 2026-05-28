@@ -16,7 +16,10 @@ import {
   Tag,
   Loader2,
   AlertCircle,
+  Trash2,
+  MoveRight,
 } from "lucide-react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 const BUCKET = "company-drive"
 
@@ -56,6 +59,9 @@ export default function DrivePage() {
   const [files, setFiles] = useState<ListItem[]>([])
   const [pathSegments, setPathSegments] = useState<string[]>([])
   const [search, setSearch] = useState("")
+  const [movePickerOpen, setMovePickerOpen] = useState(false)
+  const [moveTarget, setMoveTarget] = useState<string | null>(null)
+  const [moveSelectedFolder, setMoveSelectedFolder] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const companyId = profile?.company_id
@@ -145,6 +151,68 @@ export default function DrivePage() {
       return
     }
     window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+  }
+
+  async function deleteFile(name: string) {
+    if (!window.confirm(`¿Eliminar permanentemente "${name}"?`)) return
+    const base = listPrefix()
+    const path = `${base}/${name}`.replace(/\/+/g, "/")
+    const { error } = await supabase.storage.from(BUCKET).remove([path])
+    if (error) { setError(error.message); return }
+    await load()
+  }
+
+  async function collectAllPaths(prefix: string): Promise<string[]> {
+    const { data } = await supabase.storage.from(BUCKET).list(prefix, { limit: 200 })
+    if (!data) return []
+    const items = data as ListItem[]
+    let paths: string[] = []
+    for (const item of items) {
+      const fullPath = `${prefix}/${item.name}`
+      if (item.metadata === null && item.name !== ".keep") {
+        const subPaths = await collectAllPaths(fullPath)
+        paths.push(...subPaths)
+      } else {
+        paths.push(fullPath)
+      }
+    }
+    return paths
+  }
+
+  async function deleteFolder(name: string) {
+    if (!window.confirm(`¿Eliminar permanentemente la carpeta "${name}" y todo su contenido?`)) return
+    const base = listPrefix()
+    const folderPath = `${base}/${name}`
+    const allPaths = await collectAllPaths(folderPath)
+    if (allPaths.length > 0) {
+      for (let i = 0; i < allPaths.length; i += 100) {
+        const batch = allPaths.slice(i, i + 100)
+        const { error } = await supabase.storage.from(BUCKET).remove(batch)
+        if (error) { setError(error.message); return }
+      }
+    }
+    await load()
+  }
+
+  function openMovePicker(fileName: string) {
+    setMoveTarget(fileName)
+    setMoveSelectedFolder("")
+    setMovePickerOpen(true)
+  }
+
+  async function confirmMove() {
+    if (!moveTarget) return
+    const base = listPrefix()
+    const oldPath = `${base}/${moveTarget}`.replace(/\/+/g, "/")
+    const newPath = moveSelectedFolder
+      ? `${base}/${moveSelectedFolder}/${moveTarget}`.replace(/\/+/g, "/")
+      : oldPath
+    if (oldPath === newPath) { setMovePickerOpen(false); return }
+    const { error } = await supabase.storage.from(BUCKET).move(oldPath, newPath)
+    if (error) { setError(error.message); return }
+    setMovePickerOpen(false)
+    setMoveTarget(null)
+    await load()
   }
 
   function enterFolder(name: string) {
@@ -274,20 +342,31 @@ export default function DrivePage() {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredFolders.map((folder) => (
-                  <button
-                    type="button"
-                    key={folder.name}
-                    onClick={() => enterFolder(folder.name)}
-                    className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 text-left hover:border-flugzz-accent/40 hover:bg-zinc-800/45 transition-all group w-full"
-                  >
-                    <Folder className="w-8 h-8 text-zinc-500 group-hover:text-flugzz-accent transition-colors" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-zinc-200 text-sm font-medium truncate group-hover:text-white">
-                        {folder.name}
-                      </h3>
-                      <p className="text-zinc-600 text-xs">Carpeta</p>
-                    </div>
-                  </button>
+                  <div key={folder.name} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => enterFolder(folder.name)}
+                      className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 text-left hover:border-flugzz-accent/40 hover:bg-zinc-800/45 transition-all w-full"
+                    >
+                      <Folder className="w-8 h-8 text-zinc-500 group-hover:text-flugzz-accent transition-colors shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-zinc-200 text-sm font-medium truncate group-hover:text-white">
+                          {folder.name}
+                        </h3>
+                        <p className="text-zinc-600 text-xs">Carpeta</p>
+                      </div>
+                      {canManageDrive && (
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                          title="Eliminar carpeta"
+                          onClick={(e) => { e.stopPropagation(); void deleteFolder(folder.name) }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </button>
+                  </div>
                 ))}
               </div>
             </section>
@@ -308,7 +387,27 @@ export default function DrivePage() {
                       key={file.name}
                       className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-zinc-700 transition-all relative"
                     >
-                      <div className="absolute top-4 right-4">
+                      <div className="absolute top-4 right-4 flex items-center gap-0.5">
+                        {canManageDrive && (
+                          <>
+                            <button
+                              type="button"
+                              className="text-zinc-600 hover:text-flugzz-accent transition-colors p-1"
+                              title="Mover a carpeta"
+                              onClick={() => openMovePicker(file.name)}
+                            >
+                              <MoveRight className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                              title="Eliminar"
+                              onClick={() => void deleteFile(file.name)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           className="text-zinc-600 hover:text-zinc-200 transition-colors p-1"
@@ -359,6 +458,41 @@ export default function DrivePage() {
           )}
         </div>
       )}
+
+      <Dialog open={movePickerOpen} onOpenChange={setMovePickerOpen}>
+        <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 p-6">
+          <h2 className="text-lg font-semibold text-zinc-100">Mover archivo</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Selecciona la carpeta de destino para <strong className="text-zinc-200">{moveTarget}</strong>
+          </p>
+          <select
+            value={moveSelectedFolder}
+            onChange={(e) => setMoveSelectedFolder(e.target.value)}
+            className="mt-4 w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-600"
+          >
+            <option value="">Raíz (esta carpeta)</option>
+            {folders.map((f) => (
+              <option key={f.name} value={f.name}>{f.name}</option>
+            ))}
+          </select>
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setMovePickerOpen(false)}
+              className="flex-1 rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmMove()}
+              className="flex-1 rounded-xl bg-flugzz-accent px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-cyan-300 transition-colors"
+            >
+              Mover aquí
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

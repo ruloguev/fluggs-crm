@@ -25,6 +25,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
+import { getLeadScore } from "@/lib/lead-intelligence"
 
 const UNASSIGNED_STAGE_ID = "__unassigned__"
 const LONG_PRESS_MS = 420
@@ -330,12 +331,16 @@ function LeadCard({
   lead,
   index,
   draggable,
+  stageName,
+  stageIsClosed,
   onOpenLead,
   onOpenMove,
 }: {
   lead: Lead
   index: number
   draggable: boolean
+  stageName: string
+  stageIsClosed: boolean
   onOpenLead: (leadId: string) => void
   onOpenMove: (lead: Lead) => void
 }) {
@@ -343,6 +348,13 @@ function LeadCard({
   const longPressTriggeredRef = useRef(false)
   const budgetLabel = getBudgetLabel(lead)
   const displayName = getLeadDisplayName(lead)
+  const score = getLeadScore({
+    priority: lead.priority,
+    lastActivityAt: lead.last_activity_at,
+    stageName,
+    isClosed: stageIsClosed,
+    budgetMax: lead.budget_max,
+  })
   const isFacebookLead =
     Boolean(lead.metadata?.facebook_lead_id) ||
     Boolean(lead.source?.name?.toLowerCase().includes("facebook"))
@@ -419,9 +431,18 @@ function LeadCard({
       )}
 
       <div className={`flex items-center justify-between gap-3 ${draggable ? "mt-3 mb-3" : "mt-3"}`}>
-        <span className={`rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wider ${PRIORITY_STYLES[lead.priority]}`}>
-          {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
-        </span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className={`rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wider ${PRIORITY_STYLES[lead.priority]}`}>
+            {lead.priority === "high" ? "Alta" : lead.priority === "medium" ? "Media" : "Baja"}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${score.className}`}
+            title={score.helper}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${score.dotClassName}`} />
+            {score.label} {score.value}
+          </span>
+        </div>
         {budgetLabel && (
           <span className={`font-medium text-zinc-400 ${draggable ? "text-[10px]" : "text-[11px]"}`}>{budgetLabel}</span>
         )}
@@ -543,6 +564,8 @@ function StageColumnDesktop({
                 lead={lead}
                 index={index}
                 draggable
+                stageName={stage.name}
+                stageIsClosed={false}
                 onOpenLead={onOpenLead}
                 onOpenMove={onOpenMove}
               />
@@ -615,6 +638,8 @@ function MobileStagePanel({
                 lead={lead}
                 index={index}
                 draggable={false}
+                stageName={stage.name}
+                stageIsClosed={false}
                 onOpenLead={onOpenLead}
                 onOpenMove={onOpenMove}
               />

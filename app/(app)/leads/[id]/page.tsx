@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { getLeadScore, getOutreachRecommendation } from "@/lib/lead-intelligence"
 
 // ── tipos ─────────────────────────────────────────────────────
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean }
@@ -1117,6 +1118,23 @@ export default function LeadDetailPage() {
 
   const contact = lead.contact
   const priority = PRIORITY_MAP[lead.priority]
+  const leadScore = getLeadScore({
+    priority: lead.priority,
+    lastActivityAt: lead.last_activity_at,
+    createdAt: lead.created_at,
+    stageName: lead.stage?.name,
+    isClosed: lead.stage?.is_closed,
+    budgetMax: lead.budget_max,
+    activityCount: activities.length,
+  })
+  const outreach = getOutreachRecommendation({
+    contactName: contact.full_name,
+    priority: lead.priority,
+    lastActivityAt: lead.last_activity_at,
+    stageName: lead.stage?.name,
+    hasPhone: Boolean(contact.phone || contact.whatsapp),
+    hasEmail: Boolean(contact.email),
+  })
 
   return (
     <div className="max-w-3xl mx-auto space-y-0 animate-in fade-in duration-300">
@@ -1333,6 +1351,60 @@ export default function LeadDetailPage() {
       </div>
 
       {/* ── TABS ── */}
+      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/50 p-5 mb-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-flugzz-accent" />
+              <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Copiloto comercial</p>
+            </div>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-100">{outreach.headline}</h2>
+            <p className="mt-1 text-sm text-zinc-400">{outreach.nextAction}</p>
+          </div>
+
+          <div className={`shrink-0 rounded-2xl border px-4 py-3 ${leadScore.className}`}>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${leadScore.dotClassName}`} />
+              <span className="text-sm font-semibold">{leadScore.label}</span>
+              <span className="text-sm font-bold">{leadScore.value}</span>
+            </div>
+            <p className="mt-1 text-[11px] opacity-80">{leadScore.helper}</p>
+          </div>
+        </div>
+
+        {outreach.reengagementMessage && (
+          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-amber-200">Mensaje sugerido de re-engagement</p>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{outreach.reengagementMessage}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => outreach.reengagementMessage && navigator.clipboard.writeText(outreach.reengagementMessage)}
+                className="shrink-0 rounded-xl border border-amber-500/20 bg-black/20 p-2 text-amber-200 hover:bg-amber-500/10"
+                title="Copiar mensaje"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          {outreach.steps.map((step) => (
+            <div key={`${step.day}-${step.channel}`} className="rounded-2xl border border-zinc-800/60 bg-zinc-950/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">{step.day}</span>
+                <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400">{step.channel}</span>
+              </div>
+              <p className="mt-2 text-sm font-medium text-zinc-200">{step.title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">{step.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex gap-1 p-1 bg-zinc-900/40 border border-zinc-800/40 rounded-xl w-fit mb-4">
         {(lead.deal_type === "sale"
           ? (["timeline", "info", "expediente", "ia"] as const)

@@ -48,44 +48,57 @@ export async function DELETE(req: NextRequest) {
 
     const reportsTo = membership?.reports_to ?? null
 
-    if (reportsTo) {
-      const { data: superior } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("id", reportsTo)
-        .single()
+    const { data: userLeadIds } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("assigned_to", user.id)
 
-      const { count } = await supabase
-        .from("leads")
-        .select("*", { count: "exact", head: true })
-        .eq("assigned_to", user.id)
+    if (userLeadIds && userLeadIds.length > 0) {
+      const leadIds = userLeadIds.map(l => l.id)
 
-      const { error: reassignError } = await supabase
-        .from("leads")
-        .update({ assigned_to: reportsTo })
-        .eq("assigned_to", user.id)
+      const { error: delActivities } = await supabase.from("activities").delete().in("lead_id", leadIds)
+      if (delActivities) console.error("[delete-account] activities cleanup error:", delActivities)
 
-      if (reassignError) {
-        return NextResponse.json({ error: "Error al reasignar leads." }, { status: 500 })
-      }
+      const { error: delNotifs } = await supabase.from("notifications").delete().in("lead_id", leadIds)
+      if (delNotifs) console.error("[delete-account] notifications cleanup error:", delNotifs)
 
-      if (count && count > 0 && superior) {
-        await createNotificationWithPush({
-          company_id: profile.company_id,
-          user_id: reportsTo,
-          type: "account_deleted",
-          title: "Usuario eliminado",
-          body: `${profile.full_name} eliminó su cuenta. ${count} ${count === 1 ? "lead fue reasignado" : "leads fueron reasignados"} a ti.`,
-        })
-      }
-    } else {
-      const { error: deleteLeadsError } = await supabase
-        .from("leads")
-        .delete()
-        .eq("assigned_to", user.id)
+      const { error: delDocs } = await supabase.from("lead_documents").delete().in("lead_id", leadIds)
+      if (delDocs) console.error("[delete-account] lead_documents cleanup error:", delDocs)
 
-      if (deleteLeadsError) {
-        return NextResponse.json({ error: "Error al eliminar leads." }, { status: 500 })
+      if (reportsTo) {
+        const { data: superior } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("id", reportsTo)
+          .single()
+
+        const { error: reassignError } = await supabase
+          .from("leads")
+          .update({ assigned_to: reportsTo })
+          .eq("assigned_to", user.id)
+
+        if (reassignError) {
+          return NextResponse.json({ error: `Error al reasignar leads: ${reassignError.message}` }, { status: 500 })
+        }
+
+        if (superior) {
+          await createNotificationWithPush({
+            company_id: profile.company_id,
+            user_id: reportsTo,
+            type: "account_deleted",
+            title: "Usuario eliminado",
+            body: `${profile.full_name} eliminó su cuenta. ${leadIds.length} ${leadIds.length === 1 ? "lead fue reasignado" : "leads fueron reasignados"} a ti.`,
+          })
+        }
+      } else {
+        const { error: deleteLeadsError } = await supabase
+          .from("leads")
+          .delete()
+          .eq("assigned_to", user.id)
+
+        if (deleteLeadsError) {
+          return NextResponse.json({ error: `Error al eliminar leads: ${deleteLeadsError.message}` }, { status: 500 })
+        }
       }
     }
 

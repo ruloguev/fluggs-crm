@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Building2, KanbanSquare, Shield, Users, Brain } from "lucide-react"
+import { Building2, KanbanSquare, Shield, Users, Brain, UserCog } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
 const ALL_CARDS = [
@@ -33,11 +33,18 @@ const ALL_CARDS = [
     icon: Brain,
     permission: "can_manage_knowledge" as const,
   },
+  {
+    title: "Cuenta",
+    description: "Administra tu perfil, cambia tu contraseña o elimina tu cuenta.",
+    href: "/ajustes/cuenta",
+    icon: UserCog,
+    permission: null,
+  },
 ]
 
 export default function AjustesPage() {
   const { can } = useAuth()
-  const cards = ALL_CARDS.filter(c => can(c.permission))
+  const cards = ALL_CARDS.filter(c => !c.permission || can(c.permission))
 
   return (
     <div className="space-y-6">

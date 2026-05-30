@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import {
   Check, Plus, Trash2, ArrowRight, Loader2,
   KanbanSquare, Users, Sparkles, GripVertical,
+  Crown, Ticket, ShieldCheck, Zap,
 } from "lucide-react"
 
 const STAGE_COLORS = [
@@ -16,8 +17,46 @@ const STAGE_COLORS = [
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean; isNew?: boolean }
 type InviteRow = { email: string; name: string }
+type PlanId = "fundacion" | "expansion" | "imperio"
+
+const PROMO_CODE_PATTERN = /^FLUGZZ(0[1-9]|1[01])$/
+
+const PLANS: Array<{
+  id: PlanId
+  name: string
+  audience: string
+  range: string
+  accent: string
+  icon: typeof ShieldCheck
+}> = [
+  {
+    id: "fundacion",
+    name: "Fundacion",
+    audience: "Para equipos pequenos o celulas de alto rendimiento que recien estructuran su embudo.",
+    range: "1 a 5 asesores",
+    accent: "#22D3EE",
+    icon: ShieldCheck,
+  },
+  {
+    id: "expansion",
+    name: "Expansion",
+    audience: "Para gerencias establecidas con volumen fuerte, analitica y control operativo.",
+    range: "6 a 49 asesores",
+    accent: "#34D399",
+    icon: Zap,
+  },
+  {
+    id: "imperio",
+    name: "Imperio",
+    audience: "Para desarrolladoras o Master Brokers con multiples gerencias y equipos extensos.",
+    range: "50+ asesores",
+    accent: "#FBBF24",
+    icon: Crown,
+  },
+]
 
 const STEPS = [
+  { id: "plan",     label: "Plan",     icon: Crown },
   { id: "pipeline", label: "Pipeline", icon: KanbanSquare },
   { id: "team",     label: "Equipo",   icon: Users },
   { id: "done",     label: "¡Listo!",  icon: Sparkles },
@@ -33,13 +72,34 @@ export default function OnboardingPage() {
   const [invites, setInvites] = useState<InviteRow[]>([{ email: "", name: "" }])
   const [saving, setSaving] = useState(false)
   const [savingInvites, setSavingInvites] = useState(false)
+  const [savingPlan, setSavingPlan] = useState(false)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
-  const [skipInvites, setSkipInvites] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null)
+  const [promoCode, setPromoCode] = useState("")
+  const [planError, setPlanError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading && !profile) router.replace("/login")
-    if (!authLoading && profile?.company_id) loadStages()
+    if (!authLoading && profile?.company_id) {
+      loadCompanyPlan()
+      loadStages()
+    }
   }, [authLoading, profile])
+
+  async function loadCompanyPlan() {
+    const { data } = await supabase
+      .from("companies")
+      .select("settings")
+      .eq("id", profile!.company_id!)
+      .single()
+
+    const subscription = (data?.settings as { subscription?: { plan_id?: PlanId; promo_code?: string | null } } | null)?.subscription
+    if (subscription?.plan_id && PLANS.some(plan => plan.id === subscription.plan_id)) {
+      setSelectedPlan(subscription.plan_id)
+      setPromoCode(subscription.promo_code ?? "")
+      setStep(1)
+    }
+  }
 
   async function loadStages() {
     const { data } = await supabase
@@ -81,6 +141,42 @@ export default function OnboardingPage() {
     })
   }
 
+  async function savePlan() {
+    if (!selectedPlan) {
+      setPlanError("Selecciona un plan para continuar.")
+      return
+    }
+
+    const normalizedCode = promoCode.trim().toUpperCase()
+    if (normalizedCode && !PROMO_CODE_PATTERN.test(normalizedCode)) {
+      setPlanError("El codigo debe estar entre FLUGZZ01 y FLUGZZ11.")
+      return
+    }
+
+    setSavingPlan(true)
+    setPlanError(null)
+
+    const res = await fetch("/api/onboarding/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        planId: selectedPlan,
+        promoCode: normalizedCode || null,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+    setSavingPlan(false)
+
+    if (!res.ok) {
+      setPlanError(data?.error ?? "No pudimos guardar el plan.")
+      return
+    }
+
+    setPromoCode(normalizedCode)
+    setStep(1)
+  }
+
   async function saveStages() {
     setSaving(true)
     const companyId = profile!.company_id!
@@ -105,7 +201,7 @@ export default function OnboardingPage() {
       }
     }
     setSaving(false)
-    setStep(1)
+    setStep(2)
   }
 
   // ── Invites ─────────────────────────────────────────────────
@@ -128,7 +224,7 @@ export default function OnboardingPage() {
       })
     }
     setSavingInvites(false)
-    setStep(2)
+    setStep(3)
   }
 
   function goToDashboard() {
@@ -180,8 +276,111 @@ export default function OnboardingPage() {
         })}
       </div>
 
-      {/* ── Step 0: Pipeline ── */}
+      {/* ── Step 0: Plan ── */}
       {step === 0 && (
+        <div className="w-full max-w-5xl">
+          <div className="border border-zinc-800/60 rounded-3xl bg-zinc-950/80 backdrop-blur-xl p-5 sm:p-7 shadow-2xl shadow-black/40">
+            <div className="flex flex-col gap-2 text-center mb-6">
+              <span className="mx-auto inline-flex items-center gap-2 rounded-full border border-[#22D3EE]/20 bg-[#22D3EE]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#22D3EE]">
+                <Ticket className="h-3.5 w-3.5" /> Acceso fundador
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-100">Selecciona tu plan</h2>
+              <p className="mx-auto max-w-2xl text-sm text-zinc-500">
+                Elige la estructura que mejor describe tu operacion. Por ahora todos los planes se activan con seguimiento comercial.
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              {PLANS.map((plan) => {
+                const Icon = plan.icon
+                const active = selectedPlan === plan.id
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => { setSelectedPlan(plan.id); setPlanError(null) }}
+                    className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 ${
+                      active
+                        ? "border-zinc-200 bg-zinc-100 text-zinc-950 shadow-[0_0_32px_rgba(255,255,255,0.14)]"
+                        : "border-zinc-800/70 bg-zinc-900/45 text-zinc-100 hover:-translate-y-1 hover:border-zinc-600 hover:bg-zinc-900/80"
+                    }`}
+                  >
+                    <div
+                      className="absolute -right-10 -top-12 h-32 w-32 rounded-full blur-3xl opacity-25 transition-opacity group-hover:opacity-45"
+                      style={{ backgroundColor: plan.accent }}
+                    />
+                    <div className="relative flex items-start justify-between gap-4">
+                      <div
+                        className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${
+                          active ? "border-zinc-300 bg-zinc-950 text-zinc-100" : "border-zinc-800 bg-black/30"
+                        }`}
+                        style={!active ? { color: plan.accent } : undefined}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                        active ? "bg-zinc-900 text-zinc-100" : "bg-zinc-950 text-zinc-500 border border-zinc-800"
+                      }`}>
+                        {plan.range}
+                      </span>
+                    </div>
+                    <div className="relative mt-5">
+                      <h3 className="text-xl font-semibold">{plan.name}</h3>
+                      <p className={`mt-2 text-sm leading-relaxed ${active ? "text-zinc-700" : "text-zinc-500"}`}>
+                        {plan.audience}
+                      </p>
+                      <div className={`mt-5 rounded-xl border px-3 py-3 ${
+                        active ? "border-zinc-300 bg-white/70" : "border-zinc-800 bg-black/25"
+                      }`}>
+                        <p className={`text-[10px] uppercase tracking-[0.18em] ${active ? "text-zinc-500" : "text-zinc-600"}`}>
+                          Precio
+                        </p>
+                        <p className="mt-1 text-sm font-semibold">Contacta a un asesor</p>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-zinc-800/70 bg-black/30 p-4">
+              <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+                <Ticket className="h-3.5 w-3.5 text-[#22D3EE]" /> Codigo de promocion
+              </label>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={promoCode}
+                  onChange={(event) => {
+                    setPromoCode(event.target.value.toUpperCase())
+                    setPlanError(null)
+                  }}
+                  placeholder="FLUGZZ01"
+                  maxLength={8}
+                  className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm uppercase tracking-[0.16em] text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-zinc-600"
+                />
+                <button
+                  type="button"
+                  onClick={savePlan}
+                  disabled={savingPlan}
+                  className="rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ArrowRight className="h-4 w-4" /> Continuar</>}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-zinc-600">
+                Codigos validos: FLUGZZ01 al FLUGZZ11. Cada codigo solo puede utilizarse una vez.
+              </p>
+              {planError && (
+                <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  {planError}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 1 && (
         <div className="w-full max-w-lg">
           <div className="border border-zinc-800/60 rounded-2xl bg-zinc-950/80 backdrop-blur-xl p-6">
             <h2 className="text-zinc-100 font-medium text-lg mb-1">Personaliza tu pipeline</h2>
@@ -245,8 +444,8 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* ── Step 1: Team invites ── */}
-      {step === 1 && (
+      {/* ── Step 2: Team invites ── */}
+      {step === 2 && (
         <div className="w-full max-w-lg">
           <div className="border border-zinc-800/60 rounded-2xl bg-zinc-950/80 backdrop-blur-xl p-6">
             <h2 className="text-zinc-100 font-medium text-lg mb-1">Invita a tu equipo</h2>
@@ -300,8 +499,8 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* ── Step 2: Done ── */}
-      {step === 2 && (
+      {/* ── Step 3: Done ── */}
+      {step === 3 && (
         <div className="w-full max-w-md text-center">
           <div className="border border-zinc-800/60 rounded-2xl bg-zinc-950/80 backdrop-blur-xl p-10">
             <div className="w-16 h-16 rounded-full bg-[#22D3EE]/10 border border-[#22D3EE]/20 flex items-center justify-center mx-auto mb-5">
@@ -314,8 +513,9 @@ export default function OnboardingPage() {
             <p className="text-zinc-500 text-sm mb-6 leading-relaxed">
               Pipeline configurado. Invitaciones enviadas. Ya puedes comenzar a operar.
             </p>
-            <div className="grid grid-cols-3 gap-3 mb-6 text-left">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 text-left">
               {[
+                { label: "Plan", desc: PLANS.find(plan => plan.id === selectedPlan)?.name ?? "Seleccionado" },
                 { label: "Pipeline", desc: `${stages.length} etapas listas` },
                 { label: "Rol", desc: "Director asignado" },
                 { label: "Equipo", desc: `${invites.filter(i => i.email).length} invitados` },

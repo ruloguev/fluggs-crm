@@ -149,7 +149,7 @@ export default function OnboardingPage() {
 
     const normalizedCode = promoCode.trim().toUpperCase()
     if (normalizedCode && !PROMO_CODE_PATTERN.test(normalizedCode)) {
-      setPlanError("El codigo debe estar entre FLUGZZ01 y FLUGZZ11.")
+      setPlanError("Código inválido.")
       return
     }
 
@@ -354,7 +354,7 @@ export default function OnboardingPage() {
                     setPromoCode(event.target.value.toUpperCase())
                     setPlanError(null)
                   }}
-                  placeholder="FLUGZZ01"
+                  placeholder="Ingresa tu codigo"
                   maxLength={8}
                   className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm uppercase tracking-[0.16em] text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-zinc-600"
                 />
@@ -367,9 +367,7 @@ export default function OnboardingPage() {
                   {savingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ArrowRight className="h-4 w-4" /> Continuar</>}
                 </button>
               </div>
-              <p className="mt-2 text-xs text-zinc-600">
-                Codigos validos: FLUGZZ01 al FLUGZZ11. Cada codigo solo puede utilizarse una vez.
-              </p>
+              
               {planError && (
                 <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   {planError}

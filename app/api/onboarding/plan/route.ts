@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     if (normalizedPromo && !isValidPromoCode(normalizedPromo)) {
       return NextResponse.json(
-        { error: "El codigo debe estar entre FLUGZZ01 y FLUGZZ11." },
+        { error: "Código inválido." },
         { status: 400 },
       )
     }

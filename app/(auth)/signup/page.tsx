@@ -98,8 +98,6 @@ function SignUpForm() {
     }
   }
 
-  const currencies = ["MXN", "USD", "COP", "ARS", "CLP", "PEN", "BRL", "EUR"]
-
   return (
     <div className="relative z-10 w-full max-w-md mx-4">
       {/* Progress */}
@@ -199,22 +197,6 @@ function SignUpForm() {
                 onChange={e => set("companyName", e.target.value)}
                 placeholder="Inmobiliaria Pérez"
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-600 transition-colors" />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Moneda principal</label>
-              <div className="flex flex-wrap gap-2">
-                {currencies.map(c => (
-                  <button key={c} type="button" onClick={() => set("currency", c)}
-                    className={`px-3 py-1.5 rounded-xl text-xs border font-mono transition-all ${
-                      form.currency === c
-                        ? "bg-[#22D3EE] text-zinc-900 font-bold border-transparent"
-                        : "text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:text-zinc-300"
-                    }`}>
-                    {c}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="flex gap-3 pt-2">

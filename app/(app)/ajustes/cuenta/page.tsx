@@ -21,6 +21,7 @@ export default function CuentaPage() {
   const router = useRouter()
 
   const [detail, setDetail] = useState<ProfileDetail | null>(null)
+  const [companyName, setCompanyName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [confirmText, setConfirmText] = useState("")
@@ -33,22 +34,34 @@ export default function CuentaPage() {
     if (!profile) { router.replace("/login"); return }
 
     setLoading(true)
-    supabase
-      .from("profiles")
-      .select(`
-        id,
-        full_name,
-        email,
-        phone,
-        role:roles(name),
-        team_memberships!team_memberships_user_id_fkey(reports_to)
-      `)
-      .eq("id", profile.id)
-      .single()
-      .then(({ data, error: err }) => {
-        if (!err && data) setDetail(data as unknown as ProfileDetail)
-        setLoading(false)
-      })
+
+    ;(async () => {
+      const { data: profileData, error: profileErr } = await supabase
+        .from("profiles")
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          role:roles(name),
+          team_memberships!team_memberships_user_id_fkey(reports_to)
+        `)
+        .eq("id", profile.id)
+        .single()
+
+      if (!profileErr && profileData) setDetail(profileData as unknown as ProfileDetail)
+
+      if (profile.company_id) {
+        const { data: comp } = await supabase
+          .from("companies")
+          .select("name")
+          .eq("id", profile.company_id)
+          .single()
+        if (comp) setCompanyName(comp.name)
+      }
+
+      setLoading(false)
+    })()
   }, [authLoading, profile])
 
   async function handleDelete() {
@@ -129,7 +142,7 @@ export default function CuentaPage() {
             <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Empresa</p>
             <p className="text-sm text-zinc-200 flex items-center gap-1.5">
               <Building2 className="w-3.5 h-3.5 text-zinc-500" />
-              {company?.name ?? "—"}
+              {companyName ?? company?.name ?? "—"}
             </p>
           </div>
         </div>

@@ -75,6 +75,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(false)
+  const privacyAcceptedSession = useRef(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [loadingNotifs, setLoadingNotifs] = useState(false)
@@ -101,7 +102,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [loading, profile])
 
   useEffect(() => {
-    if (!loading && profile?.company_id && !profile.privacy_notice_accepted_at && pathname !== "/onboarding") {
+    if (!loading && profile?.company_id && !profile.privacy_notice_accepted_at && pathname !== "/onboarding" && !privacyAcceptedSession.current) {
       setShowPrivacyNotice(true)
     }
   }, [loading, profile, pathname])
@@ -406,7 +407,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {showPrivacyNotice && profile && (
         <PrivacyNoticeModal
           profileId={profile.id}
-          onAccepted={() => setShowPrivacyNotice(false)}
+          onAccepted={() => { privacyAcceptedSession.current = true; setShowPrivacyNotice(false) }}
         />
       )}
     </div>

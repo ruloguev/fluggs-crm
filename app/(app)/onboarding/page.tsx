@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
+import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
 import {
   Check, Plus, Trash2, ArrowRight, Loader2,
   KanbanSquare, Users, Sparkles, GripVertical,
@@ -19,42 +20,6 @@ type Stage = { id: string; name: string; color: string; position: number; is_clo
 type InviteRow = { email: string; name: string }
 type PlanId = "fundacion" | "expansion" | "imperio"
 
-const PROMO_CODE_PATTERN = /^FLUGZZ(0[1-9]|1[01])$/
-
-const PLANS: Array<{
-  id: PlanId
-  name: string
-  audience: string
-  range: string
-  accent: string
-  icon: typeof ShieldCheck
-}> = [
-  {
-    id: "fundacion",
-    name: "Fundacion",
-    audience: "Para equipos pequenos o celulas de alto rendimiento que recien estructuran su embudo.",
-    range: "1 a 5 asesores",
-    accent: "#22D3EE",
-    icon: ShieldCheck,
-  },
-  {
-    id: "expansion",
-    name: "Expansion",
-    audience: "Para gerencias establecidas con volumen fuerte, analitica y control operativo.",
-    range: "6 a 49 asesores",
-    accent: "#34D399",
-    icon: Zap,
-  },
-  {
-    id: "imperio",
-    name: "Imperio",
-    audience: "Para desarrolladoras o Master Brokers con multiples gerencias y equipos extensos.",
-    range: "50+ asesores",
-    accent: "#FBBF24",
-    icon: Crown,
-  },
-]
-
 const STEPS = [
   { id: "plan",     label: "Plan",     icon: Crown },
   { id: "pipeline", label: "Pipeline", icon: KanbanSquare },
@@ -65,7 +30,7 @@ const STEPS = [
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, loading: authLoading, refresh } = useAuth()
 
   const [step, setStep] = useState(0)
   const [stages, setStages] = useState<Stage[]>([])
@@ -88,15 +53,13 @@ export default function OnboardingPage() {
 
   async function loadCompanyPlan() {
     const { data } = await supabase
-      .from("companies")
-      .select("settings")
-      .eq("id", profile!.company_id!)
-      .single()
+      .from("company_subscriptions")
+      .select("plan_id")
+      .eq("company_id", profile!.company_id!)
+      .maybeSingle()
 
-    const subscription = (data?.settings as { subscription?: { plan_id?: PlanId; promo_code?: string | null } } | null)?.subscription
-    if (subscription?.plan_id && PLANS.some(plan => plan.id === subscription.plan_id)) {
-      setSelectedPlan(subscription.plan_id)
-      setPromoCode(subscription.promo_code ?? "")
+    if (data?.plan_id && (["fundacion", "expansion", "imperio"] as PlanId[]).includes(data.plan_id as PlanId)) {
+      setSelectedPlan(data.plan_id as PlanId)
       setStep(1)
     }
   }
@@ -148,10 +111,6 @@ export default function OnboardingPage() {
     }
 
     const normalizedCode = promoCode.trim().toUpperCase()
-    if (normalizedCode && !PROMO_CODE_PATTERN.test(normalizedCode)) {
-      setPlanError("Código inválido.")
-      return
-    }
 
     setSavingPlan(true)
     setPlanError(null)
@@ -167,6 +126,12 @@ export default function OnboardingPage() {
 
     const data = await res.json().catch(() => null)
     setSavingPlan(false)
+
+    // El backend rechaza sin codigo y devuelve flag de pago requerido
+    if (res.status === 402 && data?.requiresPayment) {
+      router.push(`/suscripcion?plan=${selectedPlan}`)
+      return
+    }
 
     if (!res.ok) {
       setPlanError(data?.error ?? "No pudimos guardar el plan.")
@@ -231,6 +196,12 @@ export default function OnboardingPage() {
     router.push("/dashboard")
   }
 
+  // Refresca AuthContext ANTES de ir al dashboard (evita que Ajustes no aparezca)
+  async function goToDashboardRefreshed() {
+    await refresh()
+    router.push("/dashboard")
+  }
+
   if (authLoading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
@@ -286,66 +257,21 @@ export default function OnboardingPage() {
               </span>
               <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-100">Selecciona tu plan</h2>
               <p className="mx-auto max-w-2xl text-sm text-zinc-500">
-                Elige la estructura que mejor describe tu operacion. Por ahora todos los planes se activan con seguimiento comercial.
+                Elige la estructura que mejor describe tu operacion. Luego podras aplicar un codigo o pagar con Stripe.
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              {PLANS.map((plan) => {
-                const Icon = plan.icon
-                const active = selectedPlan === plan.id
-                return (
-                  <button
-                    key={plan.id}
-                    type="button"
-                    onClick={() => { setSelectedPlan(plan.id); setPlanError(null) }}
-                    className={`group relative overflow-hidden rounded-2xl border p-5 text-left transition-all duration-300 ${
-                      active
-                        ? "border-zinc-200 bg-zinc-100 text-zinc-950 shadow-[0_0_32px_rgba(255,255,255,0.14)]"
-                        : "border-zinc-800/70 bg-zinc-900/45 text-zinc-100 hover:-translate-y-1 hover:border-zinc-600 hover:bg-zinc-900/80"
-                    }`}
-                  >
-                    <div
-                      className="absolute -right-10 -top-12 h-32 w-32 rounded-full blur-3xl opacity-25 transition-opacity group-hover:opacity-45"
-                      style={{ backgroundColor: plan.accent }}
-                    />
-                    <div className="relative flex items-start justify-between gap-4">
-                      <div
-                        className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${
-                          active ? "border-zinc-300 bg-zinc-950 text-zinc-100" : "border-zinc-800 bg-black/30"
-                        }`}
-                        style={!active ? { color: plan.accent } : undefined}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                        active ? "bg-zinc-900 text-zinc-100" : "bg-zinc-950 text-zinc-500 border border-zinc-800"
-                      }`}>
-                        {plan.range}
-                      </span>
-                    </div>
-                    <div className="relative mt-5">
-                      <h3 className="text-xl font-semibold">{plan.name}</h3>
-                      <p className={`mt-2 text-sm leading-relaxed ${active ? "text-zinc-700" : "text-zinc-500"}`}>
-                        {plan.audience}
-                      </p>
-                      <div className={`mt-5 rounded-xl border px-3 py-3 ${
-                        active ? "border-zinc-300 bg-white/70" : "border-zinc-800 bg-black/25"
-                      }`}>
-                        <p className={`text-[10px] uppercase tracking-[0.18em] ${active ? "text-zinc-500" : "text-zinc-600"}`}>
-                          Precio
-                        </p>
-                        <p className="mt-1 text-sm font-semibold">Contacta a un asesor</p>
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <PlanComparisonTable
+              selectedPlan={selectedPlan}
+              onSelect={(id) => {
+                setSelectedPlan(id as PlanId)
+                setPlanError(null)
+              }}
+            />
 
             <div className="mt-5 rounded-2xl border border-zinc-800/70 bg-black/30 p-4">
               <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-                <Ticket className="h-3.5 w-3.5 text-[#22D3EE]" /> Codigo de promocion
+                <Ticket className="h-3.5 w-3.5 text-[#22D3EE]" /> Codigo de promocion (opcional)
               </label>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <input
@@ -358,16 +284,24 @@ export default function OnboardingPage() {
                   maxLength={8}
                   className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm uppercase tracking-[0.16em] text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-zinc-600"
                 />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-zinc-500">
+                  {promoCode.trim()
+                    ? "Con codigo: prueba gratuita de 30 dias"
+                    : "Sin codigo: te llevamos a la pantalla de pago"}
+                </p>
                 <button
                   type="button"
                   onClick={savePlan}
-                  disabled={savingPlan}
+                  disabled={savingPlan || !selectedPlan}
                   className="rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {savingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ArrowRight className="h-4 w-4" /> Continuar</>}
                 </button>
               </div>
-              
+
               {planError && (
                 <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   {planError}
@@ -513,7 +447,7 @@ export default function OnboardingPage() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 text-left">
               {[
-                { label: "Plan", desc: PLANS.find(plan => plan.id === selectedPlan)?.name ?? "Seleccionado" },
+                { label: "Plan", desc: selectedPlan ? selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1) : "Seleccionado" },
                 { label: "Pipeline", desc: `${stages.length} etapas listas` },
                 { label: "Rol", desc: "Director asignado" },
                 { label: "Equipo", desc: `${invites.filter(i => i.email).length} invitados` },
@@ -524,7 +458,7 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
-            <button onClick={goToDashboard}
+            <button onClick={goToDashboardRefreshed}
               className="w-full bg-[#22D3EE] text-zinc-950 rounded-xl py-3 text-sm font-bold hover:bg-cyan-300 transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)]">
               Entrar al dashboard <ArrowRight className="w-4 h-4" />
             </button>

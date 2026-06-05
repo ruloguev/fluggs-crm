@@ -53,3 +53,37 @@ export function isValidSeats(planId: PlanId, seats: number) {
   const limit = PLAN_LIMITS[planId]
   return seats >= limit.min && seats <= limit.max
 }
+
+export const PLAN_FEATURES: Record<PlanId, string[]> = {
+  fundacion: [
+    "1–5 asientos",
+    "Pipeline Kanban ilimitado",
+    "Captura de leads (formularios + WhatsApp)",
+    "Asistente IA (200 resúmenes/mes)",
+    "Drive compartido (5 GB)",
+    "Reportes básicos",
+    "Soporte por email",
+  ],
+  expansion: [
+    "6–49 asientos",
+    "Todo lo de Fundación, más:",
+    "Jerarquía de equipo (gerentes / coordinadores)",
+    "Asistente IA (1,000 resúmenes/mes)",
+    "Drive compartido (50 GB)",
+    "Reportes avanzados + embudo por etapa",
+    "Roles y permisos granulares",
+    "Integraciones (Meta Ads, Google Ads)",
+    "Soporte prioritario (chat)",
+  ],
+  imperio: [
+    "50+ asientos",
+    "Todo lo de Expansión, más:",
+    "Multi-gerencia con jerarquía profunda",
+    "Asistente IA (5,000 resúmenes/mes)",
+    "Drive compartido (500 GB)",
+    "Reportes personalizados + BI",
+    "API access (lectura)",
+    "SLA 99.9% + onboarding dedicado",
+    "Customer Success Manager asignado",
+  ],
+}

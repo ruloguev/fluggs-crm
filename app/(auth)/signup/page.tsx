@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 import { ArrowRight, Loader2, Eye, EyeOff, Building2, User, Mail, Lock } from "lucide-react"
 
 const FlugzzIsotipo = ({ className = "w-10 h-10" }) => (
@@ -12,6 +13,7 @@ const FlugzzIsotipo = ({ className = "w-10 h-10" }) => (
 function SignUpForm() {
   const router = useRouter()
   const supabase = createClient()
+  const { refresh } = useAuth()
 
   const [step, setStep] = useState<"account" | "company">("account")
   const [showPass, setShowPass] = useState(false)
@@ -91,6 +93,8 @@ function SignUpForm() {
     // 3. Redirigir
     if (authData.session) {
       // Sesión inmediata (email confirmation desactivado en Supabase)
+      // Forzar recarga de role en AuthContext (sin esto, Ajustes no aparece)
+      await refresh()
       router.push("/onboarding")
     } else {
       // Supabase requiere confirmación de email

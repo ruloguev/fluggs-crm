@@ -85,17 +85,25 @@ function SubscriptionSection({ isDirector, onPortalClick, portalLoading }: { isD
       </div>
 
       {!sub ? (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-amber-200">No tienes suscripción activa</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Activa un plan para empezar.</p>
+        isDirector ? (
+          <Link
+            href="/suscripcion"
+            className="block rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 hover:bg-amber-500/10 hover:border-amber-500/30 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-amber-200">No tienes suscripción activa</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Activa un plan para empezar.</p>
+              </div>
+              <span className="text-xs text-amber-300 font-medium">Ver planes →</span>
+            </div>
+          </Link>
+        ) : (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <p className="text-sm text-amber-200">No tienes suscripción activa.</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Pide a tu director que active un plan.</p>
           </div>
-          {isDirector && (
-            <Link href="/suscripcion" className="rounded-lg bg-flugzz-accent text-zinc-900 px-3 py-1.5 text-xs font-semibold hover:opacity-90">
-              Ver planes
-            </Link>
-          )}
-        </div>
+        )
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-3">

@@ -17,11 +17,16 @@ function adminClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { planId, promoCode } = await req.json()
+    const { planId, code } = await req.json()
     const normalizedPlan = typeof planId === "string" ? planId.trim().toLowerCase() : ""
+    const normalizedCode =
+      typeof code === "string" && code.trim().length > 0 ? code.trim().toUpperCase() : null
 
     if (!VALID_PLANS.has(normalizedPlan)) {
-      return NextResponse.json({ error: "Selecciona un plan valido." }, { status: 400 })
+      return NextResponse.json({ error: "Plan inválido." }, { status: 400 })
+    }
+    if (!normalizedCode) {
+      return NextResponse.json({ error: "Código requerido." }, { status: 400 })
     }
 
     const cookieStore = await cookies()
@@ -34,63 +39,57 @@ export async function POST(req: NextRequest) {
     const {
       data: { user },
     } = await userSupabase.auth.getUser()
-
     if (!user) {
-      return NextResponse.json({ error: "Sesion no encontrada." }, { status: 401 })
+      return NextResponse.json({ error: "Sesión no encontrada." }, { status: 401 })
     }
 
     const supabase = adminClient()
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("company_id")
       .eq("id", user.id)
       .single()
 
-    if (profileError || !profile?.company_id) {
-      return NextResponse.json({ error: "No se encontro la empresa del usuario." }, { status: 400 })
+    if (!profile?.company_id) {
+      return NextResponse.json({ error: "Empresa no encontrada." }, { status: 400 })
     }
 
-    const companyId = profile.company_id
-    const normalizedCode =
-      typeof promoCode === "string" && promoCode.trim().length > 0
-        ? promoCode.trim().toUpperCase()
-        : null
+    // Verificar que no tenga ya una suscripción activa
+    const { data: existing } = await supabase
+      .from("company_subscriptions")
+      .select("status")
+      .eq("company_id", profile.company_id)
+      .maybeSingle()
 
-    // ── Sin codigo → NO marcar active, devolver flag para redirigir a /suscripcion
-    if (!normalizedCode) {
+    if (existing && ["active", "trial", "past_due"].includes(existing.status)) {
       return NextResponse.json(
-        { requiresPayment: true, planId: normalizedPlan, redirect: "/suscripcion" },
-        { status: 402 },
+        { error: "Ya tienes una suscripción activa. No puedes redimir un código." },
+        { status: 409 },
       )
     }
 
-    // ── Con codigo → redencion atomica via funcion SQL
     const { data: redeemData, error: redeemError } = await supabase.rpc("redeem_promo_code", {
       p_code: normalizedCode,
-      p_company: companyId,
+      p_company: profile.company_id,
       p_user: user.id,
       p_plan: normalizedPlan,
     })
 
     if (redeemError) {
       console.error("redeem_promo_code rpc error:", redeemError)
-      return NextResponse.json({ error: "No pudimos validar el codigo." }, { status: 500 })
+      return NextResponse.json({ error: "No pudimos validar el código." }, { status: 500 })
     }
-
     if (!redeemData?.ok) {
-      return NextResponse.json({ error: redeemData?.error ?? "Codigo invalido." }, { status: 400 })
+      return NextResponse.json({ error: redeemData?.error ?? "Código inválido." }, { status: 400 })
     }
 
-    const expiresAt = redeemData.expires_at as string
-
-    // Crear / actualizar company_subscriptions con trial
     const { error: upsertError } = await supabase.from("company_subscriptions").upsert(
       {
-        company_id: companyId,
+        company_id: profile.company_id,
         plan_id: normalizedPlan,
         seats: 1,
         status: "trial",
-        current_period_end: expiresAt,
+        current_period_end: redeemData.expires_at,
         current_period_start: new Date().toISOString(),
         setup_fee_paid: false,
         cancel_at_period_end: false,
@@ -103,10 +102,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No pudimos activar la prueba." }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, trial: true, redirect: "/dashboard" })
+    return NextResponse.json({
+      ok: true,
+      trial: true,
+      expiresAt: redeemData.expires_at,
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error inesperado"
-    console.error("onboarding/plan uncaught:", message)
+    console.error("redeem-promo uncaught:", message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

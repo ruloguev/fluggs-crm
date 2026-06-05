@@ -83,7 +83,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pushSupported, setPushSupported] = useState(true)
   const notifRef = useRef<HTMLDivElement>(null)
   const [companySettings, setCompanySettings] = useState<Record<string, any> | null>(null)
-  const [subStatus, setSubStatus] = useState<string | null>(null)
+  const [subStatus, setSubStatus] = useState<string | null | undefined>(undefined)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -110,15 +110,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [loading, profile, pathname])
 
   useEffect(() => {
-    if (loading || !profile?.company_id) { setCompanySettings(null); setSubStatus(null); return }
+    if (loading || !profile?.company_id) { setCompanySettings(null); setSubStatus(undefined); return }
+    // Re-fetch en cada cambio de ruta para reflejar sub recién activada
+    setSubStatus(undefined)
     Promise.all([
       supabase.from("companies").select("settings").eq("id", profile.company_id).single(),
       supabase.from("company_subscriptions").select("status, cancel_at_period_end").eq("company_id", profile.company_id).maybeSingle(),
     ]).then(([compRes, subRes]) => {
       if (compRes.data) setCompanySettings(compRes.data.settings)
-      if (subRes.data) setSubStatus(subRes.data.status as string | null)
+      // null = no row found (no sub), undefined = aún no ha cargado
+      setSubStatus(subRes.data ? (subRes.data.status as string) : null)
     })
-  }, [loading, profile?.company_id])
+  }, [loading, profile?.company_id, pathname])
 
   useEffect(() => {
     if (loading || !profile?.company_id || !companySettings) return
@@ -132,6 +135,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .eq("id", profile.company_id)
       .then(() => { router.push("/suscripcion/vencida") })
   }, [loading, profile?.company_id, companySettings, router])
+
+  // Bloqueo duro: si NO hay sub válida (company_subscriptions.status no está en
+  // trial/active/past_due), redirigir a /suscripcion. Excepción: rutas permitidas.
+  useEffect(() => {
+    if (loading || !profile?.company_id) return
+    // subStatus === undefined = aún no ha cargado, esperar
+    if (subStatus === undefined) return
+    const validStatuses = ["trial", "active", "past_due"]
+    const allowedRoutes = [
+      "/suscripcion",
+      "/suscripcion/vencida",
+      "/suscripcion/resultado",
+      "/ajustes/cuenta",
+      "/ajustes/cuenta/",
+    ]
+    const isAllowed = allowedRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
+    if (!validStatuses.includes(subStatus ?? "") && !isAllowed) {
+      router.push("/suscripcion")
+    }
+  }, [loading, profile?.company_id, subStatus, pathname, router])
 
   const trialDaysLeft = useMemo(() => {
     const sub = companySettings?.subscription as { status?: string; expires_at?: string | null } | undefined

@@ -30,6 +30,7 @@ type AuthContextValue = {
   company: Company | null
   role: Role | null
   can: (permission: string) => boolean
+  refresh: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -88,6 +89,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }, [])
 
+  // Refresca los datos de profile/role/company con la sesión actual (sin signOut)
+  const refresh = useCallback(async () => {
+    const { data } = await supabase.auth.getSession()
+    await loadFromSession(data.session)
+  }, [loadFromSession])
+
   useEffect(() => {
     let mounted = true
 
@@ -119,7 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     company,
     role,
     can,
-  }), [can, company, loading, profile, role])
+    refresh,
+  }), [can, company, loading, profile, role, refresh])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -4,11 +4,31 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { createClient } from "@/lib/supabase"
-import { PLAN_LIMITS, PLAN_FEATURES, SETUP_FEE, type PlanId } from "@/lib/stripe-plans"
+import { PLAN_LIMITS, SETUP_FEE, type PlanId } from "@/lib/stripe-plans"
 import { CheckoutModal } from "@/components/payments/checkout-modal"
 import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
-import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2 } from "lucide-react"
+import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle } from "lucide-react"
 import Link from "next/link"
+
+const StripeLogo = ({ className = "h-3.5" }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 60 25"
+    aria-hidden="true"
+    className={className}
+  >
+    <path
+      fill="#635BFF"
+      d="M59.64 14.28h-8.06c.19 1.93 1.6 2.55 3.2 2.55 1.64 0 2.96-.37 4.05-.95v3.32a8.33 8.33 0 0 1-4.56 1.1c-4.01 0-6.83-2.5-6.83-7.48 0-4.19 2.39-7.52 6.3-7.52 3.92 0 5.96 3.28 5.96 7.5 0 .4-.04 1.26-.06 1.48zm-5.92-5.62c-1.03 0-2.17.73-2.17 2.58h4.25c0-1.85-1.07-2.58-2.08-2.58zM40.95 20.3c-1.44 0-2.32-.6-2.91-1.04l-.01 4.63-4.12.87V5.57h3.62l.21 1.02a4.45 4.45 0 0 1 3.36-1.29c3.01 0 5.85 2.7 5.85 7.66 0 5.41-2.81 7.34-6 7.34zm-.96-11.4c-.79 0-1.28.28-1.64.65l.02 6.16c.34.35.81.64 1.62.64 1.27 0 2.13-1.38 2.13-3.74 0-2.3-.87-3.71-2.13-3.71zM32.16 5.43l-4.13.88V3.06l4.13-.87v3.24zM28 6.79h4.13v13.23H28V6.79zm-4.36 9.04c0-1.32-.55-1.81-1.74-2.16l-1.36-.4c-1.36-.4-2.49-1.13-2.49-3.07 0-2.09 1.64-3.51 4.27-3.51 1.36 0 2.55.27 3.55.69v3.4c-1.04-.51-2.1-.78-3.18-.78-.91 0-1.46.3-1.46.95 0 .68.5.9 1.43 1.18l1.13.34c1.65.49 3.05 1.32 3.05 3.55 0 2.32-1.84 3.66-4.6 3.66-1.5 0-2.87-.31-3.83-.78v-3.46c1.16.61 2.4.97 3.6.97 1.04 0 1.63-.34 1.63-.98zm-9.85-2.32c0-1.55-.55-2.7-2.04-2.7-1.5 0-2.13 1.16-2.13 2.7 0 1.65.65 2.78 2.13 2.78 1.49 0 2.04-1.13 2.04-2.78zm4.18 0c0 3.57-2.15 6.19-5.7 6.19-1.44 0-2.46-.36-3.2-.95l-.21 1.04H5.21V2.7l4.13-.88v5.42c.7-.66 1.66-1.06 3.05-1.06 3.18 0 5.58 2.66 5.58 6.32zM5.2 20.3c-1.3 0-2.32-.55-2.9-1.01L2.28 24l-4.13.87V6.79h3.6l.22 1.05a4.4 4.4 0 0 1 3.32-1.32c3.06 0 5.57 2.65 5.57 6.59 0 4.36-2.5 7.19-5.65 7.19z"
+    />
+  </svg>
+)
+
+type ValidationState =
+  | { kind: "idle" }
+  | { kind: "validating" }
+  | { kind: "valid"; currentUses: number; maxUses: number; campaign: string; alreadyRedeemed: boolean }
+  | { kind: "invalid"; message: string }
 
 export default function SuscripcionPage() {
   const router = useRouter()
@@ -23,9 +43,10 @@ export default function SuscripcionPage() {
   const [memberCount, setMemberCount] = useState(0)
 
   const [promoInput, setPromoInput] = useState("")
+  const [validation, setValidation] = useState<ValidationState>({ kind: "idle" })
   const [redeeming, setRedeeming] = useState(false)
   const [promoError, setPromoError] = useState<string | null>(null)
-  const [promoSuccess, setPromoSuccess] = useState<{ plan: PlanId; expiresAt: string } | null>(null)
+  const [promoSuccess, setPromoSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     if (authLoading || !profile?.company_id) return
@@ -47,8 +68,6 @@ export default function SuscripcionPage() {
     })()
   }, [authLoading, profile?.company_id])
 
-  // Al cambiar de plan: respetar el valor actual si está dentro del rango;
-  // si no, hacer clamp a min o max.
   useEffect(() => {
     const { min, max } = PLAN_LIMITS[selectedPlan]
     setSeats((prev) => Math.max(min, Math.min(max, prev)))
@@ -59,10 +78,41 @@ export default function SuscripcionPage() {
   const hasTrial = currentSub?.status === "trial"
   const limit = PLAN_LIMITS[selectedPlan]
   const monthlySubtotal = limit.unitPrice * seats
-  const totalFirstMonth = monthlySubtotal + (hasActiveSub ? 0 : SETUP_FEE)
 
-  async function redeemPromo() {
+  async function validatePromo() {
     if (!promoInput.trim()) return
+    setValidation({ kind: "validating" })
+    setPromoError(null)
+    setPromoSuccess(null)
+    try {
+      const res = await fetch("/api/payments/validate-promo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoInput.trim().toUpperCase() }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setValidation({ kind: "invalid", message: data?.error ?? "No pudimos validar el código." })
+        return
+      }
+      if (!data?.ok) {
+        setValidation({ kind: "invalid", message: data?.error ?? "Código inválido." })
+        return
+      }
+      setValidation({
+        kind: "valid",
+        currentUses: data.currentUses,
+        maxUses: data.maxUses,
+        campaign: data.campaign,
+        alreadyRedeemed: data.alreadyRedeemed,
+      })
+    } catch (e) {
+      setValidation({ kind: "invalid", message: "Error de red." })
+    }
+  }
+
+  async function activatePromo() {
+    if (validation.kind !== "valid") return
     setRedeeming(true)
     setPromoError(null)
     setPromoSuccess(null)
@@ -74,11 +124,10 @@ export default function SuscripcionPage() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
-        setPromoError(data?.error ?? "No pudimos validar el código.")
+        setPromoError(data?.error ?? "No pudimos activar la prueba.")
         return
       }
-      setPromoSuccess({ plan: selectedPlan, expiresAt: data.expiresAt })
-      setPromoInput("")
+      setPromoSuccess("¡Prueba activada! Redirigiendo al dashboard…")
       setTimeout(() => router.push("/dashboard"), 1500)
     } finally {
       setRedeeming(false)
@@ -146,7 +195,6 @@ export default function SuscripcionPage() {
         </div>
       )}
 
-      {/* Tabla comparativa */}
       <section>
         <h2 className="text-sm font-medium text-zinc-300 mb-3">Compara los planes</h2>
         <PlanComparisonTable
@@ -158,7 +206,6 @@ export default function SuscripcionPage() {
 
       {!hasActiveSub && (
         <>
-          {/* Seats stepper */}
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -206,7 +253,6 @@ export default function SuscripcionPage() {
             </div>
           </div>
 
-          {/* Resumen */}
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-2">
             <p className="text-sm font-medium text-zinc-100 mb-3">Resumen</p>
 
@@ -245,27 +291,36 @@ export default function SuscripcionPage() {
         </>
       )}
 
-      {/* CTA principal: pago (solo si no tiene sub activa ni trial) */}
+      {/* Badge Stripe + CTA pago */}
       {!hasActiveSub && !hasTrial && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-zinc-500 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-flugzz-accent" />
-            Pago seguro procesado por Stripe
-          </p>
-          {isDirector ? (
-            <button
-              onClick={() => setShowCheckout(true)}
-              className="rounded-xl bg-zinc-100 text-zinc-900 px-5 py-2.5 text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center gap-2"
-            >
-              Continuar al pago <ArrowRight className="w-4 h-4" />
-            </button>
-          ) : (
-            <p className="text-xs text-zinc-500">Solo el director puede modificar la suscripción.</p>
-          )}
+        <div className="space-y-3">
+          <div className="rounded-xl border border-flugzz-accent/30 bg-flugzz-accent/5 px-4 py-3 flex items-center gap-3">
+            <Shield className="w-4 h-4 text-flugzz-accent shrink-0" />
+            <p className="text-xs text-zinc-200 flex-1">
+              Pago 100% seguro con encriptación <span className="font-semibold">PCI-DSS</span>
+            </p>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Powered by</span>
+              <StripeLogo className="h-3.5" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            {isDirector ? (
+              <button
+                onClick={() => setShowCheckout(true)}
+                className="rounded-xl bg-zinc-100 text-zinc-900 px-5 py-2.5 text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center gap-2"
+              >
+                Continuar al pago <ArrowRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <p className="text-xs text-zinc-500">Solo el director puede modificar la suscripción.</p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Input de código promo (solo si no tiene sub activa ni trial) */}
+      {/* Flujo 2 pasos: Validar → Activar */}
       {!hasActiveSub && !hasTrial && (
         <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-5">
           <div className="flex items-center gap-2 mb-1">
@@ -273,13 +328,15 @@ export default function SuscripcionPage() {
             <p className="text-sm font-medium text-zinc-100">¿Tienes un código de activación?</p>
           </div>
           <p className="text-xs text-zinc-500 mb-3">
-            Activa tu prueba gratuita de 30 días. (Válido una sola vez por empresa.)
+            Activa tu prueba gratuita de 30 días. Cada código se puede usar máximo 2 veces.
           </p>
-          <div className="flex gap-2">
+
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               value={promoInput}
               onChange={(e) => {
                 setPromoInput(e.target.value.toUpperCase())
+                setValidation({ kind: "idle" })
                 setPromoError(null)
                 setPromoSuccess(null)
               }}
@@ -288,19 +345,54 @@ export default function SuscripcionPage() {
               className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-mono outline-none focus:border-zinc-600"
             />
             <button
-              onClick={redeemPromo}
-              disabled={!promoInput.trim() || redeeming}
-              className="rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-2 text-sm font-semibold disabled:opacity-30 flex items-center gap-2"
+              onClick={validatePromo}
+              disabled={!promoInput.trim() || validation.kind === "validating"}
+              className="rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 px-4 py-2 text-sm font-semibold disabled:opacity-30 flex items-center gap-2 justify-center"
             >
-              {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Activar prueba"}
+              {validation.kind === "validating" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Validar código"
+              )}
             </button>
           </div>
+
+          {/* Resultado de validación */}
+          {validation.kind === "valid" && (
+            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+              <p className="text-sm text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" />
+                Código válido{validation.campaign ? ` — campaña "${validation.campaign}"` : ""}
+              </p>
+              <p className="text-xs text-zinc-500">
+                {validation.currentUses}/{validation.maxUses} usos globales consumidos
+                {validation.alreadyRedeemed && " · tu empresa ya lo redimió"}
+              </p>
+              {!validation.alreadyRedeemed && (
+                <button
+                  onClick={activatePromo}
+                  disabled={redeeming}
+                  className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-30 flex items-center justify-center gap-2"
+                >
+                  {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Activar prueba de 30 días"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {validation.kind === "invalid" && (
+            <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{validation.message}</span>
+            </div>
+          )}
+
           {promoError && (
             <p className="text-xs text-red-400 mt-2">{promoError}</p>
           )}
           {promoSuccess && (
             <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> ¡Prueba activada! Redirigiendo al dashboard…
+              <CheckCircle2 className="w-3.5 h-3.5" /> {promoSuccess}
             </p>
           )}
         </div>

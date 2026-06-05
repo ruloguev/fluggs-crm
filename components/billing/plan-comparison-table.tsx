@@ -57,23 +57,47 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
               </span>
             </div>
 
-            <h3 className="text-xl font-semibold text-zinc-100">{plan.name}</h3>
-            <p className="mt-1 text-xs text-zinc-500 leading-relaxed">{plan.description}</p>
+            <h3
+              className={`text-xl font-semibold ${
+                active ? "text-zinc-950" : "text-zinc-100"
+              }`}
+            >
+              {plan.name}
+            </h3>
+            <p
+              className={`mt-1 text-xs leading-relaxed ${
+                active ? "text-zinc-700" : "text-zinc-500"
+              }`}
+            >
+              {plan.description}
+            </p>
 
             <div className="mt-4 flex items-baseline gap-1">
-              <span className="text-2xl font-semibold text-zinc-100">${plan.unitPrice}</span>
-              <span className="text-xs text-zinc-500">MXN/asiento/mes</span>
+              <span
+                className={`text-2xl font-semibold ${
+                  active ? "text-zinc-950" : "text-zinc-100"
+                }`}
+              >
+                ${plan.unitPrice}
+              </span>
+              <span
+                className={`text-xs ${active ? "text-zinc-600" : "text-zinc-500"}`}
+              >
+                MXN/asiento/mes
+              </span>
             </div>
 
             <ul className="mt-5 space-y-2.5 flex-1">
               {features.map((feat, i) => (
                 <li
                   key={i}
-                  className="flex items-start gap-2 text-sm text-zinc-300 leading-relaxed"
+                  className={`flex items-start gap-2 text-sm leading-relaxed ${
+                    active ? "text-zinc-800" : "text-zinc-300"
+                  }`}
                 >
                   <Check
                     className="w-4 h-4 shrink-0 mt-0.5"
-                    style={{ color: active ? accent : "#71717a" }}
+                    style={{ color: active ? "#0e7490" : accent }}
                   />
                   <span>{feat}</span>
                 </li>
@@ -84,7 +108,7 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
               <div className="mt-5 pt-4 border-t border-zinc-800/60">
                 <span
                   className={`text-xs font-semibold uppercase tracking-[0.16em] ${
-                    active ? "text-zinc-100" : "text-zinc-500"
+                    active ? "text-zinc-900" : "text-zinc-500"
                   }`}
                 >
                   {active ? "✓ Seleccionado" : "Elegir plan →"}
@@ -112,7 +136,7 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
             onClick={() => onSelect?.(id)}
             className={`text-left rounded-2xl border transition-all overflow-hidden ${
               active
-                ? "border-zinc-200 bg-zinc-100 text-zinc-950 shadow-[0_0_32px_rgba(255,255,255,0.14)]"
+                ? "border-zinc-200 bg-zinc-100 text-zinc-950 shadow-[0_0_32px_rgba(255,255,255,0.18)]"
                 : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700"
             }`}
           >

@@ -76,6 +76,12 @@ export async function POST(req: NextRequest) {
     })
 
     if (redeemError) {
+      if ((redeemError as { code?: string }).code === "23505") {
+        return NextResponse.json(
+          { error: "Este código ya fue utilizado por tu empresa." },
+          { status: 409 },
+        )
+      }
       console.error("redeem_promo_code rpc error:", redeemError)
       return NextResponse.json({ error: "No pudimos validar el código." }, { status: 500 })
     }

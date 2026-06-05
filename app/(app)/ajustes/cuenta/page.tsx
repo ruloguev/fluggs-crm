@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
-import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause } from "lucide-react"
+import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type ProfileDetail = {
@@ -78,10 +78,18 @@ function SubscriptionSection({ isDirector, onPortalClick, portalLoading }: { isD
         <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
           <CreditCard className="w-4 h-4 text-flugzz-accent" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-sm font-medium text-zinc-100">Suscripción</h2>
           <p className="text-xs text-zinc-500">Plan y estado de tu cuenta.</p>
         </div>
+        {isDirector && (
+          <Link
+            href="/suscripcion"
+            className="text-xs text-flugzz-accent hover:text-flugzz-accent/80 font-medium flex items-center gap-1"
+          >
+            Ver planes <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
       </div>
 
       {!sub ? (

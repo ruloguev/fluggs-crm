@@ -95,12 +95,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Construir line items
-    const lineItems: Array<{ price: string; quantity?: number }> = [
+    const lineItems: Array<{ price: string; quantity: number }> = [
       { price: plan.priceId, quantity: seatsNum },
     ]
 
     if (chargeSetup && SETUP_PRICE_ID) {
-      lineItems.unshift({ price: SETUP_PRICE_ID })
+      lineItems.unshift({ price: SETUP_PRICE_ID, quantity: 1 })
+    }
+
+    // Fail-fast: validar que todos los prices existen en Stripe antes de crear la sesion.
+    // Si alguno fue borrado o el env var esta mal, devolvemos un mensaje accionable
+    // en lugar del generico "No such price".
+    try {
+      await stripe.prices.retrieve(plan.priceId)
+      if (SETUP_PRICE_ID) await stripe.prices.retrieve(SETUP_PRICE_ID)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Price no encontrado"
+      console.error("[create-checkout] price validation failed:", msg)
+      return NextResponse.json(
+        {
+          error: `Price no disponible: ${plan.name}. Verifica STRIPE_PRICE_${planId.toUpperCase()}${SETUP_PRICE_ID ? " o STRIPE_PRICE_SETUP" : ""} en Vercel.`,
+          details: msg,
+        },
+        { status: 500 },
+      )
     }
 
     // Crear sesión de checkout en modo embedded

@@ -115,6 +115,12 @@ export async function POST(req: NextRequest) {
         ? company.settings
         : {}
 
+    const hasPromo = Boolean(normalizedPromo)
+    const nowIso = new Date().toISOString()
+    const expiresAt = hasPromo
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      : null
+
     const { error: updateError } = await supabase
       .from("companies")
       .update({
@@ -123,8 +129,10 @@ export async function POST(req: NextRequest) {
           subscription: {
             plan_id: normalizedPlan,
             promo_code: normalizedPromo,
-            trial_code_applied: Boolean(normalizedPromo),
-            selected_at: new Date().toISOString(),
+            trial_code_applied: hasPromo,
+            selected_at: nowIso,
+            status: hasPromo ? "trial" : "active",
+            expires_at: expiresAt,
           },
         },
       })

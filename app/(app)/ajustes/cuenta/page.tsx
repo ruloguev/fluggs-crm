@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
-import { Loader2, User, Shield, Building2, AlertTriangle, X, Check } from "lucide-react"
+import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type ProfileDetail = {
@@ -22,6 +22,11 @@ export default function CuentaPage() {
 
   const [detail, setDetail] = useState<ProfileDetail | null>(null)
   const [companyName, setCompanyName] = useState<string | null>(null)
+  const [subscription, setSubscription] = useState<{
+    plan_id?: string
+    status?: string
+    expires_at?: string | null
+  } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [confirmText, setConfirmText] = useState("")
@@ -51,14 +56,18 @@ export default function CuentaPage() {
 
       if (!profileErr && profileData) setDetail(profileData as unknown as ProfileDetail)
 
-      if (profile.company_id) {
-        const { data: comp } = await supabase
-          .from("companies")
-          .select("name")
-          .eq("id", profile.company_id)
-          .single()
-        if (comp) setCompanyName(comp.name)
+    if (profile.company_id) {
+      const { data: comp } = await supabase
+        .from("companies")
+        .select("name, settings")
+        .eq("id", profile.company_id)
+        .single()
+      if (comp) {
+        setCompanyName(comp.name)
+        const sub = (comp.settings as { subscription?: { plan_id?: string; status?: string; expires_at?: string | null } } | null)?.subscription
+        if (sub) setSubscription(sub)
       }
+    }
 
       setLoading(false)
     })()
@@ -147,6 +156,60 @@ export default function CuentaPage() {
           </div>
         </div>
       </div>
+
+      {subscription && (
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+              <CreditCard className="w-4 h-4 text-flugzz-accent" />
+            </div>
+            <div>
+              <h2 className="text-sm font-medium text-zinc-100">Suscripción</h2>
+              <p className="text-xs text-zinc-500">Plan y estado de tu cuenta.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Plan</p>
+              <p className="text-sm text-zinc-200 capitalize">{subscription.plan_id ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Estado</p>
+              <p className={`text-sm font-medium capitalize ${
+                subscription.status === "trial" ? "text-cyan-400"
+                : subscription.status === "active" ? "text-emerald-400"
+                : subscription.status === "expired" ? "text-red-400"
+                : "text-zinc-200"
+              }`}>
+                {subscription.status === "trial" ? "Prueba" : subscription.status === "active" ? "Activa" : subscription.status === "expired" ? "Expirada" : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">
+                {subscription.status === "trial" ? "Días restantes" : "Expira"}
+              </p>
+              <p className="text-sm text-zinc-200">
+                {subscription.expires_at
+                  ? (() => {
+                      const days = Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                      if (subscription.status === "trial" && days > 0) {
+                        return `${days} ${days === 1 ? "día" : "días"}`
+                      }
+                      return new Date(subscription.expires_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
+                    })()
+                  : "—"}
+              </p>
+            </div>
+          </div>
+
+          {subscription.status === "expired" && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              Tu prueba terminó. Activa tu suscripción para volver a acceder al CRM.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-2xl border border-red-500/15 bg-red-500/5 p-5 space-y-4">
         <div className="flex items-center gap-3">

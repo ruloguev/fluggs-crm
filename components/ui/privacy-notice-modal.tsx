@@ -44,9 +44,9 @@ export function PrivacyNoticeModal({ profileId, onAccepted }: Props) {
           <div className="space-y-4 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-zinc-300" style={{ maxHeight: "55vh" }}>
             <h3 className="text-sm font-medium text-zinc-200">Responsable</h3>
             <p>
-              Raúl Ángel Rodríguez Guevara | ULTEA, con domicilio en{" "}
-              Paseo de las Américas 41, Lomas Verdes 3ra Sección,{" "}
-              53125 Naucalpan de Juárez, Estado de México,{" "}
+              Ultimate Technology and Arquitectonics, con domicilio en{" "}
+              Av. P.º de la Reforma 284-Piso 17, Juárez, Cuauhtémoc,{" "}
+              06600 Ciudad de México, CDMX,{" "}
               es el responsable del tratamiento de sus datos personales.
             </p>
 
@@ -104,7 +104,7 @@ export function PrivacyNoticeModal({ profileId, onAccepted }: Props) {
               <li><strong>Cancelación:</strong> solicitar la eliminación de sus datos</li>
               <li><strong>Oposición:</strong> oponerse al tratamiento de sus datos para fines específicos</li>
             </ul>
-            <p>Para ejercer sus derechos ARCO, envíe un correo a: <strong>ruloguev@gmail.com</strong></p>
+            <p>Para ejercer sus derechos ARCO, envíe un correo a: <strong>legal@flugzz.com</strong></p>
 
             <h3 className="text-sm font-medium text-zinc-200">Limitación de uso y divulgación</h3>
             <p>Implementamos medidas de seguridad administrativas, técnicas y físicas para proteger sus datos contra daño, pérdida, alteración, destrucción o uso no autorizado, incluyendo cifrado en tránsito y reposo, control de acceso basado en roles y auditoría de sesiones.</p>

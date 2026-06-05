@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
@@ -82,6 +82,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushSupported, setPushSupported] = useState(true)
   const notifRef = useRef<HTMLDivElement>(null)
+  const [companySettings, setCompanySettings] = useState<Record<string, any> | null>(null)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -106,6 +107,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       setShowPrivacyNotice(true)
     }
   }, [loading, profile, pathname])
+
+  useEffect(() => {
+    if (loading || !profile?.company_id) { setCompanySettings(null); return }
+    supabase
+      .from("companies")
+      .select("settings")
+      .eq("id", profile.company_id)
+      .single()
+      .then(({ data }) => { if (data) setCompanySettings(data.settings) })
+  }, [loading, profile?.company_id])
+
+  useEffect(() => {
+    if (loading || !profile?.company_id || !companySettings) return
+    const sub = companySettings?.subscription as { status?: string; expires_at?: string | null } | undefined
+    if (!sub?.expires_at || sub.status === "active") return
+    if (new Date() <= new Date(sub.expires_at)) return
+
+    supabase
+      .from("companies")
+      .update({ settings: { ...companySettings, subscription: { ...sub, status: "expired" } } })
+      .eq("id", profile.company_id)
+      .then(() => { router.push("/suscripcion/vencida") })
+  }, [loading, profile?.company_id, companySettings, router])
+
+  const trialDaysLeft = useMemo(() => {
+    const sub = companySettings?.subscription as { status?: string; expires_at?: string | null } | undefined
+    if (!sub?.expires_at || sub.status !== "trial") return null
+    const diff = new Date(sub.expires_at).getTime() - Date.now()
+    if (diff <= 0) return null
+    return Math.ceil(diff / (1000 * 60 * 60 * 24))
+  }, [companySettings])
 
   // Load notifications
   async function loadNotifications() {
@@ -400,6 +432,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+          {trialDaysLeft !== null && trialDaysLeft <= 7 && trialDaysLeft > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-300 flex items-center justify-between gap-3">
+              <span>
+                Tu prueba termina en {trialDaysLeft} {trialDaysLeft === 1 ? "día" : "días"}. Activa tu suscripción para no perder acceso.
+              </span>
+              <Link href="/suscripcion" className="rounded-lg bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-200 whitespace-nowrap">
+                Activar
+              </Link>
+            </div>
+          )}
           {children}
         </div>
       </main>

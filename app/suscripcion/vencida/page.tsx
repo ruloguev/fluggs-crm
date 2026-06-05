@@ -76,12 +76,12 @@ export default function VencidaPage() {
         </p>
 
         <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-3">
-          <button
-            onClick={() => alert("Integración de pago próxima.")}
+          <Link
+            href="/suscripcion"
             className="w-full rounded-xl bg-zinc-100 text-zinc-900 px-4 py-3 text-sm font-semibold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2"
           >
             <CreditCard className="w-4 h-4" /> Activar suscripción
-          </button>
+          </Link>
 
           <Link
             href="/ajustes/cuenta"

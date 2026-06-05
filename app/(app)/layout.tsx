@@ -83,6 +83,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pushSupported, setPushSupported] = useState(true)
   const notifRef = useRef<HTMLDivElement>(null)
   const [companySettings, setCompanySettings] = useState<Record<string, any> | null>(null)
+  const [subStatus, setSubStatus] = useState<string | null>(null)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -109,13 +110,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [loading, profile, pathname])
 
   useEffect(() => {
-    if (loading || !profile?.company_id) { setCompanySettings(null); return }
-    supabase
-      .from("companies")
-      .select("settings")
-      .eq("id", profile.company_id)
-      .single()
-      .then(({ data }) => { if (data) setCompanySettings(data.settings) })
+    if (loading || !profile?.company_id) { setCompanySettings(null); setSubStatus(null); return }
+    Promise.all([
+      supabase.from("companies").select("settings").eq("id", profile.company_id).single(),
+      supabase.from("company_subscriptions").select("status, cancel_at_period_end").eq("company_id", profile.company_id).maybeSingle(),
+    ]).then(([compRes, subRes]) => {
+      if (compRes.data) setCompanySettings(compRes.data.settings)
+      if (subRes.data) setSubStatus(subRes.data.status as string | null)
+    })
   }, [loading, profile?.company_id])
 
   useEffect(() => {
@@ -432,6 +434,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+          {subStatus === "past_due" && (
+            <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300 flex items-center justify-between gap-3">
+              <span>
+                Tu último pago fue rechazado. Actualiza tu método de pago para evitar la cancelación.
+              </span>
+              <Link href="/ajustes/cuenta" className="rounded-lg bg-red-500/20 hover:bg-red-500/30 px-3 py-1.5 text-xs font-medium text-red-200 whitespace-nowrap">
+                Actualizar
+              </Link>
+            </div>
+          )}
           {trialDaysLeft !== null && trialDaysLeft <= 7 && trialDaysLeft > 0 && (
             <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-300 flex items-center justify-between gap-3">
               <span>

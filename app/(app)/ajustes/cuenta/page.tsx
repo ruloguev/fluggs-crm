@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
-import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard } from "lucide-react"
+import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type ProfileDetail = {
@@ -15,6 +16,160 @@ type ProfileDetail = {
   team_memberships: { reports_to: string | null }[]
 }
 
+type SubDetail = {
+  plan_id: string
+  seats: number
+  status: "trial" | "active" | "past_due" | "cancelled" | "expired"
+  current_period_end?: string | null
+  setup_fee_paid?: boolean
+  cancel_at_period_end?: boolean
+}
+
+function SubscriptionSection({ isDirector, onPortalClick, portalLoading }: { isDirector: boolean; onPortalClick: () => void; portalLoading: boolean }) {
+  const supabase = createClient()
+  const { profile } = useAuth()
+  const [sub, setSub] = useState<SubDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  async function load() {
+    if (!profile?.company_id) return
+    const { data } = await supabase
+      .from("company_subscriptions")
+      .select("plan_id, seats, status, current_period_end, setup_fee_paid, cancel_at_period_end")
+      .eq("company_id", profile.company_id)
+      .maybeSingle()
+    setSub(data as SubDetail | null)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [profile?.company_id])
+
+  async function cancel() {
+    if (!confirm("¿Cancelar la suscripción? Mantendrás acceso hasta el final del periodo actual.")) return
+    setActionLoading(true)
+    const res = await fetch("/api/payments/cancel", { method: "POST" })
+    const data = await res.json().catch(() => null)
+    setActionLoading(false)
+    if (!res.ok) { alert(data?.error ?? "Error al cancelar"); return }
+    await load()
+  }
+
+  async function resume() {
+    setActionLoading(true)
+    const res = await fetch("/api/payments/resume", { method: "POST" })
+    const data = await res.json().catch(() => null)
+    setActionLoading(false)
+    if (!res.ok) { alert(data?.error ?? "Error al reanudar"); return }
+    await load()
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5">
+        <Loader2 className="w-5 h-5 text-flugzz-accent animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+          <CreditCard className="w-4 h-4 text-flugzz-accent" />
+        </div>
+        <div>
+          <h2 className="text-sm font-medium text-zinc-100">Suscripción</h2>
+          <p className="text-xs text-zinc-500">Plan y estado de tu cuenta.</p>
+        </div>
+      </div>
+
+      {!sub ? (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-amber-200">No tienes suscripción activa</p>
+            <p className="text-xs text-zinc-500 mt-0.5">Activa un plan para empezar.</p>
+          </div>
+          {isDirector && (
+            <Link href="/suscripcion" className="rounded-lg bg-flugzz-accent text-zinc-900 px-3 py-1.5 text-xs font-semibold hover:opacity-90">
+              Ver planes
+            </Link>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Plan</p>
+              <p className="text-sm text-zinc-200 capitalize">{sub.plan_id}</p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Asientos</p>
+              <p className="text-sm text-zinc-200">{sub.seats}</p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Estado</p>
+              <p className={`text-sm font-medium capitalize ${
+                sub.status === "active" ? "text-emerald-400"
+                : sub.status === "trial" ? "text-cyan-400"
+                : sub.status === "past_due" ? "text-amber-400"
+                : "text-red-400"
+              }`}>
+                {sub.status === "active" ? "Activa" : sub.status === "trial" ? "Prueba" : sub.status === "past_due" ? "Pago pendiente" : sub.status === "cancelled" ? "Cancelada" : "Expirada"}
+              </p>
+            </div>
+            {sub.current_period_end && (
+              <div className="sm:col-span-3">
+                <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">
+                  {sub.cancel_at_period_end ? "Acceso hasta" : "Próxima renovación"}
+                </p>
+                <p className="text-sm text-zinc-200">
+                  {new Date(sub.current_period_end).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {sub.cancel_at_period_end && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200 flex items-center justify-between">
+              <span>Tu suscripción se cancelará al final del periodo actual.</span>
+              {isDirector && (
+                <button onClick={resume} disabled={actionLoading} className="text-xs text-amber-300 hover:text-amber-100 font-medium">
+                  Reanudar
+                </button>
+              )}
+            </div>
+          )}
+
+          {sub.status === "past_due" && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              El último pago fue rechazado. Actualiza tu método de pago para evitar la cancelación.
+            </div>
+          )}
+
+          {isDirector && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-zinc-800/60">
+              <Link href="/suscripcion" className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-700 px-3 py-1.5 text-xs flex items-center gap-1.5">
+                Cambiar plan / asientos
+              </Link>
+              <button onClick={onPortalClick} disabled={portalLoading} className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-700 px-3 py-1.5 text-xs flex items-center gap-1.5 disabled:opacity-50">
+                {portalLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                Gestionar método de pago
+              </button>
+              {!sub.cancel_at_period_end && sub.status === "active" && (
+                <button onClick={cancel} disabled={actionLoading} className="rounded-lg border border-red-500/20 bg-red-500/5 text-red-300 hover:bg-red-500/10 px-3 py-1.5 text-xs flex items-center gap-1.5 disabled:opacity-50">
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
+                  Cancelar suscripción
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function CuentaPage() {
   const { profile, company, role, loading: authLoading } = useAuth()
   const supabase = createClient()
@@ -22,17 +177,24 @@ export default function CuentaPage() {
 
   const [detail, setDetail] = useState<ProfileDetail | null>(null)
   const [companyName, setCompanyName] = useState<string | null>(null)
-  const [subscription, setSubscription] = useState<{
-    plan_id?: string
-    status?: string
-    expires_at?: string | null
-  } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [confirmText, setConfirmText] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [portalLoading, setPortalLoading] = useState(false)
+
+  const isDirector = (role?.level ?? 99) <= 1 || (role?.name ?? "").toLowerCase().includes("director")
+
+  async function openCustomerPortal() {
+    setPortalLoading(true)
+    const res = await fetch("/api/payments/customer-portal", { method: "POST" })
+    const data = await res.json().catch(() => null)
+    setPortalLoading(false)
+    if (!res.ok) { alert(data?.error ?? "Error al abrir portal"); return }
+    if (data?.url) window.open(data.url, "_blank")
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -59,14 +221,10 @@ export default function CuentaPage() {
     if (profile.company_id) {
       const { data: comp } = await supabase
         .from("companies")
-        .select("name, settings")
+        .select("name")
         .eq("id", profile.company_id)
         .single()
-      if (comp) {
-        setCompanyName(comp.name)
-        const sub = (comp.settings as { subscription?: { plan_id?: string; status?: string; expires_at?: string | null } } | null)?.subscription
-        if (sub) setSubscription(sub)
-      }
+      if (comp) setCompanyName(comp.name)
     }
 
       setLoading(false)
@@ -157,59 +315,11 @@ export default function CuentaPage() {
         </div>
       </div>
 
-      {subscription && (
-        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
-              <CreditCard className="w-4 h-4 text-flugzz-accent" />
-            </div>
-            <div>
-              <h2 className="text-sm font-medium text-zinc-100">Suscripción</h2>
-              <p className="text-xs text-zinc-500">Plan y estado de tu cuenta.</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Plan</p>
-              <p className="text-sm text-zinc-200 capitalize">{subscription.plan_id ?? "—"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Estado</p>
-              <p className={`text-sm font-medium capitalize ${
-                subscription.status === "trial" ? "text-cyan-400"
-                : subscription.status === "active" ? "text-emerald-400"
-                : subscription.status === "expired" ? "text-red-400"
-                : "text-zinc-200"
-              }`}>
-                {subscription.status === "trial" ? "Prueba" : subscription.status === "active" ? "Activa" : subscription.status === "expired" ? "Expirada" : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">
-                {subscription.status === "trial" ? "Días restantes" : "Expira"}
-              </p>
-              <p className="text-sm text-zinc-200">
-                {subscription.expires_at
-                  ? (() => {
-                      const days = Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                      if (subscription.status === "trial" && days > 0) {
-                        return `${days} ${days === 1 ? "día" : "días"}`
-                      }
-                      return new Date(subscription.expires_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
-                    })()
-                  : "—"}
-              </p>
-            </div>
-          </div>
-
-          {subscription.status === "expired" && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              Tu prueba terminó. Activa tu suscripción para volver a acceder al CRM.
-            </div>
-          )}
-        </div>
-      )}
+      <SubscriptionSection
+        isDirector={isDirector}
+        onPortalClick={openCustomerPortal}
+        portalLoading={portalLoading}
+      />
 
       <div className="rounded-2xl border border-red-500/15 bg-red-500/5 p-5 space-y-4">
         <div className="flex items-center gap-3">

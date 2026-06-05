@@ -417,3 +417,20 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Stripe Embedded Checkout — dark theme */
+.stripe-embedded-checkout {
+  --colorPrimary: #22D3EE;
+  --colorBackground: #09090b;
+  --colorText: #fafafa;
+  --colorTextSecondary: #a1a1aa;
+  --colorDanger: #f87171;
+  --fontFamily: 'Inter', system-ui, sans-serif;
+  --borderRadius: 12px;
+  min-height: 500px;
+  background: #09090b;
+}
+
+.stripe-embedded-checkout iframe {
+  background: #09090b !important;
+}

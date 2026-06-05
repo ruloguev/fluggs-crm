@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react"
 import { loadStripe } from "@stripe/stripe-js"
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Loader2, X, AlertTriangle, FlaskConical } from "lucide-react"
+import { Loader2, X, FlaskConical } from "lucide-react"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
@@ -17,11 +17,10 @@ type Props = {
 }
 
 // Detecta el modo de Stripe desde la publishable key (publica, expuesta al cliente).
-// pk_live_ → modo produccion (tarjetas reales)
 // pk_test_ → modo pruebas (tarjetas como 4242 4242 4242 4242)
-function detectStripeMode(): "live" | "test" | "unknown" {
+// Modo live no se muestra: en produccion el cliente no necesita ver la advertencia.
+function detectStripeMode(): "test" | "unknown" {
   const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""
-  if (pk.startsWith("pk_live_")) return "live"
   if (pk.startsWith("pk_test_")) return "test"
   return "unknown"
 }
@@ -68,52 +67,50 @@ export function CheckoutModal({ planId, seats, open, onClose, onSuccess }: Props
           translate-y-0 sm:translate-y-[-50%]
           h-[100dvh] sm:h-auto sm:max-h-[95vh]
           rounded-none sm:rounded-xl
+          overflow-hidden
           [&>button]:hidden
         "
         showCloseButton={false}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800/60 px-5 py-3 shrink-0">
-          <h2 className="text-sm font-medium text-zinc-100">Activar suscripción</h2>
-          <div className="flex items-center gap-2">
-            {mode === "test" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
-                <FlaskConical className="w-3 h-3" /> Modo test
-              </span>
-            )}
-            {mode === "live" && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
-                <AlertTriangle className="w-3 h-3" /> Modo live
-              </span>
-            )}
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
-              <X className="w-4 h-4" />
-            </button>
+        <div className="flex flex-col h-full min-h-0">
+          <div className="flex items-center justify-between border-b border-zinc-800/60 px-5 py-3 shrink-0">
+            <h2 className="text-sm font-medium text-zinc-100">Activar suscripción</h2>
+            <div className="flex items-center gap-2">
+              {mode === "test" && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+                  <FlaskConical className="w-3 h-3" /> Modo test
+                </span>
+              )}
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="min-h-[640px] flex-1 overflow-y-auto">
-          {loading && (
-            <div className="flex items-center justify-center h-[640px]">
-              <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
-            </div>
-          )}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {loading && (
+              <div className="flex items-center justify-center h-[420px]">
+                <Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" />
+              </div>
+            )}
 
-          {error && (
-            <div className="p-6 text-sm text-red-300 bg-red-500/10 border-t border-red-500/20">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="p-6 text-sm text-red-300 bg-red-500/10 border-t border-red-500/20">
+                {error}
+              </div>
+            )}
 
-          {options && !error && (
-            <div className="stripe-embedded-checkout h-full">
-              <EmbeddedCheckoutProvider
-                stripe={stripePromise}
-                options={options}
-              >
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
-            </div>
-          )}
+            {options && !error && (
+              <div className="stripe-embedded-checkout h-full">
+                <EmbeddedCheckoutProvider
+                  stripe={stripePromise}
+                  options={options}
+                >
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

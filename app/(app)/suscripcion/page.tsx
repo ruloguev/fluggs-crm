@@ -70,8 +70,16 @@ export default function SuscripcionPage() {
 
   useEffect(() => {
     const { min, max } = PLAN_LIMITS[selectedPlan]
-    setSeats((prev) => Math.max(min, Math.min(max, prev)))
-  }, [selectedPlan])
+    setSeats((prev) => {
+      // Si la sub actual coincide con el plan seleccionado, mantener seats del sub
+      if (currentSub?.plan_id === selectedPlan && typeof currentSub?.seats === "number") {
+        return Math.max(min, Math.min(max, currentSub.seats))
+      }
+      // Cualquier otro caso (cambio manual de plan, sin sub) → partir desde min
+      // para que el cliente vaya creciendo desde el rango más bajo del plan.
+      return min
+    })
+  }, [selectedPlan, currentSub])
 
   const isDirector = (role?.level ?? 99) <= 1 || (role?.name ?? "").toLowerCase().includes("director")
   const hasActiveSub = currentSub && ["active", "past_due"].includes(currentSub.status)

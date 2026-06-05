@@ -12,6 +12,8 @@ import {
 import { createClient } from "@/lib/supabase"
 import { registerPushSubscription, unregisterPushSubscription, getPushSubscriptionStatus } from "@/lib/push-notifications"
 import { PrivacyNoticeModal } from "@/components/ui/privacy-notice-modal"
+import { CommandPalette } from "@/components/search/command-palette"
+import { CommandPaletteTrigger } from "@/components/search/command-palette-trigger"
 
 type NotificationRecord = {
   id: string
@@ -84,6 +86,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const notifRef = useRef<HTMLDivElement>(null)
   const [companySettings, setCompanySettings] = useState<Record<string, any> | null>(null)
   const [subStatus, setSubStatus] = useState<string | null | undefined>(undefined)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
     can("can_manage_users") ||
@@ -228,6 +231,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [notifOpen])
 
+  // Atajo global: Cmd/Ctrl + K abre el command palette
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [])
+
   async function markAsRead(id: string, leadId?: string | null) {
     await supabase.from("notifications").update({ is_read: true }).eq("id", id)
     setNotifications(prev => prev.filter(n => n.id !== id))
@@ -361,15 +376,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="hidden sm:flex items-center flex-1 max-w-sm ml-4 md:ml-0">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-              <input type="text" placeholder="Buscar leads, contactos..."
-                className="w-full bg-zinc-900/70 border border-zinc-800/60 rounded-full pl-9 pr-4 py-1.5 text-sm text-zinc-300 outline-none focus:border-zinc-700 placeholder:text-zinc-600 transition-colors" />
-            </div>
+          <div className="flex items-center flex-1 max-w-sm ml-4 md:ml-0">
+            <CommandPaletteTrigger onOpen={() => setPaletteOpen(true)} />
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
+            {/* Search button (mobile) */}
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="sm:hidden relative p-2 text-zinc-500 hover:text-zinc-100 transition-colors rounded-lg hover:bg-zinc-800"
+              aria-label="Buscar"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
             {/* Notifications */}
             <div className="relative" ref={notifRef}>
               <button
@@ -487,6 +508,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           onAccepted={() => { privacyAcceptedSession.current = true; setShowPrivacyNotice(false) }}
         />
       )}
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   )
 }

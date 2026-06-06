@@ -134,11 +134,17 @@ export default function SuscripcionPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setPromoError(data?.error ?? "No pudimos activar la prueba.")
+        setRedeeming(false)
         return
       }
       setPromoSuccess("¡Prueba activada! Redirigiendo al dashboard…")
-      setTimeout(() => router.push("/dashboard"), 1500)
-    } finally {
+      // Hard reload: garantiza que el layout re-evalúe subStatus desde cero.
+      // Evita race conditions con el cache de useEffect en client-side routing.
+      setTimeout(() => {
+        window.location.href = "/dashboard"
+      }, 600)
+    } catch (e) {
+      setPromoError(e instanceof Error ? e.message : "Error de red.")
       setRedeeming(false)
     }
   }
@@ -414,12 +420,33 @@ export default function SuscripcionPage() {
             )}
 
             {promoError && (
-              <p className="text-xs text-red-400">{promoError}</p>
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p>{promoError}</p>
+                  <button
+                    onClick={activatePromo}
+                    disabled={redeeming}
+                    className="mt-2 text-xs underline text-red-200 hover:text-red-100 disabled:opacity-50"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              </div>
             )}
+
             {promoSuccess && (
-              <p className="text-xs text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" /> {promoSuccess}
-              </p>
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+                <p className="text-sm text-emerald-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> {promoSuccess}
+                </p>
+                <button
+                  onClick={() => { window.location.href = "/dashboard" }}
+                  className="w-full rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors"
+                >
+                  Ir al dashboard ahora →
+                </button>
+              </div>
             )}
           </div>
         )}

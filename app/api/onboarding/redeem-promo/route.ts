@@ -54,18 +54,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Empresa no encontrada." }, { status: 400 })
     }
 
-    // Verificar que no tenga ya una suscripción activa
+    // Verificar que no tenga ya una suscripción activa de pago.
+    // Si tiene una suscripción de demo (status='active' sin stripe_subscription_id,
+    // creada por el backfill de la migración 017), permitir reemplazarla: la
+    // eliminamos antes de crear el trial.
     const { data: existing } = await supabase
       .from("company_subscriptions")
-      .select("status")
+      .select("status, stripe_subscription_id, stripe_customer_id")
       .eq("company_id", profile.company_id)
       .maybeSingle()
 
-    if (existing && ["active", "trial", "past_due"].includes(existing.status)) {
-      return NextResponse.json(
-        { error: "Ya tienes una suscripción activa. No puedes redimir un código." },
-        { status: 409 },
-      )
+    if (existing) {
+      if (existing.status === "trial") {
+        return NextResponse.json(
+          { error: "Ya tienes una prueba activa. No puedes redimir otro código." },
+          { status: 409 },
+        )
+      }
+      if (existing.status === "past_due") {
+        return NextResponse.json(
+          { error: "Tu suscripción tiene un pago pendiente. Resuélvelo antes de redimir un código." },
+          { status: 409 },
+        )
+      }
+      if (existing.status === "active" && existing.stripe_subscription_id) {
+        return NextResponse.json(
+          { error: "Ya tienes una suscripción activa de pago. No puedes redimir un código." },
+          { status: 409 },
+        )
+      }
+      // active SIN stripe_subscription_id = sub de demo / backfill. Reemplazable.
+      if (existing.status === "active" && !existing.stripe_subscription_id) {
+        const { error: delError } = await supabase
+          .from("company_subscriptions")
+          .delete()
+          .eq("company_id", profile.company_id)
+        if (delError) {
+          console.error("redeem-promo: failed to clear demo sub:", delError)
+          return NextResponse.json(
+            { error: "No pudimos preparar el espacio para el código." },
+            { status: 500 },
+          )
+        }
+      }
     }
 
     const { data: redeemData, error: redeemError } = await supabase.rpc("redeem_promo_code", {

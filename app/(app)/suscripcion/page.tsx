@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase"
 import { PLAN_LIMITS, SETUP_FEE, type PlanId } from "@/lib/stripe-plans"
 import { CheckoutModal } from "@/components/payments/checkout-modal"
 import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
-import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle } from "lucide-react"
+import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import Link from "next/link"
 
 const StripeLogo = ({ className = "h-3.5" }: { className?: string }) => (
@@ -47,6 +47,7 @@ export default function SuscripcionPage() {
   const [redeeming, setRedeeming] = useState(false)
   const [promoError, setPromoError] = useState<string | null>(null)
   const [promoSuccess, setPromoSuccess] = useState<string | null>(null)
+  const [promoOpen, setPromoOpen] = useState(false)
 
   useEffect(() => {
     if (authLoading || !profile?.company_id) return
@@ -328,83 +329,101 @@ export default function SuscripcionPage() {
         </div>
       )}
 
-      {/* Flujo 2 pasos: Validar → Activar */}
-      {!hasActiveSub && !hasTrial && (
-        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 p-5">
-          <div className="flex items-center gap-2 mb-1">
+      {/* Flujo 2 pasos: Validar → Activar (colapsable, siempre accesible) */}
+      <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40">
+        <button
+          type="button"
+          onClick={() => {
+            setPromoOpen((o) => !o)
+            if (!promoOpen) {
+              setPromoError(null)
+              setPromoSuccess(null)
+            }
+          }}
+          className="w-full flex items-center justify-between gap-3 p-5 text-left"
+        >
+          <div className="flex items-center gap-2">
             <Ticket className="w-4 h-4 text-flugzz-accent" />
-            <p className="text-sm font-medium text-zinc-100">¿Tienes un código de activación?</p>
+            <span className="text-sm font-medium text-zinc-100">Tengo un código de activación</span>
           </div>
-          <p className="text-xs text-zinc-500 mb-3">
-            Activa tu prueba gratuita de 30 días. Cada código se puede usar máximo 2 veces.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={promoInput}
-              onChange={(e) => {
-                setPromoInput(e.target.value.toUpperCase())
-                setValidation({ kind: "idle" })
-                setPromoError(null)
-                setPromoSuccess(null)
-              }}
-              placeholder="FLUGZZ01"
-              maxLength={8}
-              className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-mono outline-none focus:border-zinc-600"
-            />
-            <button
-              onClick={validatePromo}
-              disabled={!promoInput.trim() || validation.kind === "validating"}
-              className="rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 px-4 py-2 text-sm font-semibold disabled:opacity-30 flex items-center gap-2 justify-center"
-            >
-              {validation.kind === "validating" ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Validar código"
-              )}
-            </button>
-          </div>
-
-          {/* Resultado de validación */}
-          {validation.kind === "valid" && (
-            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
-              <p className="text-sm text-emerald-300 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" />
-                Código válido{validation.campaign ? ` — campaña "${validation.campaign}"` : ""}
-              </p>
-              <p className="text-xs text-zinc-500">
-                {validation.currentUses}/{validation.maxUses} usos globales consumidos
-                {validation.alreadyRedeemed && " · tu empresa ya lo redimió"}
-              </p>
-              {!validation.alreadyRedeemed && (
-                <button
-                  onClick={activatePromo}
-                  disabled={redeeming}
-                  className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-30 flex items-center justify-center gap-2"
-                >
-                  {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Activar prueba de 30 días"}
-                </button>
-              )}
-            </div>
+          {promoOpen ? (
+            <ChevronUp className="w-4 h-4 text-zinc-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-zinc-500" />
           )}
+        </button>
 
-          {validation.kind === "invalid" && (
-            <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{validation.message}</span>
-            </div>
-          )}
-
-          {promoError && (
-            <p className="text-xs text-red-400 mt-2">{promoError}</p>
-          )}
-          {promoSuccess && (
-            <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {promoSuccess}
+        {promoOpen && (
+          <div className="px-5 pb-5 space-y-3">
+            <p className="text-xs text-zinc-500">
+              Activa tu prueba gratuita de 30 días.
             </p>
-          )}
-        </div>
-      )}
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={promoInput}
+                onChange={(e) => {
+                  setPromoInput(e.target.value.toUpperCase())
+                  setValidation({ kind: "idle" })
+                  setPromoError(null)
+                  setPromoSuccess(null)
+                }}
+                placeholder="Código de activación"
+                className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm font-mono outline-none focus:border-zinc-600"
+              />
+              <button
+                onClick={validatePromo}
+                disabled={!promoInput.trim() || validation.kind === "validating"}
+                className="rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 px-4 py-2 text-sm font-semibold disabled:opacity-30 flex items-center gap-2 justify-center"
+              >
+                {validation.kind === "validating" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Validar código"
+                )}
+              </button>
+            </div>
+
+            {validation.kind === "valid" && (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
+                <p className="text-sm text-emerald-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Código válido{validation.campaign ? ` — campaña "${validation.campaign}"` : ""}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {validation.currentUses}/{validation.maxUses} usos globales consumidos
+                  {validation.alreadyRedeemed && " · tu empresa ya lo redimió"}
+                </p>
+                {!validation.alreadyRedeemed && (
+                  <button
+                    onClick={activatePromo}
+                    disabled={redeeming}
+                    className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-30 flex items-center justify-center gap-2"
+                  >
+                    {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Activar prueba de 30 días"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {validation.kind === "invalid" && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{validation.message}</span>
+              </div>
+            )}
+
+            {promoError && (
+              <p className="text-xs text-red-400">{promoError}</p>
+            )}
+            {promoSuccess && (
+              <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {promoSuccess}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {showCheckout && (
         <CheckoutModal

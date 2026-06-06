@@ -64,6 +64,32 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Si ya tiene una suscripción de demo (backfill de 017, sin stripe_subscription_id),
+    // limpiarla antes de redimir para no chocar con la PK de company_subscriptions.
+    const { data: existingSub } = await supabase
+      .from("company_subscriptions")
+      .select("status, stripe_subscription_id")
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (existingSub) {
+      if (existingSub.status === "trial") {
+        return NextResponse.json(
+          { error: "Ya tienes una prueba activa." },
+          { status: 409 },
+        )
+      }
+      if (existingSub.status === "active" && existingSub.stripe_subscription_id) {
+        return NextResponse.json(
+          { error: "Ya tienes una suscripción activa de pago." },
+          { status: 409 },
+        )
+      }
+      if (existingSub.status === "active" && !existingSub.stripe_subscription_id) {
+        await supabase.from("company_subscriptions").delete().eq("company_id", companyId)
+      }
+    }
+
     // ── Con codigo → redencion atomica via funcion SQL
     const { data: redeemData, error: redeemError } = await supabase.rpc("redeem_promo_code", {
       p_code: normalizedCode,

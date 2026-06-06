@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { checkSeats, seatCheckErrorMessage } from "@/lib/seats"
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +19,22 @@ export async function POST(req: NextRequest) {
 
     if (!email || !fullName || !companyId)
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
+
+    const seatCheck = await checkSeats(adminClient, companyId)
+    if (!seatCheck.ok) {
+      const msg = seatCheckErrorMessage(seatCheck)
+      return NextResponse.json(
+        {
+          error: msg.body,
+          code: msg.code,
+          title: msg.title,
+          active: seatCheck.active,
+          seats: seatCheck.seats,
+          status: seatCheck.status,
+        },
+        { status: 403 },
+      )
+    }
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "")
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
@@ -47,8 +64,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: membershipError.message }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({
+      success: true,
+      remainingSeats: seatCheck.remaining - 1,
+      seats: seatCheck.seats,
+    })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Error inesperado"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase"
 import { PLAN_LIMITS, SETUP_FEE, type PlanId } from "@/lib/stripe-plans"
 import { CheckoutModal } from "@/components/payments/checkout-modal"
 import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
-import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle, ChevronDown, ChevronUp, Rocket } from "lucide-react"
 import Link from "next/link"
 
 const StripeLogo = ({ className = "h-3.5" }: { className?: string }) => (
@@ -87,6 +87,8 @@ export default function SuscripcionPage() {
   const hasTrial = currentSub?.status === "trial"
   const limit = PLAN_LIMITS[selectedPlan]
   const monthlySubtotal = limit.unitPrice * seats
+  const clampedSeats = Math.min(Math.max(seats, limit.min), limit.max)
+  const planLabel = (id: PlanId) => PLAN_LIMITS[id].name
 
   async function validatePromo() {
     if (!promoInput.trim()) return
@@ -391,22 +393,54 @@ export default function SuscripcionPage() {
             </div>
 
             {validation.kind === "valid" && (
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 space-y-2">
-                <p className="text-sm text-emerald-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Código válido{validation.campaign ? ` — campaña "${validation.campaign}"` : ""}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {validation.currentUses}/{validation.maxUses} usos globales consumidos
-                  {validation.alreadyRedeemed && " · tu empresa ya lo redimió"}
-                </p>
+              <div className="rounded-xl border-2 border-emerald-500/50 bg-emerald-950/40 p-4 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-emerald-300">
+                      ¡Código válido!
+                    </p>
+                    {validation.campaign && (
+                      <p className="text-xs text-emerald-400/70">Campaña: {validation.campaign}</p>
+                    )}
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      {validation.currentUses}/{validation.maxUses} usos globales
+                      {validation.alreadyRedeemed && " · tu empresa ya lo redimió"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-black/40 border border-emerald-500/20 p-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-zinc-300">
+                    <span>Plan a activar:</span>
+                    <span className="font-semibold text-zinc-100">{planLabel(selectedPlan)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-300">
+                    <span>Asientos:</span>
+                    <span className="font-semibold text-zinc-100">{clampedSeats}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-300">
+                    <span>Duración de la prueba:</span>
+                    <span className="font-semibold text-emerald-400">30 días gratis</span>
+                  </div>
+                </div>
+
                 {!validation.alreadyRedeemed && (
                   <button
                     onClick={activatePromo}
                     disabled={redeeming}
-                    className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-30 flex items-center justify-center gap-2"
+                    className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-3.5 text-base font-bold hover:opacity-90 active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2 shadow-lg shadow-flugzz-accent/30 transition-all"
                   >
-                    {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : "Activar prueba de 30 días"}
+                    {redeeming ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Rocket className="w-5 h-5" />
+                        Activar prueba de 30 días
+                      </>
+                    )}
                   </button>
                 )}
               </div>

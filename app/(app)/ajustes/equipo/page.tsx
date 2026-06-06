@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation"
 import {
   UserPlus, Mail, Shield, ChevronDown, Check, X,
   Loader2, MoreHorizontal, UserX, UserCheck,
-  Copy, AlertCircle, Users, Edit2, Trash2, KeyRound, ChevronRight,
+  Copy, AlertCircle, Users, Edit2, Trash2, KeyRound, ChevronRight, ArrowRight,
 } from "lucide-react"
+import Link from "next/link"
 
 type Role = { id: string; name: string; level: number; color: string }
 type Member = {
@@ -134,6 +135,7 @@ export default function EquipoPage() {
   const supabase = createClient()
   const [members, setMembers] = useState<Member[]>([])
   const [roles, setRoles] = useState<Role[]>([])
+  const [subscription, setSubscription] = useState<{ seats: number; status: string | null; planId: string | null }>({ seats: 0, status: null, planId: null })
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [showCreateUser, setShowCreateUser] = useState(false)
@@ -157,11 +159,25 @@ export default function EquipoPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/team/members?companyId=${profile!.company_id}`)
-      const data = await res.json()
-      if (!res.ok) { console.error("Error cargando equipo:", data.error) } else {
+      const [membersRes, subRes] = await Promise.all([
+        fetch(`/api/team/members?companyId=${profile!.company_id}`),
+        supabase
+          .from("company_subscriptions")
+          .select("seats, status, plan_id")
+          .eq("company_id", profile!.company_id)
+          .maybeSingle(),
+      ])
+      const data = await membersRes.json()
+      if (!membersRes.ok) { console.error("Error cargando equipo:", data.error) } else {
         setRoles(data.roles ?? [])
         setMembers(data.members ?? [])
+      }
+      if (!subRes.error && subRes.data) {
+        setSubscription({
+          seats: subRes.data.seats ?? 0,
+          status: subRes.data.status ?? null,
+          planId: subRes.data.plan_id ?? null,
+        })
       }
     } catch (e) { console.error("Error cargando equipo:", e) }
     setLoading(false)
@@ -192,6 +208,9 @@ export default function EquipoPage() {
   })
   const rootMembers = search ? filteredMembers : filteredMembers.filter(m => !m.reports_to || !memberIds.has(m.reports_to))
   const activeCount = members.filter(m => m.is_active).length
+  const totalCount = members.length
+  const subIsActive = subscription.status === "trial" || subscription.status === "active" || subscription.status === "past_due"
+  const atLimit = subIsActive && subscription.seats > 0 && activeCount >= subscription.seats
 
   if (authLoading || loading) return (<div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 text-flugzz-accent animate-spin" /></div>)
 
@@ -200,11 +219,39 @@ export default function EquipoPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Ajustes<span className="text-flugzz-accent">.</span></h1>
-          <p className="text-sm text-zinc-400 mt-1">{activeCount} usuarios activos</p>
+          <p className="text-sm text-zinc-400 mt-1">
+            {subIsActive && subscription.seats > 0 ? (
+              <>
+                <span className={atLimit ? "text-amber-400 font-semibold" : "text-zinc-200 font-semibold"}>
+                  {activeCount} de {subscription.seats} {subscription.seats === 1 ? "asiento" : "asientos"}
+                </span>
+                {atLimit && <span className="text-amber-400"> · límite alcanzado</span>}
+                <span className="text-zinc-500"> · {totalCount} {totalCount === 1 ? "usuario" : "usuarios"} en total</span>
+              </>
+            ) : (
+              <>{activeCount} usuarios activos</>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button type="button" onClick={() => setShowCreateUser(true)} className="flex items-center gap-2 border border-zinc-700 bg-zinc-900/85 text-zinc-100 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-800 hover:border-zinc-600 transition-colors"><KeyRound className="w-4 h-4" /> Crear usuario</button>
-          <button type="button" onClick={() => setShowInvite(true)} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-200 transition-colors"><UserPlus className="w-4 h-4" /> Invitar</button>
+          <button
+            type="button"
+            onClick={() => setShowCreateUser(true)}
+            disabled={atLimit}
+            title={atLimit ? `Límite alcanzado (${activeCount}/${subscription.seats}). Agrega más asientos para continuar.` : undefined}
+            className="flex items-center gap-2 border border-zinc-700 bg-zinc-900/85 text-zinc-100 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-800 hover:border-zinc-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-zinc-900/85 disabled:hover:border-zinc-700"
+          >
+            <KeyRound className="w-4 h-4" /> Crear usuario
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowInvite(true)}
+            disabled={atLimit}
+            title={atLimit ? `Límite alcanzado (${activeCount}/${subscription.seats}). Agrega más asientos para continuar.` : undefined}
+            className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2 rounded-xl text-sm font-medium hover:bg-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-zinc-100"
+          >
+            <UserPlus className="w-4 h-4" /> Invitar
+          </button>
         </div>
       </div>
 
@@ -224,6 +271,27 @@ export default function EquipoPage() {
             Como <span className="text-zinc-200">{role?.name}</span>, los usuarios que crees reportarán directamente a ti.
             Roles disponibles para invitar: <span className="text-zinc-200">{invitableRoles.map(r => r.name).join(", ")}</span>.
           </p>
+        </div>
+      )}
+
+      {atLimit && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-amber-200">
+              Alcanzaste el límite de tu plan ({activeCount}/{subscription.seats} asientos ocupados).
+            </p>
+            <p className="text-xs text-amber-300/80 mt-1">
+              Para invitar más personas, agrega asientos en tu suscripción. El cargo es prorrateado al siguiente ciclo de facturación.
+            </p>
+            <Link
+              href="/suscripcion"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-amber-200 hover:text-amber-100 underline underline-offset-2"
+            >
+              Administrar asientos en Suscripción
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       )}
 

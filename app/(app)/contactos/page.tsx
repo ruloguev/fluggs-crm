@@ -29,7 +29,7 @@ type LeadRow = {
   priority: "low" | "medium" | "high"
   budget_max: number | null
   currency: string | null
-  deal_type: "sale" | "rent" | "other"
+  deal_type: "sale" | "rent" | "sale_rent"
   created_at: string
   contact: {
     id: string
@@ -56,7 +56,7 @@ const PRIORITY_STYLES = {
 const DEAL_TYPE_LABELS = {
   sale: "Venta",
   rent: "Renta",
-  other: "Otro",
+  sale_rent: "Venta y renta",
 }
 
 function formatMoney(value: number | null, currency = "MXN") {
@@ -95,7 +95,7 @@ export default function ContactosPage() {
     priority: "medium" as "low" | "medium" | "high",
     budget_max: "",
     currency: "MXN",
-    deal_type: "sale" as "sale" | "rent" | "other",
+    deal_type: "sale" as "sale" | "rent" | "sale_rent",
   })
 
   const scope = computeScope(profile?.id ?? null, role ?? null, teamMembers)
@@ -485,11 +485,11 @@ export default function ContactosPage() {
                   <div className="space-y-2">
                     <Label htmlFor="deal_type" className="text-zinc-300">Tipo de operación</Label>
                     <select id="deal_type" value={formData.deal_type}
-                      onChange={(event) => setFormData({ ...formData, deal_type: event.target.value as "sale" | "rent" | "other" })}
+                      onChange={(event) => setFormData({ ...formData, deal_type: event.target.value as "sale" | "rent" | "sale_rent" })}
                       className="w-full rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700">
                       <option value="sale">Venta</option>
                       <option value="rent">Renta</option>
-                      <option value="other">Otro</option>
+                      <option value="sale_rent">Venta y renta</option>
                     </select>
                   </div>
                   <div className="space-y-2">

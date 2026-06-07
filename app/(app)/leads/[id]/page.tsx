@@ -27,7 +27,7 @@ type Activity = {
   user: { full_name: string } | null
   created_at: string
 }
-type DealType = "sale" | "rent" | "other"
+type DealType = "sale" | "rent" | "sale_rent"
 type DocumentTemplateItem = {
   id: string
   template_id: string
@@ -87,7 +87,7 @@ const PRIORITY_MAP = {
 const DEAL_TYPE_LABELS: Record<DealType, string> = {
   sale: "Venta",
   rent: "Renta",
-  other: "Otro",
+  sale_rent: "Venta y renta",
 }
 
 // ── Activity icon ─────────────────────────────────────────────
@@ -220,15 +220,17 @@ function LogActivitySheet({
           .ilike("full_name", `%${mentions[0]}%`)
         
         for (const profile of profiles ?? []) {
-          import('@/lib/push-notifications').then(({ createNotificationWithPush }) => {
-            createNotificationWithPush({
+          fetch("/api/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
               company_id: companyId,
               user_id: profile.id,
               lead_id: leadId,
               type: "mention",
-              title: "📣 Te mencionaron",
+              title: "Te mencionaron",
               body: `${user?.email?.split("@")[0] ?? "Alguien"} te mencionó en una nota: "${note.slice(0, 80)}..."`,
-            }).catch(() => {})
+            }),
           }).catch(() => {})
         }
       }
@@ -419,7 +421,7 @@ function DealTypeSelector({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {(["sale", "rent", "other"] as DealType[]).map((type) => (
+      {(["sale", "rent", "sale_rent"] as DealType[]).map((type) => (
         <button
           key={type}
           onClick={() => onChange(type)}
@@ -553,7 +555,7 @@ function EditLeadSheet({
             className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-zinc-700">
             <option value="sale">Venta</option>
             <option value="rent">Renta</option>
-            <option value="other">Otro</option>
+            <option value="sale_rent">Venta y renta</option>
           </select>
 
           <select value={form.source_id} onChange={(e) => setForm({ ...form, source_id: e.target.value })}
@@ -1278,11 +1280,11 @@ export default function LeadDetailPage() {
           {contact.phone && (
             <button
               onClick={async () => {
-                window.location.href = `tel:${contact.phone}`
                 const now = new Date().toISOString()
+                const { data: { user } } = await supabase.auth.getUser()
                 const sb = supabase as any
                 await sb.from("activities").insert({
-                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  company_id: companyId, user_id: user?.id,
                   lead_id: id, contact_id: contact.id,
                   type: "call", title: "Llamada saliente",
                   body: `Llamada iniciada a ${contact.phone}`,
@@ -1290,6 +1292,7 @@ export default function LeadDetailPage() {
                 })
                 await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
                 loadData()
+                window.open(`tel:${contact.phone}`, "_self")
               }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-zinc-600 text-zinc-300 hover:text-zinc-100 text-sm transition-all">
               <Phone className="w-3.5 h-3.5" /> Llamar
@@ -1299,11 +1302,11 @@ export default function LeadDetailPage() {
             <button
               onClick={async () => {
                 const phone = (contact.whatsapp || contact.phone)?.replace(/\D/g, "")
-                window.open(`https://wa.me/${phone}`, "_blank")
                 const now = new Date().toISOString()
+                const { data: { user } } = await supabase.auth.getUser()
                 const sb = supabase as any
                 await sb.from("activities").insert({
-                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  company_id: companyId, user_id: user?.id,
                   lead_id: id, contact_id: contact.id,
                   type: "whatsapp", title: "Mensaje de WhatsApp",
                   body: `Conversación iniciada con ${contact.full_name}`,
@@ -1311,6 +1314,7 @@ export default function LeadDetailPage() {
                 })
                 await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
                 loadData()
+                window.open(`https://wa.me/${phone}`, "_blank")
               }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-emerald-500/40 text-zinc-300 hover:text-emerald-400 text-sm transition-all">
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
@@ -1319,17 +1323,18 @@ export default function LeadDetailPage() {
           {contact.email && (
             <button
               onClick={async () => {
-                window.location.href = `mailto:${contact.email}`
                 const now = new Date().toISOString()
+                const { data: { user } } = await supabase.auth.getUser()
                 const sb = supabase as any
                 await sb.from("activities").insert({
-                  company_id: companyId, user_id: (await supabase.auth.getUser()).data.user?.id,
+                  company_id: companyId, user_id: user?.id,
                   lead_id: id, contact_id: contact.id,
                   type: "email", title: "Email enviado",
                   body: `Email a ${contact.email}`, created_at: now,
                 })
                 await sb.from("leads").update({ last_activity_at: now }).eq("id", id)
                 loadData()
+                window.open(`mailto:${contact.email}`, "_self")
               }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-blue-500/40 text-zinc-300 hover:text-blue-400 text-sm transition-all">
               <Mail className="w-3.5 h-3.5" /> Email

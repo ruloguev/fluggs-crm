@@ -36,7 +36,7 @@ type DocumentTemplate = {
   company_id: string
   name: string
   description: string | null
-  deal_type: "sale" | "rent" | "other"
+  deal_type: "sale" | "rent" | "sale_rent"
   is_active: boolean
 }
 
@@ -65,7 +65,7 @@ export default function AdminSettingsPage() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([])
   const [templateItems, setTemplateItems] = useState<Record<string, DocumentTemplateItem[]>>({})
   const [newTemplateName, setNewTemplateName] = useState("")
-  const [newTemplateType, setNewTemplateType] = useState<"sale" | "rent" | "other">("sale")
+  const [newTemplateType, setNewTemplateType] = useState<"sale" | "rent" | "sale_rent">("sale")
   const [monthlyGoal, setMonthlyGoal] = useState(10)
   const [savingGoals, setSavingGoals] = useState(false)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
@@ -495,12 +495,12 @@ export default function AdminSettingsPage() {
           />
           <select
             value={newTemplateType}
-            onChange={(event) => setNewTemplateType(event.target.value as "sale" | "rent" | "other")}
+            onChange={(event) => setNewTemplateType(event.target.value as "sale" | "rent" | "sale_rent")}
             className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
           >
             <option value="sale">Venta</option>
             <option value="rent">Renta</option>
-            <option value="other">Otro</option>
+            <option value="sale_rent">Venta y renta</option>
           </select>
           <button
             onClick={addTemplate}
@@ -522,12 +522,12 @@ export default function AdminSettingsPage() {
                 />
                 <select
                   value={template.deal_type}
-                  onChange={(event) => void updateTemplate(template.id, { deal_type: event.target.value as "sale" | "rent" | "other" })}
+                  onChange={(event) => void updateTemplate(template.id, { deal_type: event.target.value as "sale" | "rent" | "sale_rent" })}
                   className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
                 >
                   <option value="sale">Venta</option>
                   <option value="rent">Renta</option>
-                  <option value="other">Otro</option>
+                  <option value="sale_rent">Venta y renta</option>
                 </select>
                 <label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
                   <input

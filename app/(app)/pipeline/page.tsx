@@ -51,6 +51,7 @@ type Lead = {
   owner_id: string | null
   metadata: LeadMetadata
   contact: {
+    id: string | null
     full_name: string | null
     phone: string | null
   } | null
@@ -67,10 +68,12 @@ type RawLead = Omit<Lead, "stale" | "activity_label">
 
 type ContactRelation =
   | {
+      id: string | null
       full_name: string | null
       phone: string | null
     }
   | Array<{
+      id: string | null
       full_name: string | null
       phone: string | null
     }>
@@ -335,6 +338,7 @@ function LeadCard({
   stageIsClosed,
   onOpenLead,
   onOpenMove,
+  companyId,
 }: {
   lead: Lead
   index: number
@@ -343,6 +347,7 @@ function LeadCard({
   stageIsClosed: boolean
   onOpenLead: (leadId: string) => void
   onOpenMove: (lead: Lead) => void
+  companyId: string
 }) {
   const timerRef = useRef<number | null>(null)
   const longPressTriggeredRef = useRef(false)
@@ -451,24 +456,58 @@ function LeadCard({
       <div className={`${draggable ? "" : "mt-4"} flex items-center justify-between border-t border-zinc-800/60 pt-3`}>
         <div className="flex items-center gap-1.5">
           {lead.contact?.phone && (
-            <a
-              href={`tel:${lead.contact.phone}`}
-              onClick={(event) => event.stopPropagation()}
+            <button
+              onClick={async (event) => {
+                event.stopPropagation()
+                const supabase = createClient()
+                const { data: { user } } = await supabase.auth.getUser()
+                const now = new Date().toISOString()
+                const phone = lead.contact?.phone ?? ""
+                await supabase.from("activities").insert({
+                  company_id: companyId,
+                  user_id: user?.id,
+                  lead_id: lead.id,
+                  contact_id: lead.contact?.id ?? null,
+                  type: "call",
+                  title: "Llamada saliente",
+                  body: `Llamada iniciada a ${phone}`,
+                  call_status: "answered",
+                  created_at: now,
+                })
+                await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+                if (phone) window.open(`tel:${phone}`, "_self")
+              }}
               className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-flugzz-accent"
             >
               <Phone className="h-3.5 w-3.5" />
-            </a>
+            </button>
           )}
           {lead.contact?.phone && (
-            <a
-              href={`https://wa.me/${lead.contact.phone.replace(/\D/g, "")}`}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
+            <button
+              onClick={async (event) => {
+                event.stopPropagation()
+                const supabase = createClient()
+                const { data: { user } } = await supabase.auth.getUser()
+                const now = new Date().toISOString()
+                const phone = lead.contact?.phone ?? ""
+                const contactName = lead.contact?.full_name ?? lead.title ?? ""
+                await supabase.from("activities").insert({
+                  company_id: companyId,
+                  user_id: user?.id,
+                  lead_id: lead.id,
+                  contact_id: lead.contact?.id ?? null,
+                  type: "whatsapp",
+                  title: "Mensaje de WhatsApp",
+                  body: `Conversación iniciada con ${contactName}`,
+                  created_at: now,
+                })
+                await supabase.from("leads").update({ last_activity_at: now }).eq("id", lead.id)
+                if (phone) window.open(`https://wa.me/${phone.replace(/\D/g, "")}`, "_blank")
+              }}
               className="rounded-xl bg-zinc-800/60 p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-emerald-400"
             >
               <MessageCircle className="h-3.5 w-3.5" />
-            </a>
+            </button>
           )}
           {!draggable && (
             <button
@@ -520,11 +559,13 @@ function StageColumnDesktop({
   onCreateLead,
   onOpenLead,
   onOpenMove,
+  companyId,
 }: {
   stage: StageColumn
   onCreateLead: () => void
   onOpenLead: (leadId: string) => void
   onOpenMove: (lead: Lead) => void
+  companyId: string
 }) {
   return (
     <div className="flex w-80 shrink-0 flex-col gap-3">
@@ -568,6 +609,7 @@ function StageColumnDesktop({
                 stageIsClosed={false}
                 onOpenLead={onOpenLead}
                 onOpenMove={onOpenMove}
+                companyId={companyId}
               />
             ))}
             {provided.placeholder}
@@ -589,12 +631,14 @@ function MobileStagePanel({
   onOpenLead,
   onOpenMove,
   stageRef,
+  companyId,
 }: {
   stage: StageColumn
   onCreateLead: () => void
   onOpenLead: (leadId: string) => void
   onOpenMove: (lead: Lead) => void
   stageRef: (node: HTMLDivElement | null) => void
+  companyId: string
 }) {
   return (
     <section
@@ -642,6 +686,7 @@ function MobileStagePanel({
                 stageIsClosed={false}
                 onOpenLead={onOpenLead}
                 onOpenMove={onOpenMove}
+                companyId={companyId}
               />
             ))}
           </div>
@@ -700,7 +745,7 @@ export default function PipelinePage() {
           stage_id,
           owner_id,
           metadata,
-          contact:contacts(full_name, phone),
+          contact:contacts(id, full_name, phone),
           source:lead_sources(name, icon, color)
         `)
         .eq("company_id", companyId)
@@ -1212,6 +1257,7 @@ export default function PipelinePage() {
                   onOpenLead={openLead}
                   onOpenMove={setSelectedLead}
                   stageRef={setStageRef(stage.id)}
+                  companyId={profile?.company_id ?? ""}
                 />
               ))}
             </div>
@@ -1230,6 +1276,7 @@ export default function PipelinePage() {
                     onCreateLead={createLead}
                     onOpenLead={openLead}
                     onOpenMove={setSelectedLead}
+                    companyId={profile?.company_id ?? ""}
                   />
                 ))}
               </div>

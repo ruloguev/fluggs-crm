@@ -157,6 +157,16 @@ function LoginForm() {
             required
             className="bg-zinc-900 border-zinc-800 text-zinc-100 focus-visible:ring-flugzz-accent"
           />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void sendPasswordSetup()}
+              disabled={resetLoading}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
         </div>
 
         <Button

@@ -216,9 +216,9 @@ function SignUpForm() {
           </form>
         )}
 
-        <p className="mt-6 text-center text-xs text-zinc-600">
+        <p className="mt-6 text-center text-sm text-zinc-500">
           ¿Ya tienes cuenta?{" "}
-          <a href="/login" className="text-zinc-400 hover:text-zinc-200 transition-colors">
+          <a href="/login" className="text-zinc-200 hover:text-white font-medium underline underline-offset-2 decoration-zinc-700 transition-colors">
             Iniciar sesión
           </a>
         </p>

@@ -300,7 +300,7 @@ export default function DrivePage() {
             <>
               <button
                 type="button"
-                className="p-2 rounded-xl bg-zinc-900/55 border border-zinc-800/60 text-zinc-300 hover:text-white hover:border-zinc-600 transition-colors"
+                className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white hover:border-zinc-500 transition-colors"
                 title="Nueva carpeta"
                 onClick={() => void createFolder()}
               >
@@ -312,7 +312,7 @@ export default function DrivePage() {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <UploadCloud className="w-5 h-5" />
-                <span className="hidden sm:inline">Subir archivo</span>
+                <span>Subir archivo</span>
               </button>
             </>
           )}

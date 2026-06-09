@@ -568,14 +568,14 @@ function StageColumnDesktop({
   companyId: string
 }) {
   return (
-    <div className="flex w-80 shrink-0 flex-col gap-3">
-      <div className="flex items-center justify-between px-1">
+    <div className="flex w-80 shrink-0 flex-col gap-2">
+      <div className="flex items-center justify-between px-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
           <span className="truncate text-xs font-medium uppercase tracking-[0.24em] text-zinc-400">
             {stage.name}
           </span>
-          <span className="rounded-full bg-zinc-900/70 px-2 py-0.5 text-[10px] text-zinc-500">
+          <span className="rounded-full bg-zinc-900/70 px-2 py-0.5 text-[9px] text-zinc-500">
             {stage.leads.length}
           </span>
         </div>
@@ -1035,16 +1035,16 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-4 gap-2">
         {[
           { label: "Leads activos", value: filteredLeads.length.toString() },
           { label: "Sin seguimiento", value: totalStaleLeads.toString() },
           { label: "Con telefono", value: totalWithPhone.toString() },
           { label: "Etapas visibles", value: stageColumns.length.toString() },
         ].map((item, index) => (
-          <div key={item.label} className={`rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-4 ${index >= 2 ? "hidden md:block" : ""}`}>
+          <div key={item.label} className={`rounded-2xl border border-zinc-800/60 bg-zinc-900/50 p-3 ${index >= 2 ? "hidden lg:block" : ""}`}>
             <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-zinc-100">{item.value}</p>
+            <p className="mt-1.5 text-xl font-semibold text-zinc-100">{item.value}</p>
           </div>
         ))}
       </div>
@@ -1056,22 +1056,22 @@ export default function PipelinePage() {
         </div>
       )}
 
-      <div className="hidden rounded-3xl border border-zinc-800/50 bg-zinc-900/40 p-4 md:block">
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_180px_200px_180px_240px_auto]">
+      <div className="hidden rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-3 md:block">
+        <div className="grid gap-2 lg:grid-cols-[1fr_160px_160px_140px_180px_auto]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Buscar lead, contacto u origen"
-              className="border-zinc-800 bg-zinc-950 pl-9 text-zinc-100"
+              className="h-9 border-zinc-800 bg-zinc-950 pl-9 text-sm text-zinc-100"
             />
           </div>
 
           <select
             value={priorityFilter}
             onChange={(event) => setPriorityFilter(event.target.value as typeof priorityFilter)}
-            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+            className="h-9 rounded-xl border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 outline-none"
           >
             <option value="all">Todas las prioridades</option>
             <option value="high">Alta</option>
@@ -1082,7 +1082,7 @@ export default function PipelinePage() {
           <select
             value={sourceFilter}
             onChange={(event) => setSourceFilter(event.target.value)}
-            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+            className="h-9 rounded-xl border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 outline-none"
           >
             <option value="all">Todos los orígenes</option>
             {sourceOptions.map((source) => (
@@ -1098,7 +1098,7 @@ export default function PipelinePage() {
               setFocusLevel(event.target.value as FocusLevel)
               setFocusProfileId("all")
             }}
-            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none"
+            className="h-9 rounded-xl border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 outline-none"
           >
             <option value="all">Todo el equipo</option>
             <option value="gerente">Gerencia</option>
@@ -1110,7 +1110,7 @@ export default function PipelinePage() {
             value={resolvedFocusProfileId}
             onChange={(event) => setFocusProfileId(event.target.value)}
             disabled={focusLevel === "all"}
-            className="h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none disabled:opacity-50"
+            className="h-9 rounded-xl border border-zinc-800 bg-zinc-950 px-2.5 text-sm text-zinc-100 outline-none disabled:opacity-50"
           >
             <option value="all">
               {focusLevel === "all" ? "Sin filtro por responsable" : `Selecciona ${focusLevel}`}
@@ -1124,7 +1124,7 @@ export default function PipelinePage() {
             type="button"
             variant="ghost"
             disabled={!hasDesktopFilters}
-            className="border border-zinc-800 bg-zinc-950 text-zinc-200 hover:bg-zinc-900 disabled:opacity-40"
+            className="h-9 border border-zinc-800 bg-zinc-950 text-xs text-zinc-200 hover:bg-zinc-900 disabled:opacity-40"
             onClick={() => {
               setSearchTerm("")
               setPriorityFilter("all")

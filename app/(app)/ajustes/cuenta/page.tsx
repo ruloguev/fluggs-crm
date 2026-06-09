@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
-import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight } from "lucide-react"
+import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight, Lock, Mail } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type ProfileDetail = {
@@ -200,6 +200,9 @@ export default function CuentaPage() {
   const [error, setError] = useState<string | null>(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [portalLoading, setPortalLoading] = useState(false)
+  const [pwdLoading, setPwdLoading] = useState(false)
+  const [pwdSent, setPwdSent] = useState(false)
+  const [pwdError, setPwdError] = useState<string | null>(null)
 
   const isDirector = (role?.level ?? 99) <= 1 || (role?.name ?? "").toLowerCase().includes("director")
 
@@ -210,6 +213,23 @@ export default function CuentaPage() {
     setPortalLoading(false)
     if (!res.ok) { alert(data?.error ?? "Error al abrir portal"); return }
     if (data?.url) window.open(data.url, "_blank")
+  }
+
+  async function sendPasswordReset() {
+    setPwdLoading(true)
+    setPwdError(null)
+    setPwdSent(false)
+    const appUrl = typeof window !== "undefined" ? window.location.origin : ""
+    const redirectTo = (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || appUrl || "http://localhost:3000") + "/login"
+    const { error } = await supabase.auth.resetPasswordForEmail(detail?.email ?? "", {
+      redirectTo,
+    })
+    setPwdLoading(false)
+    if (error) {
+      setPwdError(error.message)
+    } else {
+      setPwdSent(true)
+    }
   }
 
   useEffect(() => {
@@ -329,6 +349,57 @@ export default function CuentaPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+            <Lock className="w-4 h-4 text-flugzz-accent" />
+          </div>
+          <div>
+            <h2 className="text-sm font-medium text-zinc-100">Contraseña</h2>
+            <p className="text-xs text-zinc-500">Recibirás un enlace por correo para cambiarla.</p>
+          </div>
+        </div>
+
+        {pwdSent ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200 flex items-start gap-3">
+            <Check className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Correo enviado</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Revisa tu bandeja de entrada y sigue las instrucciones para cambiar tu contraseña.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-zinc-500">
+              Se enviará un enlace seguro a <strong className="text-zinc-300">{detail?.email}</strong>.
+            </p>
+            <button
+              type="button"
+              onClick={sendPasswordReset}
+              disabled={pwdLoading}
+              className="shrink-0 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors flex items-center gap-2"
+            >
+              {pwdLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              {pwdLoading ? "Enviando..." : "Cambiar contraseña"}
+            </button>
+          </div>
+        )}
+        {pwdError && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {pwdError}
+          </div>
+        )}
+        {pwdSent && (
+          <button
+            type="button"
+            onClick={() => { setPwdSent(false); setPwdError(null) }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Enviar de nuevo
+          </button>
+        )}
       </div>
 
       <SubscriptionSection

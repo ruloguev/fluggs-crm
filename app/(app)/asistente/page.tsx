@@ -142,7 +142,7 @@ export default function AsistentePage() {
       {/* Header */}
       <div className="shrink-0">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
-          Asistente<span className="text-flugzz-accent">.</span>
+          Asistente<span className="text-flugzz-accent">.</span> <span className="ml-2 rounded-md bg-flugzz-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-flugzz-accent align-middle">BETA</span>
         </h1>
         <p className="text-sm text-zinc-400 mt-0.5">
           Respuestas basadas en los documentos de tu inmobiliaria.

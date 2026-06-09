@@ -1361,7 +1361,7 @@ export default function LeadDetailPage() {
           <div>
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-flugzz-accent" />
-              <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Copiloto comercial</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Copiloto comercial <span className="ml-1 rounded-md bg-flugzz-accent/15 px-1.5 py-0.5 text-[9px] font-semibold text-flugzz-accent">BETA</span></p>
             </div>
             <h2 className="mt-2 text-lg font-semibold text-zinc-100">{outreach.headline}</h2>
             <p className="mt-1 text-sm text-zinc-400">{outreach.nextAction}</p>
@@ -1432,7 +1432,7 @@ export default function LeadDetailPage() {
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
               activeTab === t ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
             }`}>
-            {t === "timeline" ? "Actividad" : t === "info" ? "Información" : t === "expediente" ? "Expediente" : <><Sparkles className="w-3.5 h-3.5" /> IA</>}
+            {t === "timeline" ? "Actividad" : t === "info" ? "Información" : t === "expediente" ? "Expediente" : <><Sparkles className="w-3.5 h-3.5" /> IA <span className="ml-0.5 rounded-md bg-flugzz-accent/15 px-1 py-0.5 text-[8px] font-semibold text-flugzz-accent">BETA</span></>}
           </button>
         ))}
       </div>

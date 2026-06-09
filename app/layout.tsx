@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   themeColor: "#000000",
   title: "Flugzz CRM",
   description: "CRM inmobiliario para agentes en campo",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -696,7 +696,7 @@ export default function DashboardPage() {
                 <Sparkles className="w-5 h-5 text-flugzz-accent" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-zinc-100">Sugerencias de IA</h2>
+                <h2 className="text-lg font-semibold text-zinc-100">Sugerencias de IA <span className="ml-1.5 rounded-md bg-flugzz-accent/15 px-1.5 py-0.5 text-[9px] font-semibold text-flugzz-accent">BETA</span></h2>
                 <p className="text-sm text-zinc-500 mt-1">Acciones recomendadas para hoy basadas en tu cartera.</p>
               </div>
             </div>

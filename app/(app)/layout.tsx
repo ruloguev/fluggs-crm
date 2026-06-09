@@ -32,7 +32,7 @@ const ALL_NAV = [
   { name: "Pipeline",      href: "/pipeline",           icon: KanbanSquare,    permission: null },
   { name: "Contactos",     href: "/contactos",          icon: Users,           permission: null },
   { name: "Drive",         href: "/drive",              icon: HardDrive,       permission: null },
-  { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null },
+  { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null, badge: "BETA" as const },
   { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_integrations" as const },
   { name: "Ajustes",       href: "/ajustes",            icon: Settings,        permission: "can_manage_users" as const },
 ]
@@ -171,16 +171,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   async function loadNotifications() {
     if (!profile?.id) return
     setLoadingNotifs(true)
-    const { data, count } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact" })
-      .eq("user_id", profile.id)
-      .eq("is_read", false)
-      .order("created_at", { ascending: false })
-      .limit(20)
-    setNotifications((data as NotificationRecord[] | null) ?? [])
-    setNotifCount(count ?? 0)
-    setLoadingNotifs(false)
+    try {
+      const { data, count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact" })
+        .eq("user_id", profile.id)
+        .eq("is_read", false)
+        .order("created_at", { ascending: false })
+        .limit(20)
+      setNotifications((data as NotificationRecord[] | null) ?? [])
+      setNotifCount(count ?? 0)
+    } catch (e) {
+      console.error("[notifications] load failed", e)
+    } finally {
+      setLoadingNotifs(false)
+    }
   }
 
   useEffect(() => {
@@ -244,7 +249,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function markAsRead(id: string, leadId?: string | null) {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id)
+    try {
+      await supabase.from("notifications").update({ is_read: true }).eq("id", id)
+    } catch (e) {
+      console.error("[notifications] markAsRead failed", e)
+    }
     setNotifications(prev => prev.filter(n => n.id !== id))
     setNotifCount(c => Math.max(0, c - 1))
     if (leadId) {
@@ -257,7 +266,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!profile?.id) return
     const ids = notifications.map(n => n.id)
     if (ids.length === 0) return
-    await supabase.from("notifications").update({ is_read: true }).in("id", ids)
+    try {
+      await supabase.from("notifications").update({ is_read: true }).in("id", ids)
+    } catch (e) {
+      console.error("[notifications] markAllAsRead failed", e)
+    }
     setNotifications([])
     setNotifCount(0)
   }
@@ -310,6 +323,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 active ? "text-zinc-100" : "text-zinc-500 group-hover:text-zinc-300"
               }`} />
               {item.name}
+              {"badge" in item && item.badge && (
+                <span className="ml-2 rounded-md bg-flugzz-accent/15 px-1.5 py-0.5 text-[9px] font-semibold text-flugzz-accent">{item.badge}</span>
+              )}
               {item.href === "/ajustes" && role && (
                 <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700">
                   {role.name}
@@ -369,7 +385,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0">
         <header className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-800/60 bg-zinc-950/70 backdrop-blur-md shrink-0 z-10">
           <button className="md:hidden p-2 -ml-2 text-zinc-400 hover:text-zinc-100"
             onClick={() => setMobileOpen(true)}>

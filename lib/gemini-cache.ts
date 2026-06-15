@@ -17,7 +17,7 @@ export async function getCachedContent(
   geminiKey: string,
   cacheKey: string,
   systemInstruction: string,
-  model: string = "gemini-2.5-flash"
+  model: string = "gemini-3.1-flash-lite"
 ): Promise<string | null> {
   const existing = cacheStore.get(cacheKey)
   if (existing && Date.now() - existing.createdAt < existing.ttlMs) {

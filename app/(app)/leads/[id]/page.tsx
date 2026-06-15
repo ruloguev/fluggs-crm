@@ -1410,7 +1410,7 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 p-1 bg-zinc-900/40 border border-zinc-800/40 rounded-xl w-fit mb-4">
+      <div className="flex gap-1 p-1 bg-zinc-900/40 border border-zinc-800/40 rounded-xl overflow-x-auto mb-4">
         {(lead.deal_type === "sale"
           ? (["timeline", "info", "expediente", "ia"] as const)
           : (["timeline", "info", "ia"] as const)

@@ -210,7 +210,7 @@ export default function AsistentePage() {
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
             placeholder="Pregunta sobre proyectos, precios, objeciones..."
             rows={1}
-            className="flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 outline-none resize-none max-h-40"
+            className="flex-1 bg-transparent text-base text-zinc-200 placeholder:text-zinc-600 outline-none resize-none max-h-40"
           />
         </div>
         <button onClick={send} disabled={!input.trim() || sending}

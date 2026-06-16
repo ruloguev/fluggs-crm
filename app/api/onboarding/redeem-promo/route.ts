@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       {
         company_id: profile.company_id,
         plan_id: normalizedPlan,
-        seats: 1,
+        seats: 9999,
         status: "trial",
         current_period_end: redeemData.expires_at,
         current_period_start: new Date().toISOString(),

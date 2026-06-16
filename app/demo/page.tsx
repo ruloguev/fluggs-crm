@@ -12,7 +12,7 @@ export default function DemoPage() {
       <div className="w-full max-w-4xl">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold tracking-tighter text-white">
-            Flugzz<span className="text-[#22D3EE]">.</span>
+            Flugzz <span className="text-[#22D3EE]">.</span>
           </h1>
           <p className="text-zinc-400 mt-2 text-lg">Video demo de la plataforma</p>
         </div>

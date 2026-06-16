@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import {
-  LayoutDashboard, Users, KanbanSquare, HardDrive, Bot,
+  LayoutDashboard, Users, KanbanSquare, HardDrive, Bot, UserCog,
   Menu, Bell, Search, LogOut, X, Plug, Settings, Loader2, Megaphone,
   CheckCheck, AlertCircle, TrendingUp, Phone, MessageCircle, Mail,
 } from "lucide-react"
@@ -35,6 +35,7 @@ const ALL_NAV = [
   { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null, badge: "BETA" as const },
   { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_integrations" as const },
   { name: "Ajustes",       href: "/ajustes",            icon: Settings,        permission: "can_manage_users" as const },
+  { name: "Cuenta",        href: "/ajustes/cuenta",     icon: UserCog,        permission: null },
 ]
 
 const FlugzzIsotipo = ({ className = "w-8 h-8" }) => (

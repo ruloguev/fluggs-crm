@@ -17,3 +17,9 @@ create policy "users_update_own" on notifications
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- 4) Users can INSERT notifications for themselves (used by client-side triggers)
+drop policy if exists "users_insert_own" on notifications;
+create policy "users_insert_own" on notifications
+  for insert
+  with check (auth.uid() = user_id);

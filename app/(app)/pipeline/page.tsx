@@ -596,7 +596,7 @@ function StageColumnDesktop({
             className={`min-h-[160px] flex-1 space-y-2.5 rounded-3xl border p-2.5 transition-colors ${
               snapshot.isDraggingOver
                 ? "border-flugzz-accent/50 bg-zinc-700/30"
-                : "border-zinc-700/30 bg-zinc-800/15"
+                : "border-zinc-700/50 bg-zinc-800/60"
             }`}
           >
             {stage.leads.map((lead, index) => (

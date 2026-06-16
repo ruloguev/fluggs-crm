@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { computeScope } from "@/lib/role-scope"
 import {
-  ArrowUpRight, Check, ChevronDown, Download, Filter, Loader2, Mail, Phone, Plus, Search, X,
+  ArrowUpRight, Check, ChevronDown, Download, Filter, Loader2, Mail, Phone, Plus, Search, X, ChevronUp,
 } from "lucide-react"
 
 type Stage = { id: string; name: string; color: string | null; position: number; is_closed: boolean }
@@ -79,6 +79,8 @@ export default function ContactosPage() {
   const [sources, setSources] = useState<Source[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [filterMemberId, setFilterMemberId] = useState<string | null>(null)
+  const [filterPriority, setFilterPriority] = useState<string | null>(null)
+  const [filterSource, setFilterSource] = useState<string | null>(null)
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -162,7 +164,7 @@ export default function ContactosPage() {
           if (res.includes(cur)) continue
           res.push(cur)
           q.push(...(reportsByLeader.get(cur) ?? []))
-        }
+}
         return res
       }
       const descendants = getDescendants(profile.id)
@@ -364,9 +366,14 @@ export default function ContactosPage() {
 
   const filteredLeads = useMemo(() => {
     const query = searchTerm.trim().toLowerCase()
+    const selectedSourceName = filterSource ? sources.find(s => s.id === filterSource)?.name : null
     return leads.filter((lead) => {
       // Filter by user scope
       if (!lead.owner_id || !scopeIds.includes(lead.owner_id)) return false
+      // Filter by priority
+      if (filterPriority && lead.priority !== filterPriority) return false
+      // Filter by source
+      if (selectedSourceName && lead.source?.name !== selectedSourceName) return false
       // Filter by search query
       if (query) {
         const values = [
@@ -381,7 +388,7 @@ export default function ContactosPage() {
       }
       return true
     })
-  }, [leads, searchTerm, scopeIds])
+  }, [leads, searchTerm, scopeIds, filterPriority, filterSource, sources])
 
   const allowedCurrencies = companySettings?.allowed_currencies?.length
     ? companySettings.allowed_currencies
@@ -532,7 +539,7 @@ export default function ContactosPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-sm">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-sm relative z-10">
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -543,7 +550,7 @@ export default function ContactosPage() {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
-          {filterOptions.length > 1 && (
+          {isLeader && filterOptions.length > 1 && (
             <ScopeDropdown
               label="Agente"
               options={filterOptions}
@@ -552,11 +559,29 @@ export default function ContactosPage() {
               storageKey="contactos-filter"
             />
           )}
+          <SimpleDropdown
+            label="Prioridad"
+            value={filterPriority}
+            options={[
+              { value: "high", label: "Alta" },
+              { value: "medium", label: "Media" },
+              { value: "low", label: "Baja" },
+            ]}
+            onChange={setFilterPriority}
+            allLabel="Todas"
+          />
+          <SimpleDropdown
+            label="Origen"
+            value={filterSource}
+            options={sources.map(s => ({ value: s.id, label: s.icon ? `${s.icon} ${s.name}` : s.name }))}
+            onChange={setFilterSource}
+            allLabel="Todos"
+          />
         </div>
         <div className="flex items-center gap-2">
-          {(filterMemberId || searchTerm) && (
+          {(filterMemberId || filterPriority || filterSource || searchTerm) && (
             <button
-              onClick={() => { setFilterMemberId(null); setSearchTerm("") }}
+              onClick={() => { setFilterMemberId(null); setFilterPriority(null); setFilterSource(null); setSearchTerm("") }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800/60 hover:border-zinc-700 transition-colors"
             >
               <X className="w-3 h-3" /> Limpiar
@@ -714,6 +739,50 @@ function ScopeDropdown({ label, options, selectedId, onSelect, storageKey }: {
                 )}
                 <span className="truncate">{o.name}</span>
                 {selectedId === o.id && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function SimpleDropdown({ label, value, options, onChange, allLabel }: {
+  label: string
+  value: string | null
+  options: { value: string; label: string }[]
+  onChange: (v: string | null) => void
+  allLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const current = options.find(o => o.value === value)
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm hover:border-zinc-700 transition-colors whitespace-nowrap min-h-[44px]"
+        style={{ touchAction: 'manipulation' }}>
+        <span className="text-zinc-400 text-xs">{label}:</span>
+        <span className="text-zinc-200 font-medium">{current?.label ?? allLabel ?? "Todos"}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-zinc-600" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)}
+            style={{ willChange: 'opacity', WebkitTapHighlightColor: 'transparent' }} />
+          <div className="absolute top-full mt-1 left-0 z-40 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+            <button onClick={() => { onChange(null); setOpen(false) }}
+              className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${!value ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}>
+              {allLabel ?? "Todos"}
+              {!value && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent" />}
+            </button>
+            {options.map(o => (
+              <button key={o.value} onClick={() => { onChange(o.value); setOpen(false) }}
+                className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors min-h-[44px] ${value === o.value ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900"}`}
+                style={{ touchAction: 'manipulation' }}>
+                <span className="truncate">{o.label}</span>
+                {value === o.value && <Check className="w-3.5 h-3.5 ml-auto text-flugzz-accent shrink-0" />}
               </button>
             ))}
           </div>

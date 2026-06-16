@@ -37,6 +37,35 @@ export async function POST(req: NextRequest) {
     if (!companyId || !type)
       return NextResponse.json({ error: "Faltan parámetros." }, { status: 400 })
 
+    // Authenticate user and enforce scope
+    const authHeader = req.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer "))
+      return NextResponse.json({ error: "No autorizado." }, { status: 401 })
+    const token = authHeader.slice(7)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    if (authError || !user)
+      return NextResponse.json({ error: "Token inválido." }, { status: 401 })
+
+    // Get user role info
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, company_id, role:roles!inner(id, name, level)")
+      .eq("id", user.id)
+      .single()
+    if (!profile || profile.company_id !== companyId)
+      return NextResponse.json({ error: "No tienes acceso a esta compañía." }, { status: 403 })
+    
+    const roleArr = profile.role as { id: string; name: string; level: number }[] | null
+    const role = roleArr?.[0]
+    if (!role)
+      return NextResponse.json({ error: "Sin rol asignado." }, { status: 403 })
+    const isLeader = role.level <= 3 || ["director", "gerente", "coordinador", "admin", "superadmin"].includes(role.name.toLowerCase())
+    
+    let scopeIds: string[] | null = null
+    if (!isLeader) {
+      scopeIds = [user.id]
+    }
+
     const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const end = endDate || new Date().toISOString()
 
@@ -44,7 +73,7 @@ export async function POST(req: NextRequest) {
     let filename: string
 
     if (type === "leads") {
-      const { data: leads } = await supabase
+      let queryBuilder = supabase
         .from("leads")
         .select(`
           id, title, priority, budget_min, budget_max, currency,
@@ -57,13 +86,19 @@ export async function POST(req: NextRequest) {
         .eq("company_id", companyId)
         .gte("created_at", start)
         .lte("created_at", end)
+
+      if (scopeIds) {
+        queryBuilder = queryBuilder.in("owner_id", scopeIds)
+      }
+
+      const { data: leads } = await queryBuilder
         .order("created_at", { ascending: false })
         .limit(1000)
 
       const formatted = (leads ?? []).map((l: any) => ({
         id: l.id,
         contacto: l.contact?.[0]?.full_name ?? "",
-        telefono: l.contact?.[0]?.phone ?? "",
+        telefono: l.contact?.[0]?.phone ? `="${l.contact[0].phone}"` : "",
         email: l.contact?.[0]?.email ?? "",
         titulo: l.title ?? "",
         prioridad: l.priority ?? "",
@@ -85,7 +120,7 @@ export async function POST(req: NextRequest) {
       filename = `leads_${new Date().toISOString().split("T")[0]}.csv`
 
     } else if (type === "activities") {
-      const { data: activities } = await (supabase as any)
+      let actQuery = (supabase as any)
         .from("activities")
         .select(`
           id, type, title, body, call_status, call_duration_secs,
@@ -96,6 +131,12 @@ export async function POST(req: NextRequest) {
         .eq("company_id", companyId)
         .gte("created_at", start)
         .lte("created_at", end)
+
+      if (scopeIds) {
+        actQuery = actQuery.in("user_id", scopeIds)
+      }
+
+      const { data: activities } = await actQuery
         .order("created_at", { ascending: false })
         .limit(1000)
 
@@ -118,12 +159,18 @@ export async function POST(req: NextRequest) {
       filename = `actividades_${new Date().toISOString().split("T")[0]}.csv`
 
     } else if (type === "metrics") {
-      // Obtener métricas de agentes
-      const { data: profiles } = await supabase
+      // Obtener métricas de agentes (filtradas por scope)
+      let profileQuery = supabase
         .from("profiles")
         .select("id, full_name")
         .eq("company_id", companyId)
         .eq("is_active", true)
+
+      if (scopeIds) {
+        profileQuery = profileQuery.in("id", scopeIds)
+      }
+
+      const { data: profiles } = await profileQuery
 
       const profileIds = profiles?.map(p => p.id) ?? []
 

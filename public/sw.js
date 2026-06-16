@@ -1,8 +1,18 @@
-// Service Worker para Push Notifications
+// Service Worker para Push Notifications + PWA Installability
 // Maneja eventos push y muestra notificaciones nativas del navegador
 
 const ICON_DEFAULT = '/Flugzz.svg'
 const BADGE_ICON = '/badge-96.png'
+
+self.addEventListener('install', () => self.skipWaiting())
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim())
+})
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request))
+})
 
 self.addEventListener('push', function(event) {
   if (!event.data) return

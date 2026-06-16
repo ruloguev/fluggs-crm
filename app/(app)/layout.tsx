@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase"
 import { registerPushSubscription, unregisterPushSubscription, getPushSubscriptionStatus } from "@/lib/push-notifications"
 import { PrivacyNoticeModal } from "@/components/ui/privacy-notice-modal"
 import { CommandPalette } from "@/components/search/command-palette"
+import { PwaInstallButton } from "@/components/pwa/install-button"
 import { CommandPaletteTrigger } from "@/components/search/command-palette-trigger"
 
 type NotificationRecord = {
@@ -559,6 +560,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <PwaInstallButton />
     </div>
   )
 }

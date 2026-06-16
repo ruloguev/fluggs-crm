@@ -42,6 +42,35 @@ const FlugzzIsotipo = ({ className = "w-8 h-8" }) => (
   <img src="/Flugzz.svg" alt="Flugzz" className={className} style={{ filter: "invert(1)" }} />
 )
 
+function InstallPwaButton() {
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => { setInstalled(true); setInstallPrompt(null) })
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  if (installed || !installPrompt) return null
+
+  return (
+    <button
+      onClick={async () => {
+        (installPrompt as any).prompt()
+        const result = await (installPrompt as any).userChoice
+        if (result.outcome === 'accepted') setInstalled(true)
+        setInstallPrompt(null)
+      }}
+      className="flex items-center gap-2 w-full px-4 py-2.5 text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900/60 transition-colors"
+    >
+      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Instalar app
+    </button>
+  )
+}
+
 function NavSkeleton() {
   return (
     <div className="space-y-1 px-3 py-5">
@@ -337,31 +366,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-zinc-800/60 shrink-0">
-        {loading ? (
-          <div className="flex items-center gap-2.5 animate-pulse">
-            <div className="w-9 h-9 rounded-full bg-zinc-900" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3 bg-zinc-900 rounded w-3/4" />
-              <div className="h-2 bg-zinc-900 rounded w-1/2" />
+      <div className="border-t border-zinc-800/60 shrink-0">
+        <InstallPwaButton />
+        <div className="p-4">
+          {loading ? (
+            <div className="flex items-center gap-2.5 animate-pulse">
+              <div className="w-9 h-9 rounded-full bg-zinc-900" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 bg-zinc-900 rounded w-3/4" />
+                <div className="h-2 bg-zinc-900 rounded w-1/2" />
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700/50 flex items-center justify-center text-xs font-bold text-zinc-300 shrink-0">
-              {initials}
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700/50 flex items-center justify-center text-xs font-bold text-zinc-300 shrink-0">
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-200 truncate">{profile?.full_name}</p>
+                <p className="text-xs text-zinc-600 truncate">{role?.name ?? "Sin rol"}</p>
+              </div>
+              <button onClick={handleLogout}
+                className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                title="Cerrar sesión">
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-zinc-200 truncate">{profile?.full_name}</p>
-              <p className="text-xs text-zinc-600 truncate">{role?.name ?? "Sin rol"}</p>
-            </div>
-            <button onClick={handleLogout}
-              className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
-              title="Cerrar sesión">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </aside>
   )

@@ -31,9 +31,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    console.log('[SW] Registered. Scope:', reg.scope);
+                  }).catch(function(err) {
+                    console.error('[SW] Registration failed:', err);
+                  });
                 });
               }
+              // Capture beforeinstallprompt for manual install
+              let deferredPrompt = null;
+              window.addEventListener('beforeinstallprompt', function(e) {
+                e.preventDefault();
+                deferredPrompt = e;
+                console.log('[PWA] Install prompt available');
+                window.dispatchEvent(new CustomEvent('pwa-ready'));
+              });
+              window.addEventListener('appinstalled', function() {
+                console.log('[PWA] Installed successfully');
+                deferredPrompt = null;
+              });
             `,
           }}
         />

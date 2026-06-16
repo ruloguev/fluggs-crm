@@ -78,10 +78,10 @@ export default function LandingPageMockup() {
           </Link>
 
           {/* Botón Secundario */}
-          <button className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-800/60 text-white font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm group">
+          <Link href="/demo" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-800/60 text-white font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm group">
             <Play className="w-5 h-5 text-zinc-400 group-hover:text-cyan-400 transition-colors" />
             Ver recorrido guiado
-          </button>
+          </Link>
         </div>
 
         {/* MOCKUP 3D ADAPTATIVO (MÓVIL + ESCRITORIO) */}

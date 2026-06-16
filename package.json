@@ -27,6 +27,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.6.0",
+    "sharp": "^0.35.1",
     "stripe": "^22.2.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",

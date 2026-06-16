@@ -13,7 +13,6 @@ import { createClient } from "@/lib/supabase"
 import { registerPushSubscription, unregisterPushSubscription, getPushSubscriptionStatus } from "@/lib/push-notifications"
 import { PrivacyNoticeModal } from "@/components/ui/privacy-notice-modal"
 import { CommandPalette } from "@/components/search/command-palette"
-import { PwaInstallButton } from "@/components/pwa/install-button"
 import { CommandPaletteTrigger } from "@/components/search/command-palette-trigger"
 
 type NotificationRecord = {
@@ -44,31 +43,67 @@ const FlugzzIsotipo = ({ className = "w-8 h-8" }) => (
 )
 
 function InstallPwaButton() {
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [installed, setInstalled] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
-    const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e) }
-    window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', () => { setInstalled(true); setInstallPrompt(null) })
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    if (typeof window === "undefined") return
+    if (window.matchMedia("(display-mode: standalone)").matches) { setInstalled(true); return }
+    if (!!(window.navigator as any).standalone) { setInstalled(true); return }
+    if (!("serviceWorker" in navigator)) return
+
+    setShow(true)
+
+    const handler = (e: Event) => { e.preventDefault(); setDeferredPrompt(e) }
+    window.addEventListener("beforeinstallprompt", handler)
+    window.addEventListener("appinstalled", () => { setInstalled(true); setDeferredPrompt(null) })
+    return () => window.removeEventListener("beforeinstallprompt", handler)
   }, [])
 
-  if (installed || !installPrompt) return null
+  const handleClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      const result = await deferredPrompt.userChoice
+      if (result.outcome === "accepted") setInstalled(true)
+      setDeferredPrompt(null)
+    } else {
+      setShowModal(true)
+    }
+  }
+
+  if (installed || !show) return null
 
   return (
-    <button
-      onClick={async () => {
-        (installPrompt as any).prompt()
-        const result = await (installPrompt as any).userChoice
-        if (result.outcome === 'accepted') setInstalled(true)
-        setInstallPrompt(null)
-      }}
-      className="flex items-center gap-2 w-full px-4 py-2.5 text-xs text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900/60 transition-colors"
-    >
-      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-      Instalar app
-    </button>
+    <>
+      <button onClick={handleClick}
+        className="flex items-center gap-1.5 px-4 py-1.5 text-[11px] text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900/40 transition-colors w-full"
+      >
+        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+        Instalar app
+      </button>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowModal(false)}>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-zinc-100 font-semibold text-base mb-4">Instalar Flugzz</h3>
+            <p className="text-zinc-400 text-sm mb-4">Abre el menú de Chrome y selecciona:</p>
+            <ol className="text-sm text-zinc-300 space-y-2 mb-6">
+              <li className="flex gap-2"><span className="text-flugzz-accent shrink-0">1.</span> Haz clic en <strong className="text-zinc-200">⋮</strong> (menú)</li>
+              <li className="flex gap-2"><span className="text-flugzz-accent shrink-0">2.</span> <strong className="text-zinc-200">"Cast, save and share"</strong></li>
+              <li className="flex gap-2"><span className="text-flugzz-accent shrink-0">3.</span> <strong className="text-zinc-200">"Install page as app..."</strong></li>
+            </ol>
+            <button onClick={() => setShowModal(false)}
+              className="w-full py-2.5 rounded-xl bg-zinc-800 text-zinc-200 text-sm font-medium hover:bg-zinc-700 transition-colors">
+              Listo, ya instalé
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -560,7 +595,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <PwaInstallButton />
     </div>
   )
 }

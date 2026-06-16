@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
-import { getCachedContent } from "@/lib/gemini-cache"
-
 export const runtime = "nodejs"
 
 function getSupabaseAdmin() {
@@ -28,37 +26,18 @@ export async function POST(req: NextRequest) {
     if (!message || !companyId)
       return NextResponse.json({ error: "Faltan parámetros." }, { status: 400 })
 
-    // ── Búsqueda full-text en Postgres ──────────
+    // ── Búsqueda full-text con stemming en español ──
     let contextText = ""
     try {
-      const keywords = message
-        .toLowerCase()
-        .replace(/[¿?¡!.,;:]/g, " ")
-        .split(/\s+/)
-        .filter((w: string) => w.length > 3)
-        .slice(0, 6)
-
-      const { data: phraseMatches } = await supabase
+      const { data: matches } = await supabase
         .from("knowledge_chunks")
         .select("id, content, metadata, document_id")
         .eq("company_id", companyId)
-        .ilike("content", `%${message.slice(0, 50)}%`)
-        .limit(4)
-
-      const { data: keywordMatches } = await supabase
-        .from("knowledge_chunks")
-        .select("id, content, metadata, document_id")
-        .eq("company_id", companyId)
-        .or(keywords.map((k: string) => `content.ilike.%${k}%`).join(","))
+        .textSearch("content", message, { type: "plain", config: "spanish" })
         .limit(8)
 
-      const seen = new Set<string>()
-      const allChunks = [...(phraseMatches ?? []), ...(keywordMatches ?? [])]
-        .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
-        .slice(0, 8)
-
-      if (allChunks.length > 0) {
-        contextText = allChunks
+      if (matches && matches.length > 0) {
+        contextText = matches
           .map((c, i) => {
             const title = (c.metadata as any)?.document_title ?? "Documento"
             return `[Fuente ${i + 1} — ${title}]\n${c.content}`
@@ -66,12 +45,12 @@ export async function POST(req: NextRequest) {
           .join("\n\n---\n\n")
       }
 
-      if (allChunks.length === 0) {
+      if (!matches || matches.length === 0) {
         const { data: fallbackChunks } = await supabase
           .from("knowledge_chunks")
           .select("id, content, metadata")
           .eq("company_id", companyId)
-          .order("chunk_index")
+          .order("created_at", { ascending: false })
           .limit(5)
 
         if (fallbackChunks && fallbackChunks.length > 0) {

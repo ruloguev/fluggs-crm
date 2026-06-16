@@ -21,18 +21,20 @@ export default function OGImage() {
       >
         <div
           style={{
-            width: "96px",
-            height: "96px",
-            borderRadius: "20px",
+            width: "120px",
+            height: "120px",
+            borderRadius: "24px",
             background: "#09090b",
-            border: "2px solid rgba(34, 211, 238, 0.3)",
+            border: "1px solid rgba(255,255,255,0.08)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: "24px",
+            marginBottom: "32px",
+            position: "relative",
           }}
         >
-          <span style={{ fontSize: "56px", fontWeight: 800, color: "#22D3EE" }}>F</span>
+          <span style={{ fontSize: "72px", fontWeight: 800, color: "#f4f4f5", lineHeight: 1 }}>F</span>
+          <span style={{ fontSize: "64px", fontWeight: 800, color: "#22D3EE", lineHeight: 1, marginLeft: "-4px" }}>.</span>
         </div>
         <span
           style={{

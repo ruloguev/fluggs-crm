@@ -3,6 +3,7 @@ import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://flugzz.xyz"),
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
   description: "CRM inmobiliario para agentes en campo",
   icons: {
     icon: "/icon.svg",
-    apple: "/icon.svg",
+    apple: "/icon-192.png",
   },
 }
 

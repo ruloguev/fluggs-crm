@@ -4,7 +4,6 @@ import { AuthProvider } from "@/contexts/AuthContext"
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://flugzz.xyz"),
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

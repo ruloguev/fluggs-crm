@@ -308,16 +308,14 @@ export default function ContactosPage() {
 
     // Crear notificación de nuevo lead (fire-and-forget, no bloquea el flujo)
     if (userId && profile.company_id) {
-      import('@/lib/push-notifications').then(({ createNotificationWithPush }) => {
-        createNotificationWithPush({
-          company_id: profile.company_id!,
-          user_id: userId,
-          lead_id: leadData.id,
-          type: "lead_created",
-          title: "📋 Nuevo lead asignado",
-          body: `Se te ha asignado el lead ${formData.full_name.trim()} (${formData.priority === "high" ? "prioridad alta" : "prioridad normal"})`,
-        }).catch(() => {}) // Silenciar errores
-      }).catch(() => {})
+      supabase.from("notifications").insert({
+        company_id: profile.company_id!,
+        user_id: userId,
+        lead_id: leadData.id,
+        type: "lead_created",
+        title: "Nuevo lead asignado",
+        body: `Se te ha asignado el lead ${formData.full_name.trim()} (${formData.priority === "high" ? "prioridad alta" : "prioridad normal"})`,
+      })
     }
 
     await supabase.from("activities").insert({

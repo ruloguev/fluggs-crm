@@ -3,7 +3,6 @@ import { createServerClient } from "@supabase/ssr"
 import { createClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
-import { createNotificationWithPush } from "@/lib/push-notifications"
 
 export const runtime = "nodejs"
 
@@ -82,7 +81,7 @@ export async function DELETE(req: NextRequest) {
         }
 
         if (superior) {
-          await createNotificationWithPush({
+          await supabase.from("notifications").insert({
             company_id: profile.company_id,
             user_id: reportsTo,
             type: "account_deleted",

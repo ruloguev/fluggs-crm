@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { createNotificationWithPush } from "@/lib/push-notifications"
+import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
 /**
  * POST /api/notifications
  *
- * Crea una notificacion en la base de datos y dispara push notification.
+ * Crea una notificacion en la base de datos.
  * Diseñado para ser llamado desde el cliente (ej. @menciones en notas).
  * Usa service_role key para insertar en nombre de otro usuario.
  */
@@ -21,16 +21,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const notification = await createNotificationWithPush({
-      company_id,
-      user_id,
-      lead_id: lead_id ?? undefined,
-      type,
-      title,
-      body: messageBody ?? "",
-    })
+    const supabase = createClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!)
 
-    if (!notification) {
+    const { data: notification, error } = await supabase
+      .from("notifications")
+      .insert({
+        company_id,
+        user_id,
+        lead_id: lead_id ?? null,
+        type,
+        title,
+        body: messageBody ?? "",
+      })
+      .select("id")
+      .single()
+
+    if (error || !notification) {
       return NextResponse.json({ error: "No se pudo crear la notificacion" }, { status: 500 })
     }
 

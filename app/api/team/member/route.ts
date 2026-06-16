@@ -3,7 +3,6 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
-import { createNotificationWithPush } from "@/lib/push-notifications"
 
 export const runtime = "nodejs"
 
@@ -169,7 +168,7 @@ export async function DELETE(req: NextRequest) {
         reassignedLeadCount = leadIds.length
 
         if (superior) {
-          await createNotificationWithPush({
+          await supabase.from("notifications").insert({
             company_id: actorProfile.company_id,
             user_id: targetReportsTo,
             type: "team_member_deleted",

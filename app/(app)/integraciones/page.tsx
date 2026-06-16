@@ -63,7 +63,7 @@ type QueueStats = {
 type QueueRecord = {
   id: string
   auto_reassign_enabled: boolean | null
-  auto_reassign_after_minutes: number | null
+  reassign_after_hours: number | null
   auto_reassign_cron: string | null
   scheduler_job_name: string | null
   last_reassignment_run_at: string | null
@@ -663,7 +663,7 @@ function RoundRobinManager({
   const [configError, setConfigError] = useState<string | null>(null)
   const [configMessage, setConfigMessage] = useState<string | null>(null)
   const [autoReassignEnabled, setAutoReassignEnabled] = useState(false)
-  const [autoReassignAfterMinutes, setAutoReassignAfterMinutes] = useState("30")
+  const [autoReassignAfterHours, setAutoReassignAfterHours] = useState("6")
   const [autoReassignCron, setAutoReassignCron] = useState("*/15 * * * *")
   const supabase = createClient()
 
@@ -681,7 +681,7 @@ function RoundRobinManager({
 
     const { data: queue } = await supabase
       .from("round_robin_queues")
-      .select("id, auto_reassign_enabled, auto_reassign_after_minutes, auto_reassign_cron, scheduler_job_name, last_reassignment_run_at")
+      .select("id, auto_reassign_enabled, reassign_after_hours, auto_reassign_cron, scheduler_job_name, last_reassignment_run_at")
       .eq("company_id", companyId)
       .eq("source", "facebook")
       .eq("integration_id", integration.id)
@@ -690,7 +690,7 @@ function RoundRobinManager({
     setQueueId(queue?.id ?? null)
     setQueueConfig((queue as QueueRecord | null) ?? null)
     setAutoReassignEnabled(Boolean(queue?.auto_reassign_enabled))
-    setAutoReassignAfterMinutes(String(queue?.auto_reassign_after_minutes ?? 30))
+    setAutoReassignAfterHours(String(queue?.reassign_after_hours ?? 6))
     setAutoReassignCron(queue?.auto_reassign_cron ?? "*/15 * * * *")
 
     if (queue?.id) {
@@ -758,9 +758,9 @@ function RoundRobinManager({
     setConfigError(null)
     setConfigMessage(null)
 
-    const minutes = Number(autoReassignAfterMinutes)
-    if (!Number.isFinite(minutes) || minutes < 1) {
-      setConfigError("El umbral de minutos debe ser mayor a 0.")
+    const hours = Number(autoReassignAfterHours)
+    if (!Number.isFinite(hours) || hours < 1 || hours > 24) {
+      setConfigError("Debe ser entre 1 y 24 horas.")
       setSavingConfig(false)
       return
     }
@@ -768,8 +768,7 @@ function RoundRobinManager({
     const { error } = await supabase.rpc("configure_round_robin_reassignment", {
       p_queue_id: queueId,
       p_enabled: autoReassignEnabled,
-      p_cron: autoReassignCron,
-      p_after_minutes: minutes,
+      p_after_hours: hours,
     })
 
     setSavingConfig(false)
@@ -911,27 +910,19 @@ function RoundRobinManager({
             </label>
 
             <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4">
-              <Label className="text-zinc-400">Minutos sin actividad</Label>
+              <Label className="text-zinc-400">Horas sin actividad (1-24)</Label>
               <Input
                 type="number"
                 min={1}
-                value={autoReassignAfterMinutes}
-                onChange={(event) => setAutoReassignAfterMinutes(event.target.value)}
+                max={24}
+                value={autoReassignAfterHours}
+                onChange={(event) => setAutoReassignAfterHours(event.target.value)}
                 className="mt-2 border-zinc-800 bg-zinc-950 text-zinc-100"
               />
-              <p className="mt-2 text-xs text-zinc-500">Cuando un lead supera este umbral, entra a revisión.</p>
+              <p className="mt-2 text-xs text-zinc-500">Cuando un lead supera este umbral sin actividad en la primera etapa, será reasignado al siguiente agente.</p>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-4">
-              <Label className="text-zinc-400">Expresión cron</Label>
-              <Input
-                value={autoReassignCron}
-                onChange={(event) => setAutoReassignCron(event.target.value)}
-                placeholder="*/15 * * * *"
-                className="mt-2 border-zinc-800 bg-zinc-950 font-mono text-zinc-100"
-              />
-              <p className="mt-2 text-xs text-zinc-500">Ejemplo: `*/15 * * * *` para revisar cada 15 minutos.</p>
-            </div>
+
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

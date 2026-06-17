@@ -15,6 +15,7 @@ import {
   Shuffle,
   Loader2,
   AlertCircle,
+  Calendar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1066,7 +1067,49 @@ export default function IntegracionesPage() {
   const supabase = createClient()
   const { can, loading: authLoading, role, profile } = useAuth()
 
-  const [tab, setTab] = useState<"facebook" | "roundrobin">("facebook")
+  const [tab, setTab] = useState<"facebook" | "roundrobin" | "google">("facebook")
+
+  // Google Calendar state
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleEmail, setGoogleEmail] = useState("")
+  const [loadingGoogle, setLoadingGoogle] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/google/auth/status")
+      .then(r => r.json())
+      .then(d => {
+        setGoogleConnected(d.connected)
+        setGoogleEmail(d.email || "")
+      })
+      .catch(() => {})
+      .finally(() => setLoadingGoogle(false))
+  }, [])
+
+  // Handle redirect from OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const googleStatus = params.get("google")
+    if (googleStatus === "connected") {
+      setGoogleConnected(true)
+      const url = new URL(window.location.href)
+      url.searchParams.delete("google")
+      url.searchParams.delete("detail")
+      window.history.replaceState({}, "", url.toString())
+      fetch("/api/google/auth/status")
+        .then(r => r.json())
+        .then(d => {
+          setGoogleEmail(d.email || "")
+        })
+        .catch(() => {})
+    } else if (googleStatus === "error") {
+      const detail = params.get("detail")
+      alert(detail ? `Error al conectar Google Calendar: ${detail}` : "Error al conectar Google Calendar")
+      const url = new URL(window.location.href)
+      url.searchParams.delete("google")
+      url.searchParams.delete("detail")
+      window.history.replaceState({}, "", url.toString())
+    }
+  }, [])
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [teamProfiles, setTeamProfiles] = useState<TeamProfile[]>([])
   const [integrations, setIntegrations] = useState<FacebookIntegration[]>([])
@@ -1226,11 +1269,12 @@ export default function IntegracionesPage() {
                 {[
                   { id: "facebook", label: "Facebook Leads", icon: Globe },
                   { id: "roundrobin", label: "Round Robin", icon: Shuffle },
+                  { id: "google", label: "Google Calendar", icon: Calendar },
                 ].map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}
                     type="button"
-                    onClick={() => setTab(id as "facebook" | "roundrobin")}
+                    onClick={() => setTab(id as "facebook" | "roundrobin" | "google")}
                     className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                       tab === id ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:text-zinc-200"
                     }`}
@@ -1241,7 +1285,88 @@ export default function IntegracionesPage() {
                 ))}
               </div>
 
-              {tab === "facebook" ? (
+              {tab === "google" ? (
+                <div className="space-y-5">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-500/30 bg-red-600/20">
+                      <Calendar className="h-5 w-5 text-red-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-zinc-100">Google Calendar</p>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        Conecta tu cuenta de Google para agendar reuniones con leads y generar enlaces de Google Meet directamente desde el CRM.
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingGoogle ? (
+                    <div className="flex items-center gap-2 text-sm text-zinc-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verificando conexión...
+                    </div>
+                  ) : googleConnected ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                        <span className="text-sm font-medium text-emerald-300">Conectado</span>
+                      </div>
+                      {googleEmail && (
+                        <p className="text-sm text-zinc-300">
+                          Cuenta: <span className="font-medium">{googleEmail}</span>
+                        </p>
+                      )}
+                      <p className="text-xs text-zinc-500">
+                        Puedes agendar reuniones desde la ficha de cada lead.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await fetch("/api/google/auth/disconnect", { method: "POST" })
+                          setGoogleConnected(false)
+                          setGoogleEmail("")
+                        }}
+                        className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300 hover:bg-red-500/20 transition-colors"
+                      >
+                        Desconectar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 p-5 space-y-4">
+                      <p className="text-sm text-zinc-400">
+                        Al conectar, podrás crear eventos de calendario y reuniones de Google Meet directamente desde los leads.
+                      </p>
+                      <a
+                        href="/api/google/auth"
+                        className="inline-flex items-center gap-2 rounded-xl bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-200 transition-colors"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Conectar Google Calendar
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 p-5">
+                    <p className="text-xs uppercase tracking-wider text-zinc-500 mb-3">Permisos solicitados</p>
+                    <ul className="space-y-2 text-sm text-zinc-400">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-flugzz-accent shrink-0 mt-0.5" />
+                        <span>Ver tu dirección de correo electrónico</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-flugzz-accent shrink-0 mt-0.5" />
+                        <span>Crear eventos en tu Google Calendar</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-flugzz-accent shrink-0 mt-0.5" />
+                        <span>Crear reuniones de Google Meet</span>
+                      </li>
+                    </ul>
+                    <p className="mt-4 text-xs text-zinc-600">
+                      Solo creamos eventos, no leemos ni modificamos eventos existentes. Cada agente conecta su cuenta personal.
+                    </p>
+                  </div>
+                </div>
+              ) : tab === "facebook" ? (
                 companyId && profile?.id ? (
                   <FacebookSetupForm
                     key={selectedIntegration?.id ?? "new"}

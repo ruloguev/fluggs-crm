@@ -8,7 +8,7 @@ import {
   Plus, ChevronDown, Edit2, Check, X, Loader2, FileText,
   PhoneCall, PhoneMissed, PhoneOff, Voicemail, User,
   AlertCircle, Trash2, ExternalLink,
-  Navigation, StickyNote, Calendar, Sparkles, Download, Copy
+  Navigation, StickyNote, Calendar, Sparkles, Download, Copy, Video, CheckCircle2
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -106,6 +106,7 @@ function ActivityIcon({ type, callStatus }: { type: string; callStatus?: string 
   if (type === "note") return <div className={`${base} bg-zinc-700/50 border-zinc-700`}><StickyNote className="w-3.5 h-3.5 text-zinc-400" /></div>
   if (type === "stage_change") return <div className={`${base} bg-flugzz-accent/10 border-flugzz-accent/20`}><Check className="w-3.5 h-3.5 text-flugzz-accent" /></div>
   if (type === "file_upload") return <div className={`${base} bg-zinc-700/50 border-zinc-700`}><FileText className="w-3.5 h-3.5 text-zinc-400" /></div>
+  if (type === "meeting") return <div className={`${base} bg-red-500/10 border-red-500/20`}><Calendar className="w-3.5 h-3.5 text-red-400" /></div>
   return <div className={`${base} bg-zinc-700/50 border-zinc-700`}><User className="w-3.5 h-3.5 text-zinc-400" /></div>
 }
 
@@ -905,6 +906,14 @@ export default function LeadDetailPage() {
   const [newTag, setNewTag] = useState("")
   const [aiSummary, setAiSummary] = useState<string | null>(null)
   const [loadingAiSummary, setLoadingAiSummary] = useState(false)
+  const [showSchedule, setShowSchedule] = useState(false)
+  const [scheduleTitle, setScheduleTitle] = useState("")
+  const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().slice(0, 10))
+  const [scheduleTime, setScheduleTime] = useState("10:00")
+  const [scheduleDuration, setScheduleDuration] = useState(60)
+  const [scheduleMeet, setScheduleMeet] = useState(true)
+  const [scheduling, setScheduling] = useState(false)
+  const [scheduleResult, setScheduleResult] = useState<{ htmlLink?: string; meetLink?: string } | null>(null)
 
   useEffect(() => { loadData() }, [id])
   useEffect(() => { if (editingTitle && titleRef.current) titleRef.current.focus() }, [editingTitle])
@@ -1320,6 +1329,15 @@ export default function LeadDetailPage() {
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
             </button>
           )}
+          <button
+            onClick={() => {
+              setScheduleTitle(lead?.title || contact.full_name)
+              setScheduleResult(null)
+              setShowSchedule(true)
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-red-500/40 text-zinc-300 hover:text-red-400 text-sm transition-all">
+            <Calendar className="w-3.5 h-3.5" /> Agendar
+          </button>
           {contact.email && (
             <button
               onClick={async () => {
@@ -1730,6 +1748,166 @@ export default function LeadDetailPage() {
                 Eliminar
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {showSchedule && (
+        <>
+          <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={() => { if (!scheduling) setShowSchedule(false) }} />
+          <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 pb-8 animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto md:max-w-lg md:left-1/2 md:-translate-x-1/2 md:rounded-2xl md:bottom-8 md:border">
+            <div className="w-10 h-1 bg-zinc-800 rounded-full mx-auto mb-5 md:hidden" />
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-zinc-100 font-medium">Agendar reunión</h3>
+              <button onClick={() => setShowSchedule(false)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {scheduleResult ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-300">Reunión creada</span>
+                  </div>
+                  <p className="text-sm text-zinc-300">El evento se agregó a tu Google Calendar.</p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {scheduleResult.htmlLink && (
+                    <a
+                      href={scheduleResult.htmlLink}
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-200 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Ver en Google Calendar
+                    </a>
+                  )}
+                  {scheduleResult.meetLink && (
+                    <a
+                      href={scheduleResult.meetLink}
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      <Video className="w-4 h-4" />
+                      Unirse a Google Meet
+                    </a>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowSchedule(false)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-300 hover:border-zinc-700"
+                >
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <input
+                  value={scheduleTitle}
+                  onChange={e => setScheduleTitle(e.target.value)}
+                  placeholder="Título de la reunión"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
+                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1.5 block">Fecha</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={e => setScheduleDate(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1.5 block">Hora</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={e => setScheduleTime(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-zinc-500 mb-1.5 block">Duración (minutos)</label>
+                  <select
+                    value={scheduleDuration}
+                    onChange={e => setScheduleDuration(Number(e.target.value))}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm outline-none focus:border-zinc-700"
+                  >
+                    <option value={15}>15 min</option>
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>1 hora</option>
+                    <option value={90}>1.5 horas</option>
+                    <option value={120}>2 horas</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div
+                    onClick={() => setScheduleMeet(!scheduleMeet)}
+                    className={`w-10 h-6 rounded-full transition-colors relative ${
+                      scheduleMeet ? "bg-flugzz-accent" : "bg-zinc-700"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        scheduleMeet ? "translate-x-[18px]" : "translate-x-0.5"
+                      }`}
+                    />
+                  </div>
+                  <span className="text-sm text-zinc-300">Agregar Google Meet</span>
+                </label>
+
+                <button
+                  onClick={async () => {
+                    setScheduling(true)
+                    try {
+                      const startTime = new Date(`${scheduleDate}T${scheduleTime}:00`)
+                      const endTime = new Date(startTime.getTime() + scheduleDuration * 60000)
+                      const res = await fetch("/api/google/calendar/events", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          lead_id: id,
+                          title: scheduleTitle,
+                          description: `Reunión con ${contact.full_name}${lead.title ? ` — ${lead.title}` : ""}`,
+                          start_time: startTime.toISOString(),
+                          end_time: endTime.toISOString(),
+                          add_meet: scheduleMeet,
+                        }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) {
+                        alert(data.error || "Error al crear la reunión")
+                        setScheduling(false)
+                        return
+                      }
+                      setScheduleResult(data)
+                      loadData()
+                    } catch (e: any) {
+                      alert(e.message || "Error al crear la reunión")
+                    }
+                    setScheduling(false)
+                  }}
+                  disabled={scheduling || !scheduleTitle.trim()}
+                  className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-medium disabled:opacity-40 transition-opacity"
+                >
+                  {scheduling ? (
+                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                  ) : (
+                    "Crear reunión"
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

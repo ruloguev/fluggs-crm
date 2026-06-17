@@ -32,9 +32,11 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname === route)
   // Facebook/Meta webhook must be publicly accessible
   const isFacebookWebhook = request.nextUrl.pathname === "/api/facebook"
+  // Google OAuth callback is public (handles sign-in of its own)
+  const isGoogleAuthCallback = request.nextUrl.pathname === "/api/google/auth/callback"
 
   // Unauthenticated users trying to access protected routes → redirect to login
-  if (!user && !isPublicRoute && !isFacebookWebhook) {
+  if (!user && !isPublicRoute && !isFacebookWebhook && !isGoogleAuthCallback) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)

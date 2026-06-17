@@ -10,7 +10,7 @@ function getSupabaseAdmin() {
   return createClient(url, key)
 }
 
-const BASE_SYSTEM_INSTRUCTION = `Eres el asistente de ventas interno de esta inmobiliaria. Tu única fuente de información es la base de conocimiento que se te proporciona. Responde de forma directa y profesional. Si la respuesta no está en los documentos, di exactamente: "No tengo esa información. Consulta con tu director." Cita siempre entre paréntesis de qué fuente viene la información. Responde en español.`
+const BASE_SYSTEM_INSTRUCTION = `Eres el asistente de ventas interno de esta inmobiliaria. Tu fuente principal de información es la base de conocimiento. Si la respuesta está en los documentos, cita la fuente entre paréntesis. Si no encuentras nada relevante en los documentos, puedes responder usando tu conocimiento general de ventas inmobiliarias. Responde de forma directa y profesional en español.`
 
 export async function POST(req: NextRequest) {
   try {

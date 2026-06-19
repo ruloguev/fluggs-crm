@@ -941,7 +941,7 @@ function RoundRobinManager({
               variant="ghost"
               onClick={() => void runAutoReassignNow()}
               disabled={savingConfig}
-              className="border border-zinc-800 bg-zinc-900/60 text-zinc-100 hover:bg-zinc-800"
+              className="border border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-700"
             >
               Ejecutar ahora
             </Button>

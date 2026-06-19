@@ -722,11 +722,11 @@ function ExpedientePanel({
             {requiredCount > 0 ? `${completedCount} / ${requiredCount} obligatorios completos` : `${documents.length} documento(s) cargado(s)`}
           </span>
           {documents.length > 0 && (
-            <button
-              onClick={downloadZip}
-              disabled={downloading}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 hover:border-zinc-600 disabled:opacity-50"
-            >
+              <button
+                onClick={downloadZip}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 hover:bg-zinc-700 hover:border-zinc-500 disabled:opacity-50"
+              >
               {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Descargar ZIP
             </button>
@@ -802,7 +802,7 @@ function ExpedientePanel({
                   )}
                 </div>
 
-                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-zinc-200 hover:border-zinc-600">
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-600 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-100 hover:bg-zinc-700 hover:border-zinc-500">
                   {uploadingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                   {uploadedDocument ? "Reemplazar archivo" : "Subir archivo"}
                   <input
@@ -1181,8 +1181,8 @@ export default function LeadDetailPage() {
                     className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none"
                     placeholder="Título del lead"
                   />
-                  <button onClick={saveTitle} className="p-1 rounded hover:bg-zinc-700"><Check className="w-3.5 h-3.5 text-emerald-400" /></button>
-                  <button onClick={() => setEditingTitle(false)} className="p-1 rounded hover:bg-zinc-700"><X className="w-3.5 h-3.5 text-zinc-500" /></button>
+          <button onClick={saveTitle} className="p-1.5 rounded-lg hover:bg-zinc-700"><Check className="w-3.5 h-3.5 text-emerald-400" /></button>
+          <button onClick={() => setEditingTitle(false)} className="p-1.5 rounded-lg hover:bg-zinc-700"><X className="w-3.5 h-3.5 text-zinc-500" /></button>
                 </div>
               ) : (
                 <button onClick={() => setEditingTitle(true)}

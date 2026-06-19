@@ -975,10 +975,10 @@ function RoundRobinManager({
             <p className="font-medium text-zinc-200">Sin cola configurada</p>
             <p className="mt-1 text-sm text-zinc-500">Crea una cola especifica para esta integracion.</p>
           </div>
-          <Button onClick={() => void createQueue()} className="bg-flugzz-accent text-zinc-950 hover:bg-cyan-300">
-            <Plus className="mr-2 h-4 w-4" />
+          <button onClick={() => void createQueue()} className="flex items-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-black hover:bg-cyan-400 border border-cyan-300 transition-all shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+            <Plus className="h-4 w-4" />
             Crear cola de Facebook
-          </Button>
+          </button>
         </div>
       ) : (
         <>

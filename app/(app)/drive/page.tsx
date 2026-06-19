@@ -308,7 +308,7 @@ export default function DrivePage() {
               </button>
               <button
                 type="button"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-flugzz-accent text-zinc-950 font-semibold hover:bg-cyan-300 transition-colors shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-colors border border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <UploadCloud className="w-5 h-5" />
@@ -486,7 +486,7 @@ export default function DrivePage() {
             <button
               type="button"
               onClick={() => void confirmMove()}
-              className="flex-1 rounded-xl bg-flugzz-accent px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-cyan-300 transition-colors"
+              className="flex-1 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors border border-cyan-300"
             >
               Mover aquí
             </button>

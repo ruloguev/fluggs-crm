@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Public routes — no auth required
-  const publicRoutes = ["/", "/login", "/signup", "/auth/callback", "/demo"]
+  const publicRoutes = ["/", "/login", "/signup", "/auth/callback", "/demo", "/aviso-de-privacidad", "/terminos-y-condiciones"]
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname === route)
   // Facebook/Meta webhook must be publicly accessible
   const isFacebookWebhook = request.nextUrl.pathname === "/api/facebook"

@@ -206,6 +206,16 @@ function LoginForm() {
       <p className="mt-8 text-center text-xs text-zinc-600">
         El registro público no está habilitado; tu organización debe invitarte o crear tu cuenta desde Ajustes → Equipo.
       </p>
+
+      <div className="mt-6 flex items-center justify-center gap-4 text-xs text-zinc-600">
+        <a href="/aviso-de-privacidad" className="hover:text-zinc-400 transition-colors">
+          Aviso de Privacidad
+        </a>
+        <span className="text-zinc-700">|</span>
+        <a href="/terminos-y-condiciones" className="hover:text-zinc-400 transition-colors">
+          Términos y Condiciones
+        </a>
+      </div>
     </div>
   )
 }

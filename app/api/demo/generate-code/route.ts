@@ -18,7 +18,7 @@ export async function POST() {
       .from("valid_promo_codes")
       .select("code, current_uses, max_uses")
       .in("code", ALL_CODES)
-      .lt("current_uses", "max_uses")
+      .lt("current_uses", 2)
       .limit(1)
       .maybeSingle()
 

@@ -431,7 +431,7 @@ export default function SuscripcionPage() {
                   <button
                     onClick={activatePromo}
                     disabled={redeeming}
-                    className="w-full rounded-xl bg-flugzz-accent text-zinc-900 px-4 py-3.5 text-base font-bold hover:opacity-90 active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2 shadow-lg shadow-flugzz-accent/30 transition-all"
+                    className="w-full rounded-xl bg-cyan-500 text-black px-4 py-3.5 text-base font-bold hover:bg-cyan-400 active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-2 border border-cyan-300 shadow-lg shadow-cyan-500/30 transition-all"
                   >
                     {redeeming ? (
                       <Loader2 className="w-5 h-5 animate-spin" />

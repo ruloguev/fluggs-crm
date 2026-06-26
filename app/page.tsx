@@ -82,6 +82,11 @@ export default function LandingPageMockup() {
             <Play className="w-5 h-5 text-zinc-400 group-hover:text-cyan-400 transition-colors" />
             Ver recorrido guiado
           </Link>
+
+          {/* Botón Demo */}
+          <Link href="/solicitar-demo" className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-700/60 text-zinc-300 font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm group">
+            Solicitar demo
+          </Link>
         </div>
 
         {/* MOCKUP 3D ADAPTATIVO (MÓVIL + ESCRITORIO) */}

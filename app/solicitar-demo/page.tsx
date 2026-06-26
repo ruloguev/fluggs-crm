@@ -44,8 +44,8 @@ export default function SolicitarDemoPage() {
     <main className="min-h-screen bg-[#09090b] text-zinc-300 antialiased flex flex-col">
       {/* NAV */}
       <nav className="relative z-20 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto w-full">
-        <a href="/" className="font-semibold text-xl tracking-tighter text-zinc-100">
-          Flugzz<span style={{ color: '#22D3EE' }}>.</span>
+        <a href="/" className="font-semibold text-xl tracking-tighter text-zinc-100 flex items-baseline">
+          Flugzz<span style={{ color: '#22D3EE' }} className="ml-0.5">.</span>
         </a>
         <a
           href="/login"
@@ -64,7 +64,7 @@ export default function SolicitarDemoPage() {
               Demo gratuita
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-100 mb-3">
-              Probá Flugzz gratis
+              Prueba Flugzz gratis
             </h1>
             <p className="text-zinc-400 text-sm sm:text-base">
               Generá un código promocional y canjealo por <strong className="text-zinc-200">30 días de prueba</strong> sin compromiso.

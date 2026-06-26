@@ -16,9 +16,9 @@ export async function POST() {
 
     const { data: row } = await supabase
       .from("valid_promo_codes")
-      .select("code")
+      .select("code, current_uses, max_uses")
       .in("code", ALL_CODES)
-      .eq("given_by_generator", false)
+      .lt("current_uses", "max_uses")
       .limit(1)
       .maybeSingle()
 
@@ -27,16 +27,6 @@ export async function POST() {
         { error: "Ya no quedan códigos promocionales :(" },
         { status: 404 },
       )
-    }
-
-    const { error: updateError } = await supabase
-      .from("valid_promo_codes")
-      .update({ given_by_generator: true })
-      .eq("code", row.code)
-
-    if (updateError) {
-      console.error("Error marking code as given:", updateError)
-      return NextResponse.json({ error: "Error al generar código." }, { status: 500 })
     }
 
     return NextResponse.json({ code: row.code })

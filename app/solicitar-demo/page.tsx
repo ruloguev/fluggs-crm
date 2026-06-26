@@ -126,10 +126,10 @@ export default function SolicitarDemoPage() {
                 <div className="rounded-xl bg-zinc-900/60 border border-zinc-800/50 p-4 text-left text-sm space-y-2">
                   <p className="text-zinc-200 font-medium">Pasos para activar:</p>
                   <ol className="list-decimal pl-5 space-y-1.5 text-zinc-400">
-                    <li>Creá tu cuenta en <strong className="text-zinc-200">Flugzz</strong></li>
-                    <li>Andá a la sección <strong className="text-zinc-200">Suscripción</strong></li>
-                    <li>Ingresá el código <strong className="text-zinc-200">{code}</strong> en &quot;Tengo un código de activación&quot;</li>
-                    <li>Hacé clic en &quot;Activar prueba de 30 días&quot;</li>
+                    <li>Crea tu cuenta en <strong className="text-zinc-200">Flugzz</strong></li>
+                    <li>Ve a la sección <strong className="text-zinc-200">Suscripción</strong></li>
+                    <li>Ingresa el código <strong className="text-zinc-200">{code}</strong> en &quot;Tengo un código de activación&quot;</li>
+                    <li>Haz clic en &quot;Activar prueba de 30 días&quot;</li>
                   </ol>
                 </div>
 

@@ -410,7 +410,7 @@ export default function ContactosPage() {
                 <Plus className="w-4 h-4 mr-2" /> Nuevo Lead
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[720px] bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl">
+            <DialogContent className="sm:max-w-[720px] max-h-[92dvh] sm:max-h-none flex flex-col bg-zinc-950 border border-zinc-800 text-zinc-100 shadow-2xl">
               <DialogHeader>
                 <DialogTitle>Registrar nuevo lead</DialogTitle>
                 <DialogDescription className="text-zinc-400">
@@ -418,8 +418,8 @@ export default function ContactosPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={handleSaveLead} className="space-y-5 mt-4">
-                <div className="grid gap-4 md:grid-cols-2">
+              <form onSubmit={handleSaveLead} className="space-y-0 mt-4 flex flex-col overflow-hidden flex-1">
+                <div className="grid gap-4 md:grid-cols-2 overflow-y-auto flex-1 pr-1 py-4">
                   <div className="space-y-2">
                     <Label htmlFor="full_name" className="text-zinc-300">Nombre completo</Label>
                     <Input id="full_name" required value={formData.full_name}
@@ -522,7 +522,7 @@ export default function ContactosPage() {
                   </div>
                 )}
 
-                <DialogFooter className="pt-2">
+                <DialogFooter className="shrink-0 pt-4 border-t border-zinc-800/30">
                   <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="bg-transparent border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800">
                     Cancelar
                   </Button>

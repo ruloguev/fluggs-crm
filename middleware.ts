@@ -2,6 +2,21 @@
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
+  // Admin routes bypass Supabase middleware entirely (use own cookie-based auth)
+  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")
+  // Facebook/Meta webhook must be publicly accessible
+  const isFacebookWebhook = request.nextUrl.pathname === "/api/facebook"
+  // Google OAuth callback is public (handles sign-in of its own)
+  const isGoogleAuthCallback = request.nextUrl.pathname === "/api/google/auth/callback"
+  // Public routes — no auth required
+  const publicRoutes = ["/", "/login", "/signup", "/auth/callback", "/demo", "/aviso-de-privacidad", "/terminos-y-condiciones", "/solicitar-demo", "/api/demo/generate-code"]
+  const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname === route)
+
+  // Skip Supabase auth check for non-app routes
+  if (isAdminRoute || isPublicRoute || isFacebookWebhook || isGoogleAuthCallback) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -27,18 +42,8 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Public routes — no auth required
-  const publicRoutes = ["/", "/login", "/signup", "/auth/callback", "/demo", "/aviso-de-privacidad", "/terminos-y-condiciones", "/solicitar-demo", "/api/demo/generate-code"]
-  const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname === route)
-  // Admin routes use their own auth (cookie-based), bypass Supabase middleware
-  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")
-  // Facebook/Meta webhook must be publicly accessible
-  const isFacebookWebhook = request.nextUrl.pathname === "/api/facebook"
-  // Google OAuth callback is public (handles sign-in of its own)
-  const isGoogleAuthCallback = request.nextUrl.pathname === "/api/google/auth/callback"
-
   // Unauthenticated users trying to access protected routes → redirect to login
-  if (!user && !isPublicRoute && !isAdminRoute && !isFacebookWebhook && !isGoogleAuthCallback) {
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)

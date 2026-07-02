@@ -30,13 +30,15 @@ export async function middleware(request: NextRequest) {
   // Public routes — no auth required
   const publicRoutes = ["/", "/login", "/signup", "/auth/callback", "/demo", "/aviso-de-privacidad", "/terminos-y-condiciones", "/solicitar-demo", "/api/demo/generate-code"]
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname === route)
+  // Admin routes use their own auth (cookie-based), bypass Supabase middleware
+  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")
   // Facebook/Meta webhook must be publicly accessible
   const isFacebookWebhook = request.nextUrl.pathname === "/api/facebook"
   // Google OAuth callback is public (handles sign-in of its own)
   const isGoogleAuthCallback = request.nextUrl.pathname === "/api/google/auth/callback"
 
   // Unauthenticated users trying to access protected routes → redirect to login
-  if (!user && !isPublicRoute && !isFacebookWebhook && !isGoogleAuthCallback) {
+  if (!user && !isPublicRoute && !isAdminRoute && !isFacebookWebhook && !isGoogleAuthCallback) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)

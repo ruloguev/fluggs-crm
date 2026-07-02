@@ -1,35 +1,25 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { createClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
+import { createClient } from "@supabase/supabase-js"
 import { getSupabaseUrl, getSupabaseServiceRoleKey } from "@/lib/server-env"
+import { verifyAdminToken } from "@/lib/admin-auth"
 
-async function checkSuperAdmin() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    getSupabaseUrl()!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+function getAdmin() {
+  return createClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!)
+}
 
-  const admin = createClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!)
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("is_super_admin")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile?.is_super_admin) return null
-  return admin
+function checkAdmin(token: string): boolean {
+  return verifyAdminToken(token)
 }
 
 export async function GET() {
-  const admin = await checkSuperAdmin()
-  if (!admin) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get("admin_token")?.value
+  if (!token || !checkAdmin(token)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
+
+  const admin = getAdmin()
 
   const { data: companies } = await admin
     .from("companies")
@@ -66,7 +56,6 @@ export async function GET() {
     return NextResponse.json({ companies: [] })
   }
 
-  // Get active member count and lead count per company
   const enriched = await Promise.all(
     companies.map(async (c: any) => {
       const { count: activeMembers } = await admin

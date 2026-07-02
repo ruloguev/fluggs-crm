@@ -18,7 +18,7 @@ export default function DemoPage() {
         </div>
         <div className="aspect-video rounded-2xl overflow-hidden bg-zinc-900 shadow-2xl ring-1 ring-white/10">
           <iframe
-            src="https://www.youtube.com/embed/7EVCHMGKsKk"
+            src="https://www.youtube.com/embed/gTgRWKFFsuE"
             title="Flugzz CRM Demo"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen

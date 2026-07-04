@@ -98,7 +98,7 @@ export default function PrivacyNoticePage() {
               <li><strong>Oposición:</strong> oponerse al tratamiento de sus datos para fines específicos</li>
             </ul>
             <p className="mt-3">
-              Para ejercer sus derechos ARCO, envíe un correo a: <strong className="text-zinc-100">legal@flugzz.com</strong>
+              Para ejercer sus derechos ARCO, envíe un correo a: <strong className="text-zinc-100">legal@flugzz.xyz</strong>
             </p>
           </Section>
 
@@ -129,8 +129,8 @@ export default function PrivacyNoticePage() {
         <div className="mt-10 border-t border-zinc-800/60 pt-6 text-center text-xs text-zinc-600">
           <p>
             Si tienes dudas, contáctanos en{" "}
-            <a href="mailto:legal@flugzz.com" className="text-flugzz-accent hover:underline">
-              legal@flugzz.com
+            <a href="mailto:legal@flugzz.xyz" className="text-flugzz-accent hover:underline">
+              legal@flugzz.xyz
             </a>
           </p>
         </div>

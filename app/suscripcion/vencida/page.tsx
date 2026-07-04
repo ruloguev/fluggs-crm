@@ -101,7 +101,7 @@ export default function VencidaPage() {
         </div>
 
         <p className="text-xs text-zinc-600 text-center mt-6">
-          ¿Necesitas ayuda? Escríbenos a <span className="text-zinc-400">legal@flugzz.com</span>
+          ¿Necesitas ayuda? Escríbenos a <span className="text-zinc-400">legal@flugzz.xyz</span>
         </p>
       </div>
     </div>

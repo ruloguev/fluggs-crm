@@ -47,7 +47,7 @@ export default function TermsPage() {
               <li>Para utilizar la Plataforma, debe crear una cuenta proporcionando información veraz y actualizada.</li>
               <li>Usted es responsable de mantener la confidencialidad de sus credenciales de acceso.</li>
               <li>No puede compartir su cuenta con terceros ni permitir el acceso no autorizado.</li>
-              <li>Debe notificar inmediatamente cualquier uso no autorizado de su cuenta a <strong className="text-zinc-100">legal@flugzz.com</strong>.</li>
+              <li>Debe notificar inmediatamente cualquier uso no autorizado de su cuenta a <strong className="text-zinc-100">legal@flugzz.xyz</strong>.</li>
             </ul>
           </Section>
 
@@ -127,7 +127,7 @@ export default function TermsPage() {
           <Section title="12. Contacto">
             <p>
               Para cualquier pregunta relacionada con estos términos, contáctenos en:{" "}
-              <strong className="text-zinc-100">legal@flugzz.com</strong>
+              <strong className="text-zinc-100">legal@flugzz.xyz</strong>
             </p>
           </Section>
         </div>

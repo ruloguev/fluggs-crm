@@ -104,7 +104,7 @@ export function PrivacyNoticeModal({ profileId, onAccepted }: Props) {
               <li><strong>Cancelación:</strong> solicitar la eliminación de sus datos</li>
               <li><strong>Oposición:</strong> oponerse al tratamiento de sus datos para fines específicos</li>
             </ul>
-            <p>Para ejercer sus derechos ARCO, envíe un correo a: <strong>legal@flugzz.com</strong></p>
+            <p>Para ejercer sus derechos ARCO, envíe un correo a: <strong>legal@flugzz.xyz</strong></p>
 
             <h3 className="text-sm font-medium text-zinc-200">Limitación de uso y divulgación</h3>
             <p>Implementamos medidas de seguridad administrativas, técnicas y físicas para proteger sus datos contra daño, pérdida, alteración, destrucción o uso no autorizado, incluyendo cifrado en tránsito y reposo, control de acceso basado en roles y auditoría de sesiones.</p>

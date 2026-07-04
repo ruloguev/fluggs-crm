@@ -911,9 +911,11 @@ export default function LeadDetailPage() {
   const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().slice(0, 10))
   const [scheduleTime, setScheduleTime] = useState("10:00")
   const [scheduleDuration, setScheduleDuration] = useState(60)
-  const [scheduleMeet, setScheduleMeet] = useState(true)
+  const [scheduleMeetType, setScheduleMeetType] = useState<"meet" | "call" | "in_person">("meet")
+  const [scheduleLocation, setScheduleLocation] = useState("")
   const [scheduling, setScheduling] = useState(false)
-  const [scheduleResult, setScheduleResult] = useState<{ htmlLink?: string; meetLink?: string } | null>(null)
+  const [scheduleResult, setScheduleResult] = useState<{ htmlLink?: string; meetLink?: string; meeting_type?: string } | null>(null)
+  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([])
 
   useEffect(() => { loadData() }, [id])
   useEffect(() => { if (editingTitle && titleRef.current) titleRef.current.focus() }, [editingTitle])
@@ -984,6 +986,14 @@ export default function LeadDetailPage() {
     setSources((sourcesData as Source[] | null) ?? [])
     setCompanySettings((companyData as CompanySettings | null) ?? null)
     setTitleDraft(leadData?.title ?? "")
+
+    const { data: events } = await supabase
+      .from("lead_events")
+      .select("*")
+      .eq("lead_id", id)
+      .gte("start_time", new Date().toISOString())
+      .order("start_time", { ascending: true })
+    setUpcomingEvents(events ?? [])
 
     // Collect all tags from company's leads for autocomplete
     if (profile?.company_id) {
@@ -1332,11 +1342,19 @@ export default function LeadDetailPage() {
           <button
             onClick={() => {
               setScheduleTitle(lead?.title || contact.full_name)
+              setScheduleLocation("")
+              setScheduleMeetType("meet")
               setScheduleResult(null)
               setShowSchedule(true)
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:border-red-500/40 text-zinc-300 hover:text-red-400 text-sm transition-all">
-            <Calendar className="w-3.5 h-3.5" /> Agendar
+            <Calendar className="w-3.5 h-3.5" />
+            Agendar
+            {upcomingEvents.length > 0 && (
+              <span className="ml-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20 text-[10px] font-semibold text-red-400">
+                {upcomingEvents.length}
+              </span>
+            )}
           </button>
           {contact.email && (
             <button
@@ -1457,7 +1475,55 @@ export default function LeadDetailPage() {
 
       {/* ── TIMELINE ── */}
       {activeTab === "timeline" && (
-        <div className="rounded-2xl bg-zinc-900/30 border border-zinc-800/40 p-5">
+        <>
+
+          {/* Upcoming events */}
+          {upcomingEvents.length > 0 && (
+            <div className="rounded-2xl bg-zinc-900/30 border border-zinc-800/40 p-4 mb-4">
+              <h4 className="text-xs uppercase tracking-wider text-zinc-500 mb-3 flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5" />
+                Próximas reuniones ({upcomingEvents.length})
+              </h4>
+              <div className="space-y-2">
+                {upcomingEvents.map((ev) => {
+                  const typeLabel = ev.meeting_type === "call" ? "Llamada" : ev.meeting_type === "in_person" ? "Presencial" : "Meet"
+                  return (
+                    <div key={ev.id} className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/50 border border-zinc-800/30">
+                      <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${
+                        ev.meeting_type === "call" ? "bg-blue-500" :
+                        ev.meeting_type === "in_person" ? "bg-amber-500" :
+                        "bg-emerald-500"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-200">{ev.title}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          {new Date(ev.start_time).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" })}
+                          {" "}
+                          {new Date(ev.start_time).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
+                          {" · "}
+                          {typeLabel}
+                        </p>
+                        {ev.meeting_type === "in_person" && ev.location && (
+                          <p className="text-xs text-zinc-600 mt-0.5">{ev.location}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {ev.meet_link && (
+                          <a href={ev.meet_link} target="_blank"
+                            className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                            title="Unirse a Meet">
+                            <Video className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-zinc-900/30 border border-zinc-800/40 p-5">
           {activities.length === 0 ? (
             <div className="text-center py-10 text-zinc-600">
               <StickyNote className="w-8 h-8 mx-auto mb-3 opacity-40" />
@@ -1504,6 +1570,7 @@ export default function LeadDetailPage() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* ── INFO ── */}
@@ -1758,7 +1825,7 @@ export default function LeadDetailPage() {
           <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 pb-8 animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto md:max-w-lg md:left-1/2 md:-translate-x-1/2 md:rounded-2xl md:bottom-8 md:border">
             <div className="w-10 h-1 bg-zinc-800 rounded-full mx-auto mb-5 md:hidden" />
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-zinc-100 font-medium">Agendar reunión</h3>
+              <h3 className="text-zinc-100 font-medium">Agendar</h3>
               <button onClick={() => setShowSchedule(false)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
                 <X className="w-4 h-4" />
               </button>
@@ -1769,9 +1836,17 @@ export default function LeadDetailPage() {
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    <span className="text-sm font-medium text-emerald-300">Reunión creada</span>
+                    <span className="text-sm font-medium text-emerald-300">
+                      {scheduleResult.meeting_type === "call" ? "Llamada agendada" :
+                       scheduleResult.meeting_type === "in_person" ? "Cita agendada" :
+                       "Reunión creada"}
+                    </span>
                   </div>
-                  <p className="text-sm text-zinc-300">El evento se agregó a tu Google Calendar.</p>
+                  <p className="text-sm text-zinc-300">
+                    {scheduleResult.meeting_type === "call" ? "La llamada se registró en tu calendario." :
+                     scheduleResult.meeting_type === "in_person" ? "La cita se registró en tu calendario." :
+                     "El evento se agregó a tu Google Calendar."}
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -1809,9 +1884,39 @@ export default function LeadDetailPage() {
                 <input
                   value={scheduleTitle}
                   onChange={e => setScheduleTitle(e.target.value)}
-                  placeholder="Título de la reunión"
+                  placeholder="Título"
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
                 />
+
+                {/* Meeting type selector */}
+                <div>
+                  <label className="text-xs text-zinc-500 mb-2 block">Tipo</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "call" as const, label: "Llamada", icon: Phone },
+                      { value: "meet" as const, label: "Google Meet", icon: Video },
+                      { value: "in_person" as const, label: "Presencial", icon: MapPin },
+                    ].map((opt) => {
+                      const Icon = opt.icon
+                      const active = scheduleMeetType === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setScheduleMeetType(opt.value)}
+                          className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-xs font-medium transition-all ${
+                            active
+                              ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-300"
+                              : "border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700"
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1850,21 +1955,18 @@ export default function LeadDetailPage() {
                   </select>
                 </div>
 
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => setScheduleMeet(!scheduleMeet)}
-                    className={`w-10 h-6 rounded-full transition-colors relative ${
-                      scheduleMeet ? "bg-flugzz-accent" : "bg-zinc-700"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                        scheduleMeet ? "translate-x-[18px]" : "translate-x-0.5"
-                      }`}
+                {/* Location field — only for in_person */}
+                {scheduleMeetType === "in_person" && (
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1.5 block">Lugar / Dirección</label>
+                    <input
+                      value={scheduleLocation}
+                      onChange={e => setScheduleLocation(e.target.value)}
+                      placeholder="Ej. Av. Reforma 222, oficina 3"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 text-sm placeholder:text-zinc-600 outline-none focus:border-zinc-700"
                     />
                   </div>
-                  <span className="text-sm text-zinc-300">Agregar Google Meet</span>
-                </label>
+                )}
 
                 <button
                   onClick={async () => {
@@ -1881,28 +1983,31 @@ export default function LeadDetailPage() {
                           description: `Reunión con ${contact.full_name}${lead.title ? ` — ${lead.title}` : ""}`,
                           start_time: startTime.toISOString(),
                           end_time: endTime.toISOString(),
-                          add_meet: scheduleMeet,
+                          meeting_type: scheduleMeetType,
+                          location: scheduleLocation || undefined,
                         }),
                       })
                       const data = await res.json()
                       if (!res.ok) {
-                        alert(data.error || "Error al crear la reunión")
+                        alert(data.error || "Error al agendar")
                         setScheduling(false)
                         return
                       }
                       setScheduleResult(data)
                       loadData()
                     } catch (e: any) {
-                      alert(e.message || "Error al crear la reunión")
+                      alert(e.message || "Error al agendar")
                     }
                     setScheduling(false)
                   }}
-                  disabled={scheduling || !scheduleTitle.trim()}
+                  disabled={scheduling || !scheduleTitle.trim() || (scheduleMeetType === "in_person" && !scheduleLocation.trim())}
                   className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-3 text-sm font-medium disabled:opacity-40 transition-opacity"
                 >
                   {scheduling ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                   ) : (
+                    scheduleMeetType === "call" ? "Agendar llamada" :
+                    scheduleMeetType === "in_person" ? "Agendar cita" :
                     "Crear reunión"
                   )}
                 </button>

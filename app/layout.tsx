@@ -4,6 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext"
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://flugzz.xyz"),
+  robots: { index: false, follow: false },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

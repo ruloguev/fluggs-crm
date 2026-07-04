@@ -17,6 +17,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Bots crawling protected pages → 404 instead of redirect (prevents Search Console "Página con redirección")
+  const ua = request.headers.get("user-agent") ?? ""
+  const isBot = /bot|crawl|spider|googlebot|bingbot|slurp|duckduckbot|baiduspider/i.test(ua)
+  if (isBot) {
+    return new NextResponse(null, { status: 404 })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

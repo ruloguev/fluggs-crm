@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Demo - Flugzz CRM",
   description: "Video demo de Flugzz CRM - Gestión comercial inteligente",
+  robots: { index: true, follow: true },
   openGraph: { title: "Demo - Flugzz CRM", description: "Video demo de Flugzz CRM" },
 }
 

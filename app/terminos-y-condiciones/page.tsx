@@ -1,3 +1,12 @@
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Términos y Condiciones - Flugzz CRM",
+  description: "Términos y condiciones de uso de Flugzz CRM.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "https://flugzz.xyz/terminos-y-condiciones" },
+}
+
 export default function TermsPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-300 antialiased">

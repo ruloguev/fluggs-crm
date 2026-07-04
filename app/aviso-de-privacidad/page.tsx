@@ -1,4 +1,12 @@
+import type { Metadata } from "next"
 import { Mail } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Aviso de Privacidad - Flugzz CRM",
+  description: "Aviso de privacidad de Flugzz CRM. Conoce cómo protegemos tus datos personales.",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "https://flugzz.xyz/aviso-de-privacidad" },
+}
 
 const FlugzzIsotipo = () => (
   <img src="/Flugzz.svg" alt="Flugzz" className="h-8 w-8" style={{ filter: "invert(1)" }} />

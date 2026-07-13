@@ -53,7 +53,10 @@ INSERT INTO support_chunks (content, category) VALUES
 -- Facebook
 ('Para conectar Facebook Lead Ads, ve a Integraciones > Facebook e inicia sesión con tu cuenta de Facebook. Selecciona la página y el formulario de leads que deseas conectar. Los leads llegarán automáticamente a Flugzz.', 'facebook'),
 
+-- Navegación
+('En Flugzz NO existe un menú llamado "Leads" en la barra lateral. Para ver y gestionar leads usa "Pipeline" (arrastrar entre etapas) o "Contactos" (crear leads manualmente). Desde "Dashboard" ves estadísticas generales.', 'navigation'),
+('La barra lateral de Flugzz tiene: Dashboard, Pipeline (para leads), Contactos (para crear leads), Drive (documentos), Asistente IA, Integraciones y Ajustes. No hay una sección llamada "Leads".', 'navigation'),
+
 -- General
 ('Flugzz CRM es un sistema diseñado para inmobiliarias. Centraliza leads, automatiza asignaciones, gestiona pipelines y facilita el seguimiento de clientes. Está construido con tecnología moderna para funcionar en cualquier dispositivo.', 'general'),
-
 ('Si tienes problemas con tu cuenta o necesitas ayuda adicional, escribe a legal@flugzz.xyz o contacta a tu administrador de empresa.', 'general');

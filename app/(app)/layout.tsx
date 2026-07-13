@@ -12,6 +12,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { PrivacyNoticeModal } from "@/components/ui/privacy-notice-modal"
 import { CommandPalette } from "@/components/search/command-palette"
+import SupportWidget from "@/components/support-widget"
 import { CommandPaletteTrigger } from "@/components/search/command-palette-trigger"
 
 type NotificationRecord = {
@@ -555,6 +556,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <SupportWidget />
     </div>
   )
 }

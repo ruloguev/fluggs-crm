@@ -164,7 +164,7 @@ export default function LandingPageMockup() {
       {/* FOOTER */}
       <footer className="relative z-10 border-t border-zinc-800/40 py-6 px-4">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 text-xs text-zinc-600 sm:flex-row sm:justify-between">
-          <p>&copy; {new Date().getFullYear()} Ultimate Technology and Architectonics (ULTEA). Todos los derechos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} Ultimate Tech & Architectonics (ULTEA). Todos los derechos reservados.</p>
           <div className="flex items-center gap-4">
             <a href="/aviso-de-privacidad" className="hover:text-zinc-400 transition-colors">
               Aviso de Privacidad

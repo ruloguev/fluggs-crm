@@ -44,7 +44,7 @@ export function PrivacyNoticeModal({ profileId, onAccepted }: Props) {
           <div className="space-y-4 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-zinc-300" style={{ maxHeight: "55vh" }}>
             <h3 className="text-sm font-medium text-zinc-200">Responsable</h3>
             <p>
-              Ultimate Technology and Arquitectonics, con domicilio en{" "}
+              Ultimate Tech & Architectonics, con domicilio en{" "}
               Av. P.º de la Reforma 284-Piso 17, Juárez, Cuauhtémoc,{" "}
               06600 Ciudad de México, CDMX,{" "}
               es el responsable del tratamiento de sus datos personales.

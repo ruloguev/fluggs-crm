@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
-import { Loader2, User, Shield, Building2, AlertTriangle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight, Lock, Mail } from "lucide-react"
+import { Loader2, User, Shield, Building2, AlertTriangle, AlertCircle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight, Lock, Mail, Edit2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type ProfileDetail = {
@@ -195,6 +195,14 @@ export default function CuentaPage() {
   const [companyName, setCompanyName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const [editName, setEditName] = useState("")
+  const [editEmail, setEditEmail] = useState("")
+  const [editMode, setEditMode] = useState<"name" | "email" | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [emailConfirmSent, setEmailConfirmSent] = useState(false)
+
   const [confirmText, setConfirmText] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -324,11 +332,93 @@ export default function CuentaPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Nombre</p>
-            <p className="text-sm text-zinc-200">{detail?.full_name ?? "—"}</p>
+            {editMode === "name" ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+                  autoFocus
+                />
+                <button onClick={async () => {
+                  if (!editName.trim()) return
+                  setSaving(true); setSaveError(null); setSaveSuccess(null)
+                  try {
+                    const res = await fetch("/api/account/update-profile", {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ full_name: editName.trim() }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) { setSaveError(data.error); return }
+                    setDetail(d => d ? { ...d, full_name: editName.trim() } : d)
+                    setSaveSuccess("Nombre actualizado")
+                    setEditMode(null)
+                    setTimeout(() => setSaveSuccess(null), 3000)
+                  } catch { setSaveError("Error al guardar") }
+                  setSaving(false)
+                }} disabled={saving || !editName.trim()} className="p-2 rounded-lg bg-cyan-500 text-zinc-950 hover:bg-cyan-400 disabled:opacity-40">
+                  <Check className="w-4 h-4" />
+                </button>
+                <button onClick={() => setEditMode(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <p className="text-sm text-zinc-200">{detail?.full_name ?? "—"}</p>
+                <button onClick={() => { setEditName(detail?.full_name ?? ""); setEditMode("name"); setSaveSuccess(null) }} className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-zinc-800 text-zinc-500 transition-all">
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Email</p>
-            <p className="text-sm text-zinc-200">{detail?.email ?? "—"}</p>
+            {editMode === "email" ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  type="email"
+                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-500"
+                  autoFocus
+                />
+                <button onClick={async () => {
+                  if (!editEmail.trim()) return
+                  setSaving(true); setSaveError(null); setSaveSuccess(null); setEmailConfirmSent(false)
+                  try {
+                    const res = await fetch("/api/account/update-profile", {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: editEmail.trim() }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) { setSaveError(data.error); return }
+                    setDetail(d => d ? { ...d, email: editEmail.trim() } : d)
+                    if (data.confirmationSent) {
+                      setEmailConfirmSent(true)
+                      setSaveSuccess("Se envió un link de confirmación al nuevo correo")
+                    } else {
+                      setSaveSuccess("Email actualizado")
+                    }
+                    setEditMode(null)
+                    setTimeout(() => setSaveSuccess(null), 5000)
+                  } catch { setSaveError("Error al guardar") }
+                  setSaving(false)
+                }} disabled={saving || !editEmail.trim()} className="p-2 rounded-lg bg-cyan-500 text-zinc-950 hover:bg-cyan-400 disabled:opacity-40">
+                  <Check className="w-4 h-4" />
+                </button>
+                <button onClick={() => setEditMode(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <p className="text-sm text-zinc-200">{detail?.email ?? "—"}</p>
+                <button onClick={() => { setEditEmail(detail?.email ?? ""); setEditMode("email"); setSaveSuccess(null) }} className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-zinc-800 text-zinc-500 transition-all">
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Teléfono</p>
@@ -349,6 +439,23 @@ export default function CuentaPage() {
             </p>
           </div>
         </div>
+
+        {saveError && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />{saveError}
+          </div>
+        )}
+        {saveSuccess && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">
+            <Check className="w-4 h-4 shrink-0" />{saveSuccess}
+          </div>
+        )}
+        {emailConfirmSent && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm">
+            <Mail className="w-4 h-4 shrink-0" />
+            Revisa tu nuevo correo para confirmar el cambio. Mientras tanto, sigue usando tu email actual para iniciar sesión.
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-4">

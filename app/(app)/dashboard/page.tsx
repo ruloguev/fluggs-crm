@@ -1,11 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import {
-  Activity, ArrowRight, Building2, Cable, CircleDollarSign,
+  Activity, ArrowRight, Building2, Cable, CalendarDays, CircleDollarSign,
   Clock3, Loader2, PhoneOutgoing, TrendingUp, Users, Sparkles,
   Phone, MessageCircle, Mail, CheckCircle, Clock, Download, Target,
 } from "lucide-react"
@@ -44,6 +44,16 @@ type ActorCard = {
   activities7d: number; projectedValue: number; topSource: string
 }
 type DashboardMode = "director" | "gerente" | "coordinador" | "marketing" | "agente"
+type DateRangePreset = "7d" | "15d" | "30d" | "90d" | "historico" | "personalizado"
+
+const DATE_RANGE_PRESETS: { value: DateRangePreset; label: string }[] = [
+  { value: "7d", label: "7 días" },
+  { value: "15d", label: "15 días" },
+  { value: "30d", label: "30 días" },
+  { value: "90d", label: "90 días" },
+  { value: "historico", label: "Histórico" },
+  { value: "personalizado", label: "Personalizado" },
+]
 
 function formatCurrency(amount: number, currency = "MXN") {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount)
@@ -205,6 +215,35 @@ export default function DashboardPage() {
   const [velocityData, setVelocityData] = useState<any[]>([])
   const [loadingMetrics, setLoadingMetrics] = useState(false)
 
+  const [dateRange, setDateRange] = useState<DateRangePreset>("30d")
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [customStartDate, setCustomStartDate] = useState("")
+  const [customEndDate, setCustomEndDate] = useState("")
+  const datePickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showDatePicker) return
+    const handleClick = (e: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [showDatePicker])
+
+  const rangeStartMs = useMemo(() => {
+    if (dateRange === "historico") return 0
+    if (dateRange === "personalizado") {
+      if (customStartDate) return new Date(customStartDate).getTime()
+      return 0
+    }
+    const days = { "7d": 7, "15d": 15, "30d": 30, "90d": 90 }[dateRange]
+    return days ? Date.now() - days * 86400000 : 0
+  }, [dateRange, customStartDate])
+
+  const dateRangeLabel = DATE_RANGE_PRESETS.find(p => p.value === dateRange)?.label ?? "30 días"
+
   useEffect(() => {
     const companyId = profile?.company_id
     if (!companyId) return
@@ -315,14 +354,30 @@ export default function DashboardPage() {
     return [profile.id]
   }, [mode, profile?.id, profiles, getDescendants, reportsByLeader])
 
-  const scopeLeadRecords = useMemo(
+  const rawScopeLeadRecords = useMemo(
     () => leads.filter(l => l.owner_id && scopeUserIds.includes(l.owner_id)),
     [leads, scopeUserIds],
   )
 
-  const scopeActivities = useMemo(
+  const rawScopeActivities = useMemo(
     () => activities.filter(a => a.user_id && scopeUserIds.includes(a.user_id)),
     [activities, scopeUserIds],
+  )
+
+  const scopeLeadRecords = useMemo(
+    () => {
+      if (!rangeStartMs) return rawScopeLeadRecords
+      return rawScopeLeadRecords.filter(l => l.created_at && new Date(l.created_at).getTime() >= rangeStartMs)
+    },
+    [rawScopeLeadRecords, rangeStartMs],
+  )
+
+  const scopeActivities = useMemo(
+    () => {
+      if (!rangeStartMs) return rawScopeActivities
+      return rawScopeActivities.filter(a => new Date(a.created_at).getTime() >= rangeStartMs)
+    },
+    [rawScopeActivities, rangeStartMs],
   )
 
   const scopeMetrics = useMemo<ScopeMetrics>(() => {
@@ -339,7 +394,7 @@ export default function DashboardPage() {
   const firstStageId = stages[0]?.id ?? null
 
   const conversionPct = useMemo(() => conversionPercent(scopeLeadRecords, wonStageIds), [scopeLeadRecords, wonStageIds])
-  const contactacionPct = useMemo(() => contactacionPercent(scopeLeadRecords, scopeActivities), [scopeLeadRecords, scopeActivities])
+  const contactacionPct = useMemo(() => contactacionPercent(rawScopeLeadRecords, rawScopeActivities), [rawScopeLeadRecords, rawScopeActivities])
   const wonCount = useMemo(() => scopeLeadRecords.filter(l => l.stage_id && wonStageIds.includes(l.stage_id)).length, [scopeLeadRecords, wonStageIds])
 
   const monthlyGoal = company?.settings?.goals?.monthly_won_leads ?? 0
@@ -360,11 +415,11 @@ export default function DashboardPage() {
 
   const coberturaEquipoPct = useMemo(() => {
     const teamIds = mode === "director" ? profiles.map(p => p.id) : mode === "gerente" ? getDescendants(profile?.id ?? "") : directReportIds
-    return coberturaEquipoPercent(teamIds, scopeActivities, 7, snapshotAt)
-  }, [mode, profiles, profile?.id, directReportIds, scopeActivities, snapshotAt, getDescendants])
+    return coberturaEquipoPercent(teamIds, rawScopeActivities, 7, snapshotAt)
+  }, [mode, profiles, profile?.id, directReportIds, rawScopeActivities, snapshotAt, getDescendants])
 
-  const eficienciaPct = useMemo(() => eficienciaPercent(scopeLeadRecords, scopeActivities, wonStageIds, snapshotAt), [scopeLeadRecords, scopeActivities, wonStageIds, snapshotAt])
-  const velocidadPct = useMemo(() => velocidadPipelinePercent(scopeLeadRecords, firstStageId, snapshotAt), [scopeLeadRecords, firstStageId, snapshotAt])
+  const eficienciaPct = useMemo(() => eficienciaPercent(rawScopeLeadRecords, rawScopeActivities, wonStageIds, snapshotAt), [rawScopeLeadRecords, rawScopeActivities, wonStageIds, snapshotAt])
+  const velocidadPct = useMemo(() => velocidadPipelinePercent(rawScopeLeadRecords, firstStageId, snapshotAt), [rawScopeLeadRecords, firstStageId, snapshotAt])
 
   // Build donuts config per mode
   const donuts = useMemo<DonutConfig[]>(() => {
@@ -400,8 +455,8 @@ export default function DashboardPage() {
   const buildActorCard = useCallback((actorId: string): ActorCard | null => {
     const actor = profiles.find(p => p.id === actorId)
     if (!actor) return null
-    const actorLeads = leads.filter(l => l.owner_id === actorId)
-    const actorActivities = activities.filter(a => a.user_id === actorId)
+    const actorLeads = scopeLeadRecords.filter(l => l.owner_id === actorId)
+    const actorActivities = scopeActivities.filter(a => a.user_id === actorId)
     const topSourceId = actorLeads.reduce<Record<string, number>>((acc, l) => {
       if (!l.source_id) return acc
       acc[l.source_id] = (acc[l.source_id] ?? 0) + 1
@@ -416,7 +471,7 @@ export default function DashboardPage() {
       projectedValue: actorLeads.reduce((s, l) => s + Number(l.budget_max || 0), 0),
       topSource: sources.find(s => s.id === topSource)?.name ?? "Sin fuente",
     }
-  }, [activities, leads, profiles, snapshotAt, sources])
+  }, [scopeActivities, scopeLeadRecords, profiles, snapshotAt, sources])
 
   const actorCards = useMemo(() => {
     const targetIds = mode === "coordinador" ? directReportIds
@@ -454,15 +509,67 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-semibold tracking-tighter text-zinc-100">Dashboard<span className="text-flugzz-accent">.</span></h1>
           <p className="text-sm text-zinc-400 mt-2 max-w-2xl">{perspectiveDescription}</p>
         </div>
-        <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 px-4 py-3 backdrop-blur-xl">
-          <p className="text-xs uppercase tracking-[0.22em] text-zinc-600">Alcance actual</p>
-          <p className="text-sm text-zinc-200 mt-1">{scopeUserIds.length} usuarios en este panel</p>
+        <div className="flex items-center gap-2">
+          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 px-4 py-3 backdrop-blur-xl">
+            <p className="text-xs uppercase tracking-[0.22em] text-zinc-600">Alcance actual</p>
+            <p className="text-sm text-zinc-200 mt-1">{scopeUserIds.length} usuarios en este panel</p>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowDatePicker(v => !v)}
+              className="flex items-center gap-2 rounded-2xl border border-zinc-800/50 bg-zinc-900/50 px-4 py-3 backdrop-blur-xl text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-colors"
+            >
+              <CalendarDays className="w-4 h-4" />
+              <span className="text-sm font-medium">{dateRangeLabel}</span>
+            </button>
+            {showDatePicker && (
+              <div ref={datePickerRef} className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border border-zinc-800/50 bg-zinc-900 p-4 backdrop-blur-xl shadow-2xl">
+                <div className="flex flex-wrap gap-2">
+                  {DATE_RANGE_PRESETS.map(p => (
+                    <button
+                      key={p.value}
+                      onClick={() => { setDateRange(p.value); if (p.value !== "personalizado") setShowDatePicker(false) }}
+                      className={`px-3 py-1.5 rounded-xl text-sm transition-colors ${
+                        dateRange === p.value
+                          ? "bg-flugzz-accent/20 text-flugzz-accent border border-flugzz-accent/30"
+                          : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                {dateRange === "personalizado" && (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={e => setCustomStartDate(e.target.value)}
+                      className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+                    />
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={e => setCustomEndDate(e.target.value)}
+                      className="w-full rounded-xl bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200"
+                    />
+                    <button
+                      onClick={() => setShowDatePicker(false)}
+                      className="w-full mt-1 rounded-xl bg-flugzz-accent/20 text-flugzz-accent px-3 py-2 text-sm font-medium hover:bg-flugzz-accent/30 transition-colors"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard icon={Users} title="Leads en alcance" value={String(scopeMetrics.leadCount)} hint="cartera" accentClass="bg-violet-500/10 border-violet-500/20 text-violet-300" />
-        <MetricCard icon={Activity} title="Actividad últimos 7 días" value={String(scopeMetrics.activities7d)} hint="movimiento" accentClass="bg-cyan-500/10 border-cyan-500/20 text-cyan-300" />
+        <MetricCard icon={Users} title="Leads en alcance" value={String(scopeMetrics.leadCount)} hint={dateRangeLabel} accentClass="bg-violet-500/10 border-violet-500/20 text-violet-300" />
+        <MetricCard icon={Activity} title="Actividad en período" value={String(scopeMetrics.activities7d)} hint="movimiento" accentClass="bg-cyan-500/10 border-cyan-500/20 text-cyan-300" />
         <MetricCard icon={Clock3} title="Leads sin seguimiento" value={String(scopeMetrics.staleCount)} hint="alerta" accentClass="bg-amber-500/10 border-amber-500/20 text-amber-300" />
         <MetricCard icon={CircleDollarSign} title="Valor proyectado" value={formatCurrency(scopeMetrics.projectedValue, currency)} hint={currency} accentClass="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
       </div>

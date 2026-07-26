@@ -425,19 +425,19 @@ export default function DashboardPage() {
   const donuts = useMemo<DonutConfig[]>(() => {
     const base: DonutConfig[] = [
       { percent: conversionPct, label: "Conversión", subtitle: `${wonCount} / ${scopeLeadRecords.length || 0} cerrados`, variant: "cyan" },
-      { percent: contactacionPct, label: "Contactación (7d)", subtitle: "Actividad o llamada registrada", variant: "emerald" },
+      { percent: contactacionPct, label: "Contactación", subtitle: "Actividad o llamada registrada", variant: "emerald" },
     ]
     if (mode === "coordinador") {
       base.push({ percent: coberturaEquipoPct, label: "Cobertura equipo", subtitle: "% agentes activos esta semana", variant: "violet" })
     }
     if (mode === "gerente") {
       base.push({ percent: coberturaEquipoPct, label: "Cobertura equipo", subtitle: "% del equipo activo esta semana", variant: "violet" })
-      base.push({ percent: eficienciaPct, label: "Eficiencia (14d)", subtitle: "Leads con 2+ actividades recientes", variant: "amber" })
+      base.push({ percent: eficienciaPct, label: "Eficiencia", subtitle: "Leads con 2+ actividades recientes", variant: "amber" })
     }
     if (mode === "director") {
       base.push({ percent: coberturaEquipoPct, label: "Cobertura total", subtitle: "% del equipo activo esta semana", variant: "violet" })
-      base.push({ percent: eficienciaPct, label: "Eficiencia (14d)", subtitle: "Leads con seguimiento sostenido", variant: "amber" })
-      base.push({ percent: velocidadPct, label: "Velocidad (30d)", subtitle: "Leads nuevos que ya avanzaron", variant: "cyan" })
+      base.push({ percent: eficienciaPct, label: "Eficiencia", subtitle: "Leads con seguimiento sostenido", variant: "amber" })
+      base.push({ percent: velocidadPct, label: "Velocidad", subtitle: "Leads nuevos que ya avanzaron", variant: "cyan" })
     }
     return base
   }, [mode, conversionPct, contactacionPct, coberturaEquipoPct, eficienciaPct, velocidadPct, wonCount, scopeLeadRecords.length])

@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Trash2,
   MoveRight,
+  Link,
+  Plus,
 } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
@@ -49,6 +51,13 @@ type ListItem = {
   metadata: Record<string, unknown> | null
 }
 
+type DriveLink = {
+  id: string
+  name: string
+  url: string
+  created_at: string
+}
+
 export default function DrivePage() {
   const { profile, role, can, loading: authLoading } = useAuth()
   const [supabase] = useState(() => createClient())
@@ -63,6 +72,10 @@ export default function DrivePage() {
   const [moveTarget, setMoveTarget] = useState<string | null>(null)
   const [moveSelectedFolder, setMoveSelectedFolder] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [links, setLinks] = useState<DriveLink[]>([])
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [linkName, setLinkName] = useState("")
+  const [linkUrl, setLinkUrl] = useState("")
 
   const companyId = profile?.company_id
 
@@ -105,10 +118,20 @@ export default function DrivePage() {
     setIsLoading(false)
   }, [companyId, listPrefix, supabase])
 
+  const loadLinks = useCallback(async () => {
+    if (!companyId) return
+    const { data } = await supabase
+      .from("drive_links")
+      .select("id, name, url, created_at")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false })
+    setLinks((data ?? []) as DriveLink[])
+  }, [companyId, supabase])
+
   useEffect(() => {
-    if (!authLoading && companyId) void load()
+    if (!authLoading && companyId) { void load(); void loadLinks() }
     if (!authLoading && !companyId) setIsLoading(false)
-  }, [authLoading, companyId, load])
+  }, [authLoading, companyId, load, loadLinks])
 
   async function uploadFiles(fileList: FileList | null) {
     if (!fileList?.length || !companyId) return
@@ -215,6 +238,28 @@ export default function DrivePage() {
     await load()
   }
 
+  async function addLink() {
+    if (!linkName.trim() || !linkUrl.trim() || !companyId || !profile?.id) return
+    const { error } = await supabase.from("drive_links").insert({
+      company_id: companyId,
+      name: linkName.trim(),
+      url: linkUrl.trim(),
+      created_by: profile.id,
+    })
+    if (error) { setError(error.message); return }
+    setLinkDialogOpen(false)
+    setLinkName("")
+    setLinkUrl("")
+    await loadLinks()
+  }
+
+  async function deleteLink(id: string, name: string) {
+    if (!window.confirm(`¿Eliminar el enlace "${name}"?`)) return
+    const { error } = await supabase.from("drive_links").delete().eq("id", id)
+    if (error) { setError(error.message); return }
+    await loadLinks()
+  }
+
   function enterFolder(name: string) {
     setPathSegments((p) => [...p, name])
   }
@@ -228,6 +273,9 @@ export default function DrivePage() {
   )
   const filteredFolders = folders.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase()),
+  )
+  const filteredLinks = links.filter((l) =>
+    l.name.toLowerCase().includes(search.toLowerCase()),
   )
 
   if (authLoading) {
@@ -308,6 +356,14 @@ export default function DrivePage() {
               </button>
               <button
                 type="button"
+                className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white hover:border-zinc-500 transition-colors"
+                title="Añadir enlace de Google Drive"
+                onClick={() => { setLinkName(""); setLinkUrl(""); setLinkDialogOpen(true) }}
+              >
+                <Link className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-colors border border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -385,7 +441,11 @@ export default function DrivePage() {
                   return (
                     <div
                       key={file.name}
-                      className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-zinc-700 transition-all relative"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => void downloadFile(file.name)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void downloadFile(file.name) }}}
+                      className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-zinc-700 transition-all relative cursor-pointer"
                     >
                       <div className="absolute top-4 right-4 flex items-center gap-0.5">
                         {canManageDrive && (
@@ -394,7 +454,7 @@ export default function DrivePage() {
                               type="button"
                               className="text-zinc-600 hover:text-flugzz-accent transition-colors p-1"
                               title="Mover a carpeta"
-                              onClick={() => openMovePicker(file.name)}
+                              onClick={(e) => { e.stopPropagation(); openMovePicker(file.name) }}
                             >
                               <MoveRight className="w-4 h-4" />
                             </button>
@@ -402,7 +462,7 @@ export default function DrivePage() {
                               type="button"
                               className="text-zinc-600 hover:text-red-400 transition-colors p-1"
                               title="Eliminar"
-                              onClick={() => void deleteFile(file.name)}
+                              onClick={(e) => { e.stopPropagation(); void deleteFile(file.name) }}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -412,7 +472,7 @@ export default function DrivePage() {
                           type="button"
                           className="text-zinc-600 hover:text-zinc-200 transition-colors p-1"
                           title="Descargar"
-                          onClick={() => void downloadFile(file.name)}
+                          onClick={(e) => { e.stopPropagation(); void downloadFile(file.name) }}
                         >
                           <Download className="w-5 h-5" />
                         </button>
@@ -435,13 +495,6 @@ export default function DrivePage() {
                         <span className="flex items-center gap-1">
                           <Tag className="w-3 h-3" /> {mime.split("/").pop()}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => void downloadFile(file.name)}
-                          className="text-flugzz-accent hover:underline"
-                        >
-                          Abrir
-                        </button>
                       </div>
                     </div>
                   )
@@ -450,10 +503,56 @@ export default function DrivePage() {
             </section>
           )}
 
-          {filteredFolders.length === 0 && filteredFiles.length === 0 && !error && (
+          {filteredLinks.length > 0 && (
+            <section>
+              <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">
+                Enlaces externos
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredLinks.map((link) => (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-flugzz-accent/40 transition-all relative cursor-pointer"
+                  >
+                    <div className="absolute top-4 right-4 flex items-center gap-0.5">
+                      {canManageDrive && (
+                        <button
+                          type="button"
+                          className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                          title="Eliminar enlace"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); void deleteLink(link.id, link.name) }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mb-4 p-3 bg-zinc-950/60 rounded-xl inline-block w-fit border border-zinc-800/50">
+                      <Link className="w-8 h-8 text-flugzz-accent" />
+                    </div>
+                    <div className="flex-1 mb-4 pr-8">
+                      <h3 className="text-zinc-100 font-medium truncate mb-1" title={link.name}>
+                        {link.name}
+                      </h3>
+                      <div className="flex items-center text-xs text-zinc-500 gap-3">
+                        <span className="truncate">{link.url}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-4 border-t border-zinc-800/60 text-zinc-600 text-xs">
+                      <span className="flex items-center gap-1">Google Drive</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {filteredFolders.length === 0 && filteredFiles.length === 0 && filteredLinks.length === 0 && !error && (
             <div className="text-center py-16 text-zinc-600 text-sm">
               <p>Esta carpeta está vacía.</p>
-              <p className="mt-2">Sube archivos o crea una carpeta.</p>
+              <p className="mt-2">Sube archivos, crea una carpeta o añade un enlace.</p>
             </div>
           )}
         </div>
@@ -489,6 +588,54 @@ export default function DrivePage() {
               className="flex-1 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors border border-cyan-300"
             >
               Mover aquí
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 p-6">
+          <h2 className="text-lg font-semibold text-zinc-100">Añadir enlace externo</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Ingresa un nombre y la URL del archivo en Google Drive (u otro servicio).
+          </p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="block text-sm text-zinc-500 mb-1">Nombre</label>
+              <input
+                type="text"
+                value={linkName}
+                onChange={(e) => setLinkName(e.target.value)}
+                placeholder="Ej: Plano departamento 101"
+                className="w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-600 placeholder:text-zinc-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-zinc-500 mb-1">URL</label>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                className="w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-600 placeholder:text-zinc-600"
+              />
+            </div>
+          </div>
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setLinkDialogOpen(false)}
+              className="flex-1 rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void addLink()}
+              disabled={!linkName.trim() || !linkUrl.trim()}
+              className="flex-1 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black hover:bg-cyan-400 transition-colors border border-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Añadir
             </button>
           </div>
         </DialogContent>

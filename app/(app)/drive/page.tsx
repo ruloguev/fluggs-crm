@@ -168,12 +168,24 @@ export default function DrivePage() {
   async function downloadFile(name: string) {
     const base = listPrefix()
     const path = `${base}/${name}`.replace(/\/+/g, "/")
+    const win = window.open("", "_blank")
     const { data, error: dlErr } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600)
     if (dlErr || !data?.signedUrl) {
+      win?.close()
       setError(dlErr?.message ?? "No se pudo generar enlace")
       return
     }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+    if (win) {
+      win.location.href = data.signedUrl
+    } else {
+      const a = document.createElement("a")
+      a.href = data.signedUrl
+      a.target = "_blank"
+      a.rel = "noopener noreferrer"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    }
   }
 
   async function deleteFile(name: string) {

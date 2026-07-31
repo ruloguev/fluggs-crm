@@ -527,7 +527,7 @@ export default function DrivePage() {
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-flugzz-accent/40 transition-all relative cursor-pointer"
+                    className="flex flex-col p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 group hover:border-flugzz-accent/60 hover:bg-zinc-800/45 transition-all relative cursor-pointer"
                   >
                     <div className="absolute top-4 right-4 flex items-center gap-0.5">
                       {canManageDrive && (

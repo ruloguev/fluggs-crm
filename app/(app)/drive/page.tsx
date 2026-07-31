@@ -120,13 +120,17 @@ export default function DrivePage() {
 
   const loadLinks = useCallback(async () => {
     if (!companyId) return
+    if (pathSegments.length > 0) {
+      setLinks([])
+      return
+    }
     const { data } = await supabase
       .from("drive_links")
       .select("id, name, url, created_at")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false })
     setLinks((data ?? []) as DriveLink[])
-  }, [companyId, supabase])
+  }, [companyId, supabase, pathSegments])
 
   useEffect(() => {
     if (!authLoading && companyId) { void load(); void loadLinks() }
@@ -366,14 +370,16 @@ export default function DrivePage() {
               >
                 <FolderPlus className="w-5 h-5" />
               </button>
-              <button
-                type="button"
-                className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white hover:border-zinc-500 transition-colors"
-                title="Añadir enlace de Google Drive"
-                onClick={() => { setLinkName(""); setLinkUrl(""); setLinkDialogOpen(true) }}
-              >
-                <Link className="w-5 h-5" />
-              </button>
+              {pathSegments.length === 0 && (
+                <button
+                  type="button"
+                  className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white hover:border-zinc-500 transition-colors"
+                  title="Añadir enlace de Google Drive"
+                  onClick={() => { setLinkName(""); setLinkUrl(""); setLinkDialogOpen(true) }}
+                >
+                  <Link className="w-5 h-5" />
+                </button>
+              )}
               <button
                 type="button"
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-colors border border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
@@ -515,7 +521,7 @@ export default function DrivePage() {
             </section>
           )}
 
-          {filteredLinks.length > 0 && (
+          {pathSegments.length === 0 && filteredLinks.length > 0 && (
             <section>
               <h2 className="text-sm font-medium text-zinc-500 mb-4 uppercase tracking-wider">
                 Enlaces externos

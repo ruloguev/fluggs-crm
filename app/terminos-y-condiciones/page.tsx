@@ -75,7 +75,7 @@ export default function TermsPage() {
 
           <Section title="6. Propiedad intelectual">
             <ul className="list-disc space-y-1.5 pl-5">
-              <li>Flugzz CRM y todos sus componentes (código, diseño, marcas, logotipos) son propiedad de Ultimate Tech & Architectonics.</li>
+              <li>Flugzz CRM y todos sus componentes (código, diseño, marcas, logotipos) son propiedad de Ultea S.A.S. de C.V.</li>
               <li>Se otorga una licencia limitada, no exclusiva e intransferible para usar la Plataforma durante la vigencia de la suscripción.</li>
               <li>Los datos que usted ingresa en la Plataforma son de su propiedad. Nosotros no reclamamos propiedad sobre su contenido.</li>
             </ul>
@@ -134,7 +134,7 @@ export default function TermsPage() {
 
         <div className="mt-10 border-t border-zinc-800/60 pt-6 text-center text-xs text-zinc-600">
           <p>
-            Ultimate Tech & Architectonics &mdash; Todos los derechos reservados.
+            Ultea S.A.S. de C.V. &mdash; Todos los derechos reservados.
           </p>
         </div>
       </div>

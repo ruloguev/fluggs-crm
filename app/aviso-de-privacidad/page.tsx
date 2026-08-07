@@ -30,7 +30,7 @@ export default function PrivacyNoticePage() {
         <div className="space-y-8 text-sm leading-relaxed">
           <Section title="Responsable">
             <p>
-              Ultimate Tech & Architectonics, con domicilio en Av. P.º de la Reforma 284-Piso 17,
+              Ultea S.A.S. de C.V., con domicilio en Av. P.º de la Reforma 284-Piso 17,
               Juárez, Cuauhtémoc, 06600 Ciudad de México, CDMX, es el responsable del tratamiento
               de sus datos personales.
             </p>

@@ -3,8 +3,47 @@
 import Link from "next/link"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Play, Zap } from "lucide-react"
+import { ArrowRight, Play, Zap, BarChart3, Kanban, Sparkles, ThumbsUp, Shuffle, CalendarClock } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+
+const FEATURES = [
+  {
+    icon: BarChart3,
+    title: "Métricas y desempeño",
+    desc: "Visualiza tus números y los de tu equipo de venta en tiempo real. Si lideras un equipo, sabes exactamente quién avanza y quién se queda atrás.",
+    accent: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+  },
+  {
+    icon: Kanban,
+    title: "Prospectos y pipeline dinámico",
+    desc: "Registra tus prospectos manualmente, consulta toda su información y muévelos de etapa en tu pipeline con un solo clic.",
+    accent: "text-violet-400 bg-violet-500/10 border-violet-500/20",
+  },
+  {
+    icon: Sparkles,
+    title: "Copiloto de IA",
+    desc: "La inteligencia artificial es tu copiloto comercial: pregúntale por tus propiedades y sigue sus sugerencias para un mejor seguimiento y más cierres.",
+    accent: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  },
+  {
+    icon: ThumbsUp,
+    title: "Facebook Leads",
+    desc: "Recibe tus leads de Facebook automáticamente, sin copiar y pegar a mano en una hoja de cálculo.",
+    accent: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+  },
+  {
+    icon: Shuffle,
+    title: "Reparto equitativo",
+    desc: "Automatiza la distribución de leads entre tu equipo de trabajo. Cada quien recibe su turno, de manera justa y sin favoritismos.",
+    accent: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+  },
+  {
+    icon: CalendarClock,
+    title: "Google Calendar",
+    desc: "Conecta tu calendario de Google y agenda llamadas con tus prospectos en un par de clics, sin perder el hilo.",
+    accent: "text-rose-400 bg-rose-500/10 border-rose-500/20",
+  },
+]
 
 export default function LandingPageMockup() {
   const router = useRouter()
@@ -158,6 +197,71 @@ export default function LandingPageMockup() {
             </div>
           </div>
         </div>
+
+        {/* HIGHLIGHTS */}
+        <section className="w-full mt-20 md:mt-32">
+          <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/30 border border-cyan-900/50 text-cyan-400 text-xs font-semibold uppercase tracking-wider mb-6">
+              <Zap className="w-3.5 h-3.5" />
+              ¿Por qué Flugzz?
+            </span>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-balance">
+              Deja el desmadre de las hojas de cálculo
+            </h2>
+            <p className="text-zinc-400 mt-4 text-base md:text-lg text-balance">
+              Nada de CRMs con 10,000 funcionalidades de las que usas tres, cobrándote como si las usaras todas.
+              Flugzz es simple, directo y hecho para vender.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {FEATURES.map((feature) => {
+              const Icon = feature.icon
+              return (
+                <div
+                  key={feature.title}
+                  className="rounded-2xl border border-zinc-800/50 bg-zinc-900/50 p-6 backdrop-blur-xl hover:border-flugzz-accent/40 transition-all"
+                >
+                  <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center mb-5 ${feature.accent}`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-zinc-100">{feature.title}</h3>
+                  <p className="text-sm text-zinc-400 mt-2 leading-relaxed">{feature.desc}</p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="w-full mt-20 md:mt-32 mb-10">
+          <div className="relative rounded-3xl border border-zinc-800/60 bg-zinc-900/30 backdrop-blur-xl p-10 md:p-16 text-center overflow-hidden">
+            <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[28rem] h-[28rem] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="relative z-10">
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-balance">
+                ¿Listo para dejar de perseguir leads?
+              </h2>
+              <p className="text-zinc-400 mt-4 max-w-xl mx-auto text-base md:text-lg">
+                Convierte tu cartera en un sistema que trabaja para ti y cierra más ventas.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                <Link
+                  href="/signup"
+                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-cyan-400 text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] group"
+                >
+                  Comenzar gratis
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link
+                  href="/solicitar-demo"
+                  className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-700/60 text-zinc-300 font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm"
+                >
+                  Solicitar demo
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
 
       </main>
 

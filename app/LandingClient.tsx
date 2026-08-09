@@ -249,14 +249,14 @@ export default function LandingPageMockup() {
                   href="/signup"
                   className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-cyan-400 text-zinc-950 font-bold hover:bg-cyan-300 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] group"
                 >
-                  Comenzar gratis
+                  Comenzar ahora
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
                   href="/solicitar-demo"
                   className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-zinc-900/50 border border-zinc-700/60 text-zinc-300 font-medium hover:bg-zinc-800 transition-all backdrop-blur-sm"
                 >
-                  Solicitar demo
+                  Solicitar demo gratis
                 </Link>
               </div>
             </div>

@@ -33,10 +33,10 @@ export async function POST(req: NextRequest) {
 
     const wonStageIds = wonStages?.map(s => s.id) ?? []
 
-    // Obtener perfiles de la empresa (sin directores ni coordinadores)
+    // Obtener perfiles de la empresa
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, role_id, roles(name)")
+      .select("id, full_name, role_id")
       .eq("company_id", companyId)
       .eq("is_active", true)
 
@@ -44,12 +44,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ranking: [] })
     }
 
-    const isLeaderRole = (profile: { roles?: { name?: string | null }[] | null }) => {
-      const name = (profile.roles?.[0]?.name ?? "").toLowerCase()
+    // Obtener roles de la empresa para identificar líderes
+    const { data: roleRows } = await supabase
+      .from("roles")
+      .select("id, name")
+      .eq("company_id", companyId)
+
+    const roleNameById = new Map<string, string>(
+      (roleRows ?? []).map(r => [r.id, r.name]),
+    )
+
+    const isLeaderRole = (profile: { role_id: string | null }) => {
+      if (!profile.role_id) return false
+      const name = (roleNameById.get(profile.role_id) ?? "").toLowerCase()
       return name.includes("director") || name.includes("coordinador")
     }
 
-    const rankingProfiles = profiles.filter(p => !isLeaderRole(p as never))
+    const rankingProfiles = profiles.filter(p => !isLeaderRole(p))
 
     if (rankingProfiles.length === 0) {
       return NextResponse.json({ ranking: [] })

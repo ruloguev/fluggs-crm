@@ -33,10 +33,10 @@ export async function POST(req: NextRequest) {
 
     const wonStageIds = wonStages?.map(s => s.id) ?? []
 
-    // Obtener perfiles de la empresa
+    // Obtener perfiles de la empresa (sin directores ni coordinadores)
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, role_id")
+      .select("id, full_name, role_id, roles(name)")
       .eq("company_id", companyId)
       .eq("is_active", true)
 
@@ -44,7 +44,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ranking: [] })
     }
 
-    const profileIds = profiles.map(p => p.id)
+    const isLeaderRole = (profile: { roles?: { name?: string | null }[] | null }) => {
+      const name = (profile.roles?.[0]?.name ?? "").toLowerCase()
+      return name.includes("director") || name.includes("coordinador")
+    }
+
+    const rankingProfiles = profiles.filter(p => !isLeaderRole(p as never))
+
+    if (rankingProfiles.length === 0) {
+      return NextResponse.json({ ranking: [] })
+    }
+
+    const profileIds = rankingProfiles.map(p => p.id)
 
     // Obtener leads del período
     const { data: leads } = await supabase
@@ -66,7 +77,7 @@ export async function POST(req: NextRequest) {
       .lte("created_at", end)
 
     // Calcular métricas por agente
-    const ranking = profiles.map(profile => {
+    const ranking = rankingProfiles.map(profile => {
       const profileLeads = leads?.filter(l => l.owner_id === profile.id) ?? []
       const profileActivities = activities?.filter(a => a.user_id === profile.id) ?? []
 

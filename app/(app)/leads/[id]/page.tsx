@@ -1100,7 +1100,7 @@ export default function LeadDetailPage() {
       const res = await fetch(`/api/google/calendar/events?id=${ev.id}`, { method: "DELETE" })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error || "Error al eliminar la reunión")
+        alert(data.detail ? `${data.error}: ${data.detail}` : (data.error || "Error al eliminar la reunión"))
         return
       }
       setUpcomingEvents(prev => prev.filter(e => e.id !== ev.id))
@@ -2035,7 +2035,7 @@ export default function LeadDetailPage() {
                       })
                       const data = await res.json()
                       if (!res.ok) {
-                        alert(data.error || "Error al agendar")
+                        alert(data.detail ? `${data.error}: ${data.detail}` : (data.error || "Error al agendar"))
                         setScheduling(false)
                         return
                       }

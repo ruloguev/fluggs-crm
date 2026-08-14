@@ -212,12 +212,35 @@ export async function PATCH(req: NextRequest) {
     const startDate = new Date(start_time)
     const endDate = new Date(end_time)
 
-    let googleEventId: string | null = current.google_event_id
-    let meetLink: string | null = current.meet_link ?? null
+    const reminderChanged = new Date(current.start_time).getTime() !== startDate.getTime()
+    const syncNeeded = mtype === "meet" || !!current.google_event_id
 
-    if (mtype === "meet" || current.google_event_id) {
+    const { error: updateErr } = await supabase
+      .from("lead_events")
+      .update({
+        title,
+        description: description || null,
+        start_time: startDate.toISOString(),
+        end_time: endDate.toISOString(),
+        meeting_type: mtype,
+        location: location || null,
+        ...(reminderChanged ? { reminder_sent: false } : {}),
+      })
+      .eq("id", event_id)
+    if (updateErr) {
+      console.error("[calendar events] lead_events update failed:", updateErr)
+      return NextResponse.json(
+        { error: "No se pudo actualizar el evento", detail: updateErr.message },
+        { status: 500 }
+      )
+    }
+
+    let syncError: string | null = null
+    if (syncNeeded) {
       try {
         const accessToken = await resolveAccessToken(supabase, user.id)
+        let googleEventId: string | null = current.google_event_id
+        let meetLink: string | null = null
 
         if (current.google_event_id && mtype === "meet") {
           const updated = await updateCalendarEvent({
@@ -231,9 +254,12 @@ export async function PATCH(req: NextRequest) {
           })
           meetLink = updated.meetLink
         } else if (current.google_event_id) {
-          await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
+          try {
+            await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
+          } catch (e: any) {
+            if (e?.code !== 404 && e?.status !== 404) throw e
+          }
           googleEventId = null
-          meetLink = null
         } else {
           const created = await createCalendarEvent({
             accessToken,
@@ -246,30 +272,19 @@ export async function PATCH(req: NextRequest) {
           googleEventId = created.googleEventId
           meetLink = created.meetLink
         }
+
+        const { error: syncErr } = await supabase
+          .from("lead_events")
+          .update({ google_event_id: googleEventId, meet_link: meetLink })
+          .eq("id", event_id)
+        if (syncErr) {
+          console.error("[calendar events] google sync write failed:", syncErr)
+          syncError = "El calendario se actualizó, pero no se pudo guardar el enlace del evento"
+        }
       } catch (e) {
-        return tokenErrorResponse(e)
+        console.error("[calendar events] google sync failed:", e)
+        syncError = "La reunión quedó actualizada, pero Google Calendar no se sincronizó"
       }
-    }
-
-    const reminderChanged = new Date(current.start_time).getTime() !== startDate.getTime()
-
-    const { error: updateErr } = await supabase
-      .from("lead_events")
-      .update({
-        google_event_id: googleEventId,
-        meet_link: meetLink,
-        title,
-        description: description || null,
-        start_time: startDate.toISOString(),
-        end_time: endDate.toISOString(),
-        meeting_type: mtype,
-        location: location || null,
-        ...(reminderChanged ? { reminder_sent: false } : {}),
-      })
-      .eq("id", event_id)
-    if (updateErr) {
-      console.error("[calendar events] lead_events update failed:", updateErr)
-      return NextResponse.json({ error: "No se pudo actualizar el evento" }, { status: 500 })
     }
 
     await supabase
@@ -277,7 +292,7 @@ export async function PATCH(req: NextRequest) {
       .update({ last_activity_at: new Date().toISOString() })
       .eq("id", current.lead_id)
 
-    return NextResponse.json({ ok: true, googleEventId, meetLink, meeting_type: mtype })
+    return NextResponse.json({ ok: true, meeting_type: mtype, syncError })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
@@ -299,22 +314,29 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: (e as Error).message }, { status: 404 })
     }
 
-    if (current.google_event_id) {
-      try {
-        const accessToken = await resolveAccessToken(supabase, user.id)
-        await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
-      } catch (e) {
-        return tokenErrorResponse(e)
-      }
-    }
-
     const { error: delErr } = await supabase
       .from("lead_events")
       .delete()
       .eq("id", eventId)
     if (delErr) {
       console.error("[calendar events] lead_events delete failed:", delErr)
-      return NextResponse.json({ error: "No se pudo eliminar el evento de la base de datos" }, { status: 500 })
+      return NextResponse.json(
+        { error: "No se pudo eliminar el evento de la base de datos", detail: delErr.message },
+        { status: 500 }
+      )
+    }
+
+    if (current.google_event_id) {
+      try {
+        const accessToken = await resolveAccessToken(supabase, user.id)
+        await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
+      } catch (e: any) {
+        if (e?.code === 404 || e?.status === 404) {
+          console.error("[calendar events] google event already gone:", current.google_event_id)
+        } else {
+          console.error("[calendar events] google delete failed, orphan kept:", e)
+        }
+      }
     }
 
     await supabase

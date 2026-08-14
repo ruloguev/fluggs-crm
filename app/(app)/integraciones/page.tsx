@@ -1179,18 +1179,15 @@ export default function IntegracionesPage() {
   }, [loadData])
 
   useEffect(() => {
-    if (!authLoading && !canOpenIntegrations) {
-      router.push("/dashboard")
-      return
+    if (authLoading) return
+    if (!canOpenIntegrations) {
+      setTab("google")
     }
+    const timeoutId = window.setTimeout(() => {
+      void loadDataRef.current()
+    }, 0)
 
-    if (!authLoading && canOpenIntegrations) {
-      const timeoutId = window.setTimeout(() => {
-        void loadDataRef.current()
-      }, 0)
-
-      return () => window.clearTimeout(timeoutId)
-    }
+    return () => window.clearTimeout(timeoutId)
   }, [authLoading, canOpenIntegrations, profile?.company_id, router])
 
   const selectedIntegration = useMemo(
@@ -1211,23 +1208,27 @@ export default function IntegracionesPage() {
           Integraciones<span className="text-flugzz-accent">.</span>
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Conecta varias captaciones por empresa, gerencia o coordinacion y asignales su propia rotacion.
+          {canOpenIntegrations
+            ? "Conecta varias captaciones por empresa, gerencia o coordinacion y asignales su propia rotacion."
+            : "Conecta tu cuenta de Google para agendar reuniones y Google Meet directamente desde tus leads."}
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-        <div className="rounded-3xl border border-zinc-800/50 bg-zinc-900/40 p-5 backdrop-blur-xl">
-          <IntegrationPicker
-            integrations={integrations}
-            profiles={teamProfiles}
-            selectedId={selectedIntegrationId}
-            onSelect={setSelectedIntegrationId}
-            onCreateNew={() => {
-              setSelectedIntegrationId("new")
-              setTab("facebook")
-            }}
-          />
-        </div>
+      <div className={`grid gap-6 ${canOpenIntegrations ? "xl:grid-cols-[300px_minmax(0,1fr)]" : "xl:grid-cols-1"}`}>
+        {canOpenIntegrations && (
+          <div className="rounded-3xl border border-zinc-800/50 bg-zinc-900/40 p-5 backdrop-blur-xl">
+            <IntegrationPicker
+              integrations={integrations}
+              profiles={teamProfiles}
+              selectedId={selectedIntegrationId}
+              onSelect={setSelectedIntegrationId}
+              onCreateNew={() => {
+                setSelectedIntegrationId("new")
+                setTab("facebook")
+              }}
+            />
+          </div>
+        )}
 
         <div className="rounded-3xl border border-zinc-800/50 bg-zinc-900/40 p-6 backdrop-blur-xl">
           {loading ? (
@@ -1267,9 +1268,13 @@ export default function IntegracionesPage() {
 
               <div className="flex gap-1 rounded-xl border border-zinc-800/50 bg-zinc-900/60 p-1 w-fit">
                 {[
-                  { id: "facebook", label: "Facebook Leads", icon: Globe },
-                  { id: "roundrobin", label: "Round Robin", icon: Shuffle },
-                  { id: "google", label: "Google Calendar", icon: Calendar },
+                  ...(canOpenIntegrations
+                    ? [
+                        { id: "facebook" as const, label: "Facebook Leads", icon: Globe },
+                        { id: "roundrobin" as const, label: "Round Robin", icon: Shuffle },
+                      ]
+                    : []),
+                  { id: "google" as const, label: "Google Calendar", icon: Calendar },
                 ].map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}

@@ -33,7 +33,7 @@ const ALL_NAV = [
   { name: "Contactos",     href: "/contactos",          icon: Users,           permission: null },
   { name: "Drive",         href: "/drive",              icon: HardDrive,       permission: null },
   { name: "Asistente IA",  href: "/asistente",          icon: Bot,             permission: null, badge: "BETA" as const },
-  { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: "can_manage_integrations" as const },
+  { name: "Integraciones", href: "/integraciones",      icon: Plug,            permission: null },
   { name: "Ajustes",       href: "/ajustes",            icon: Settings,        permission: "can_manage_users" as const },
   { name: "Cuenta",        href: "/ajustes/cuenta",     icon: UserCog,        permission: null },
 ]
@@ -158,11 +158,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     normalizedRoleName.includes("gerente") ||
     normalizedRoleName.includes("admin") ||
     (role?.level ?? 99) <= 2
-  const canManageIntegrations =
-    can("can_manage_integrations") ||
-    canManageSettings ||
-    normalizedRoleName.includes("mkt") ||
-    normalizedRoleName.includes("marketing")
 
   useEffect(() => {
     if (!loading && profile && !profile.company_id) {
@@ -325,7 +320,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const navItems = ALL_NAV.filter((item) => {
     if ("marketingOnly" in item && item.marketingOnly && !showMarketingNav) return false
-    if (item.href === "/integraciones") return canManageIntegrations
     if (item.href === "/ajustes") return canManageSettings
     if (!item.permission) return true
     return can(item.permission)

@@ -80,6 +80,34 @@ export default function PrivacyNoticePage() {
             </p>
           </Section>
 
+          <Section title="Uso de Datos de las API de Google">
+            <p>
+              Flugzz CRM recopila y utiliza información obtenida a través de las API de Google
+              (específicamente Google Calendar) únicamente para permitir a los usuarios agendar,
+              gestionar, sincronizar y eliminar eventos de reuniones directamente desde la plataforma.
+            </p>
+            <p className="mt-3">
+              <strong className="text-zinc-300">Requisitos de Uso Limitado:</strong> El uso y la
+              transferencia a cualquier otra aplicación de la información recibida de las API de
+              Google por parte de Flugzz se adherirán a la{" "}
+              <a
+                href="https://developers.google.com/terms/api-services-user-data-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-flugzz-accent hover:underline"
+              >
+                Política de Datos de Usuario de los Servicios de la API de Google
+              </a>
+              , incluidos los requisitos de Uso Limitado (Limited Use Requirements).
+            </p>
+            <p className="mt-3">
+              <strong className="text-zinc-300">Protección y No Comercialización:</strong> No
+              compartimos, vendemos ni utilizamos los datos obtenidos a través de la API de Google
+              para fines publicitarios, ni los empleamos para entrenar modelos de Inteligencia
+              Artificial o Aprendizaje Automático (AI/ML).
+            </p>
+          </Section>
+
           <Section title="Responsabilidad del usuario">
             <p>Al utilizar Flugzz CRM, usted es responsable de:</p>
             <ul className="mt-2 list-disc space-y-1.5 pl-5">

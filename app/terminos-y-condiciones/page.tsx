@@ -61,7 +61,30 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="5. Uso permitido">
+          <Section title="5. Integración con Servicios de Terceros (Google Calendar)">
+            <p>
+              La Plataforma permite a los usuarios conectar voluntariamente sus cuentas de servicios
+              de terceros, incluyendo Google Calendar, con el fin de automatizar la sincronización,
+              agenda, edición y eliminación de eventos de reuniones comerciales.
+            </p>
+            <p className="mt-2">
+              <strong className="text-zinc-100">Autorización de acceso:</strong> Al conectar su cuenta
+              de Google, el usuario concede a la Plataforma los permisos necesarios para interactuar con
+              su calendario exclusivamente dentro de las funciones operativas del CRM.
+            </p>
+            <p className="mt-2">
+              <strong className="text-zinc-100">Responsabilidad del usuario:</strong> El usuario es
+              responsable de los eventos, citas e información agendada o eliminada a través de las
+              integraciones de la Plataforma.
+            </p>
+            <p className="mt-2">
+              <strong className="text-zinc-100">Revocación de accesos:</strong> El usuario puede
+              desvincular la integración en cualquier momento desde la sección de Integraciones en
+              Flugzz o revocando el acceso desde la configuración de seguridad de su cuenta de Google.
+            </p>
+          </Section>
+
+          <Section title="6. Uso permitido">
             <p>Usted se compromete a:</p>
             <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>Utilizar la Plataforma únicamente para fines lícitos y comerciales legítimos.</li>
@@ -73,7 +96,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="6. Propiedad intelectual">
+          <Section title="7. Propiedad intelectual">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>Flugzz CRM y todos sus componentes (código, diseño, marcas, logotipos) son propiedad de Ultea S.A.S. de C.V.</li>
               <li>Se otorga una licencia limitada, no exclusiva e intransferible para usar la Plataforma durante la vigencia de la suscripción.</li>
@@ -81,7 +104,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="7. Privacidad y datos">
+          <Section title="8. Privacidad y datos">
             <p>
               El tratamiento de sus datos personales se rige por nuestro{" "}
               <a href="/aviso-de-privacidad" className="text-flugzz-accent hover:underline">
@@ -91,7 +114,7 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section title="8. Limitación de responsabilidad">
+          <Section title="9. Limitación de responsabilidad">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>La Plataforma se proporciona &ldquo;tal cual&rdquo; y &ldquo;según disponibilidad&rdquo;, sin garantías de ningún tipo.</li>
               <li>No garantizamos que la Plataforma esté libre de errores, interrupciones o fallos técnicos.</li>
@@ -100,7 +123,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="9. Cancelación y terminación">
+          <Section title="10. Cancelación y terminación">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>Usted puede cancelar su cuenta en cualquier momento desde la configuración de la Plataforma.</li>
               <li>Nos reservamos el derecho de suspender o terminar cuentas que violen estos términos.</li>
@@ -109,7 +132,7 @@ export default function TermsPage() {
             </ul>
           </Section>
 
-          <Section title="10. Modificaciones">
+          <Section title="11. Modificaciones">
             <p>
               Nos reservamos el derecho de modificar estos términos en cualquier momento. Los cambios
               serán notificados a través de la Plataforma con al menos 15 días de antelación. El uso
@@ -117,14 +140,14 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section title="11. Ley aplicable">
+          <Section title="12. Ley aplicable">
             <p>
               Estos Términos y Condiciones se rigen por las leyes de los Estados Unidos Mexicanos.
               Cualquier controversia será sometida a la jurisdicción de los tribunales de la Ciudad de México.
             </p>
           </Section>
 
-          <Section title="12. Contacto">
+          <Section title="13. Contacto">
             <p>
               Para cualquier pregunta relacionada con estos términos, contáctenos en:{" "}
               <strong className="text-zinc-100">legal@flugzz.xyz</strong>

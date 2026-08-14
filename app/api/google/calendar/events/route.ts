@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { getSupabaseUrl, getSupabaseServiceRoleKey } from "@/lib/server-env"
-import { decryptToken, refreshAccessToken, createCalendarEvent, encryptToken } from "@/lib/google-calendar"
+import {
+  decryptToken,
+  refreshAccessToken,
+  createCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  encryptToken,
+} from "@/lib/google-calendar"
 
 const MEETING_LABELS: Record<string, string> = {
   call: "Llamada",
@@ -9,15 +16,81 @@ const MEETING_LABELS: Record<string, string> = {
   in_person: "Presencial",
 }
 
+function getSupabase(req: NextRequest) {
+  return createServerClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!, {
+    cookies: {
+      getAll() { return req.cookies.getAll() },
+      setAll() {},
+    },
+  })
+}
+
+async function requireUser(supabase: ReturnType<typeof createServerClient>) {
+  const { data: { user } } = await supabase.auth.getUser()
+  return user ?? null
+}
+
+async function resolveAccessToken(supabase: ReturnType<typeof createServerClient>, userId: string): Promise<string> {
+  const { data: tokenRow } = await supabase
+    .from("user_google_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .single()
+
+  if (!tokenRow) {
+    throw new Error("Conecta Google Calendar primero en Integraciones")
+  }
+
+  let accessToken: string
+  try {
+    accessToken = decryptToken(tokenRow.access_token as string)
+  } catch {
+    throw new Error("Error al descifrar token")
+  }
+
+  const expiresAt = new Date(tokenRow.token_expires_at as string)
+  if (expiresAt.getTime() <= Date.now()) {
+    try {
+      const refreshToken = decryptToken(tokenRow.refresh_token as string)
+      const refreshed = await refreshAccessToken(refreshToken)
+      accessToken = refreshed.access_token
+      const newExpiresAt = new Date(Date.now() + refreshed.expires_in)
+      const encryptedAccess = encryptToken(accessToken)
+      await supabase
+        .from("user_google_tokens")
+        .update({ access_token: encryptedAccess, token_expires_at: newExpiresAt.toISOString() })
+        .eq("id", tokenRow.id as string)
+    } catch {
+      throw new Error("Sesión de Google expirada. Reconecta en Integraciones.")
+    }
+  }
+
+  return accessToken
+}
+
+function tokenErrorResponse(e: unknown) {
+  const msg = (e as Error).message
+  if (msg.includes("expirada")) return NextResponse.json({ error: msg }, { status: 401 })
+  if (msg.includes("Conecta")) return NextResponse.json({ error: msg }, { status: 400 })
+  return NextResponse.json({ error: msg }, { status: 500 })
+}
+
+async function requireOwnEvent(supabase: ReturnType<typeof createServerClient>, userId: string, eventId: string, action: string) {
+  const { data: ev } = await supabase
+    .from("lead_events")
+    .select("*")
+    .eq("id", eventId)
+    .single()
+
+  if (!ev) throw new Error("Evento no encontrado")
+  if ((ev as any).user_id !== userId) throw new Error(`Solo el creador puede ${action} esta reunión`)
+  return ev as any
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!, {
-      cookies: {
-        getAll() { return req.cookies.getAll() },
-        setAll() {},
-      },
-    })
-    const { data: { user } } = await supabase.auth.getUser()
+    const supabase = getSupabase(req)
+    const user = await requireUser(supabase)
     if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
     const { lead_id, title, description, start_time, end_time, meeting_type, location } = await req.json()
@@ -30,51 +103,21 @@ export async function POST(req: NextRequest) {
     let googleEventId: string | null = null
     let htmlLink: string | null = null
     let meetLink: string | null = null
-    let accessToken: string | null = null
 
     if (mtype === "meet") {
-      const { data: tokenRow } = await supabase
-        .from("user_google_tokens")
-        .select("*")
-        .eq("user_id", user.id)
-        .single()
-
-      if (!tokenRow) {
-        return NextResponse.json({ error: "Conecta Google Calendar primero en Integraciones" }, { status: 400 })
-      }
-
+      let accessToken: string
       try {
-        accessToken = decryptToken(tokenRow.access_token as string)
-      } catch {
-        return NextResponse.json({ error: "Error al descifrar token" }, { status: 500 })
+        accessToken = await resolveAccessToken(supabase, user.id)
+      } catch (e) {
+        return tokenErrorResponse(e)
       }
-
-      const expiresAt = new Date(tokenRow.token_expires_at as string)
-      if (expiresAt.getTime() <= Date.now()) {
-        try {
-          const refreshToken = decryptToken(tokenRow.refresh_token as string)
-          const refreshed = await refreshAccessToken(refreshToken)
-          accessToken = refreshed.access_token
-          const newExpiresAt = new Date(Date.now() + refreshed.expires_in)
-          const encryptedAccess = encryptToken(accessToken)
-          await supabase
-            .from("user_google_tokens")
-            .update({ access_token: encryptedAccess, token_expires_at: newExpiresAt.toISOString() })
-            .eq("id", tokenRow.id as string)
-        } catch {
-          return NextResponse.json({ error: "Sesión de Google expirada. Reconecta en Integraciones." }, { status: 401 })
-        }
-      }
-
-      const startDate = new Date(start_time)
-      const endDate = new Date(end_time)
 
       const event = await createCalendarEvent({
         accessToken,
         summary: title,
         description,
-        startTime: startDate,
-        endTime: endDate,
+        startTime: new Date(start_time),
+        endTime: new Date(end_time),
         addMeet: true,
       })
 
@@ -82,9 +125,6 @@ export async function POST(req: NextRequest) {
       htmlLink = event.htmlLink
       meetLink = event.meetLink
     }
-
-    const startDate = new Date(start_time)
-    const endDate = new Date(end_time)
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -100,8 +140,8 @@ export async function POST(req: NextRequest) {
       meet_link: meetLink,
       title,
       description: description || null,
-      start_time: startDate.toISOString(),
-      end_time: endDate.toISOString(),
+      start_time: new Date(start_time).toISOString(),
+      end_time: new Date(end_time).toISOString(),
       meeting_type: mtype,
       location: location || null,
     })
@@ -119,7 +159,7 @@ export async function POST(req: NextRequest) {
 
     const parts: string[] = [
       `Tipo: ${MEETING_LABELS[mtype]}`,
-      `${startDate.toLocaleString("es-MX")} - ${endDate.toLocaleString("es-MX")}`,
+      `${new Date(start_time).toLocaleString("es-MX")} - ${new Date(end_time).toLocaleString("es-MX")}`,
     ]
     if (mtype === "in_person" && location) parts.push(`Lugar: ${location}`)
     if (meetLink) parts.push(`Meet: ${meetLink}`)
@@ -142,6 +182,158 @@ export async function POST(req: NextRequest) {
       meetLink,
       meeting_type: mtype,
     })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = getSupabase(req)
+    const user = await requireUser(supabase)
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+
+    const { event_id, title, description, start_time, end_time, meeting_type, location } = await req.json()
+    if (!event_id || !title || !start_time || !end_time) {
+      return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
+    }
+
+    let current
+    try {
+      current = await requireOwnEvent(supabase, user.id, event_id, "editar")
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 404 })
+    }
+
+    const mtype = meeting_type === "call" || meeting_type === "in_person" ? meeting_type : "meet"
+    const startDate = new Date(start_time)
+    const endDate = new Date(end_time)
+
+    let googleEventId: string | null = current.google_event_id
+    let meetLink: string | null = current.meet_link ?? null
+
+    if (mtype === "meet" || current.google_event_id) {
+      try {
+        const accessToken = await resolveAccessToken(supabase, user.id)
+
+        if (current.google_event_id && mtype === "meet") {
+          const updated = await updateCalendarEvent({
+            accessToken,
+            googleEventId: current.google_event_id,
+            summary: title,
+            description,
+            startTime: startDate,
+            endTime: endDate,
+            addMeet: true,
+          })
+          meetLink = updated.meetLink
+        } else if (current.google_event_id) {
+          await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
+          googleEventId = null
+          meetLink = null
+        } else {
+          const created = await createCalendarEvent({
+            accessToken,
+            summary: title,
+            description,
+            startTime: startDate,
+            endTime: endDate,
+            addMeet: true,
+          })
+          googleEventId = created.googleEventId
+          meetLink = created.meetLink
+        }
+      } catch (e) {
+        return tokenErrorResponse(e)
+      }
+    }
+
+    const reminderChanged = new Date(current.start_time).getTime() !== startDate.getTime()
+
+    await supabase
+      .from("lead_events")
+      .update({
+        google_event_id: googleEventId,
+        meet_link: meetLink,
+        title,
+        description: description || null,
+        start_time: startDate.toISOString(),
+        end_time: endDate.toISOString(),
+        meeting_type: mtype,
+        location: location || null,
+        ...(reminderChanged ? { reminder_sent: false } : {}),
+      })
+      .eq("id", event_id)
+
+    await supabase
+      .from("leads")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", current.lead_id)
+
+    return NextResponse.json({ ok: true, googleEventId, meetLink, meeting_type: mtype })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = getSupabase(req)
+    const user = await requireUser(supabase)
+    if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+
+    const eventId = req.nextUrl.searchParams.get("id")
+    if (!eventId) return NextResponse.json({ error: "Falta id del evento" }, { status: 400 })
+
+    let current
+    try {
+      current = await requireOwnEvent(supabase, user.id, eventId, "eliminar")
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 404 })
+    }
+
+    if (current.google_event_id) {
+      try {
+        const accessToken = await resolveAccessToken(supabase, user.id)
+        await deleteCalendarEvent({ accessToken, googleEventId: current.google_event_id })
+      } catch (e) {
+        return tokenErrorResponse(e)
+      }
+    }
+
+    await supabase
+      .from("lead_events")
+      .delete()
+      .eq("id", eventId)
+
+    await supabase
+      .from("leads")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", current.lead_id)
+
+    const { data: contact } = await supabase
+      .from("leads")
+      .select("contact_id")
+      .eq("id", current.lead_id)
+      .single()
+
+    const parts: string[] = [
+      `Tipo: ${MEETING_LABELS[current.meeting_type] ?? current.meeting_type}`,
+      `${new Date(current.start_time).toLocaleString("es-MX")} - ${new Date(current.end_time).toLocaleString("es-MX")}`,
+    ]
+
+    await (supabase as any).from("activities").insert({
+      lead_id: current.lead_id,
+      contact_id: (contact as any)?.contact_id || null,
+      user_id: user.id,
+      company_id: current.company_id,
+      type: "meeting",
+      title: `${MEETING_LABELS[current.meeting_type] ?? "Reunión"} cancelada`,
+      body: parts.join("\n"),
+      created_at: new Date().toISOString(),
+    })
+
+    return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

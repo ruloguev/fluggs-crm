@@ -118,6 +118,70 @@ export async function createCalendarEvent(params: {
   }
 }
 
+export async function updateCalendarEvent(params: {
+  accessToken: string
+  googleEventId: string
+  summary: string
+  description?: string
+  startTime: Date
+  endTime: Date
+  addMeet: boolean
+}) {
+  const oauth2Client = getOAuth2Client()
+  oauth2Client.setCredentials({ access_token: params.accessToken })
+
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client })
+
+  const event: any = {
+    summary: params.summary,
+    description: params.description,
+    start: {
+      dateTime: params.startTime.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    end: {
+      dateTime: params.endTime.toISOString(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+  }
+
+  if (params.addMeet) {
+    event.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    }
+  }
+
+  const response = await calendar.events.update({
+    calendarId: "primary",
+    eventId: params.googleEventId,
+    requestBody: event,
+    conferenceDataVersion: params.addMeet ? 1 : 0,
+  })
+
+  return {
+    googleEventId: response.data.id!,
+    htmlLink: response.data.htmlLink!,
+    meetLink: response.data.hangoutLink ?? null,
+  }
+}
+
+export async function deleteCalendarEvent(params: {
+  accessToken: string
+  googleEventId: string
+}): Promise<void> {
+  const oauth2Client = getOAuth2Client()
+  oauth2Client.setCredentials({ access_token: params.accessToken })
+
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client })
+  await calendar.events.delete({
+    calendarId: "primary",
+    eventId: params.googleEventId,
+  })
+}
+
 export async function getUserEmail(accessToken: string): Promise<string> {
   const oauth2Client = getOAuth2Client()
   oauth2Client.setCredentials({ access_token: accessToken })

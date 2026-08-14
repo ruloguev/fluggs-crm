@@ -7,7 +7,7 @@ import {
   ArrowLeft, Phone, MessageCircle, Mail, MapPin, Clock,
   Plus, ChevronDown, Edit2, Check, X, Loader2, FileText,
   PhoneCall, PhoneMissed, PhoneOff, Voicemail, User,
-  AlertCircle, Trash2, ExternalLink,
+  AlertCircle, Trash2, ExternalLink, Pencil,
   Navigation, StickyNote, Calendar, Sparkles, Download, Copy, Video, CheckCircle2
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
@@ -916,6 +916,7 @@ export default function LeadDetailPage() {
   const [scheduling, setScheduling] = useState(false)
   const [scheduleResult, setScheduleResult] = useState<{ htmlLink?: string; meetLink?: string; meeting_type?: string } | null>(null)
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([])
+  const [editingEvent, setEditingEvent] = useState<any | null>(null)
 
   useEffect(() => { loadData() }, [id])
   useEffect(() => { if (editingTitle && titleRef.current) titleRef.current.focus() }, [editingTitle])
@@ -1077,6 +1078,35 @@ export default function LeadDetailPage() {
     if (titleDraft === lead.title) return
     await supabase.from("leads").update({ title: titleDraft }).eq("id", id)
     setLead(l => l ? { ...l, title: titleDraft } : l)
+  }
+
+  function startEditEvent(ev: any) {
+    setEditingEvent(ev)
+    setScheduleTitle(ev.title ?? "")
+    const start = new Date(ev.start_time)
+    setScheduleDate(start.toISOString().slice(0, 10))
+    setScheduleTime(start.toTimeString().slice(0, 5))
+    const mins = Math.round((new Date(ev.end_time).getTime() - start.getTime()) / 60000)
+    setScheduleDuration(mins > 0 ? mins : 60)
+    setScheduleMeetType(ev.meeting_type === "call" || ev.meeting_type === "in_person" ? ev.meeting_type : "meet")
+    setScheduleLocation(ev.location ?? "")
+    setScheduleResult(null)
+    setShowSchedule(true)
+  }
+
+  async function handleDeleteEvent(ev: any) {
+    if (!window.confirm(`¿Eliminar la reunión "${ev.title}"?`)) return
+    try {
+      const res = await fetch(`/api/google/calendar/events?id=${ev.id}`, { method: "DELETE" })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || "Error al eliminar la reunión")
+        return
+      }
+      loadData()
+    } catch (e: any) {
+      alert(e.message || "Error al eliminar la reunión")
+    }
   }
 
   async function updateDealType(nextType: DealType) {
@@ -1341,6 +1371,7 @@ export default function LeadDetailPage() {
           )}
           <button
             onClick={() => {
+              setEditingEvent(null)
               setScheduleTitle(lead?.title || contact.full_name)
               setScheduleLocation("")
               setScheduleMeetType("meet")
@@ -1508,6 +1539,20 @@ export default function LeadDetailPage() {
                         )}
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        {ev.user_id === userId && (
+                          <>
+                            <button onClick={() => startEditEvent(ev)}
+                              className="p-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/50 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200 transition-colors"
+                              title="Editar reunión">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteEvent(ev)}
+                              className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors"
+                              title="Eliminar reunión">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                         {ev.meet_link && (
                           <a href={ev.meet_link} target="_blank"
                             className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
@@ -1821,12 +1866,12 @@ export default function LeadDetailPage() {
 
       {showSchedule && (
         <>
-          <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={() => { if (!scheduling) setShowSchedule(false) }} />
+          <div className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm" onClick={() => { if (!scheduling) { setShowSchedule(false); setEditingEvent(null) } }} />
           <div className="fixed inset-x-0 bottom-0 z-50 bg-zinc-950 border-t border-zinc-800 rounded-t-2xl p-5 pb-8 animate-in slide-in-from-bottom duration-200 max-h-[85vh] overflow-y-auto md:max-w-lg md:left-1/2 md:-translate-x-1/2 md:rounded-2xl md:bottom-8 md:border">
             <div className="w-10 h-1 bg-zinc-800 rounded-full mx-auto mb-5 md:hidden" />
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-zinc-100 font-medium">Agendar</h3>
-              <button onClick={() => setShowSchedule(false)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
+              <h3 className="text-zinc-100 font-medium">{editingEvent ? "Editar reunión" : "Agendar"}</h3>
+              <button onClick={() => { setShowSchedule(false); setEditingEvent(null) }} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1975,10 +2020,10 @@ export default function LeadDetailPage() {
                       const startTime = new Date(`${scheduleDate}T${scheduleTime}:00`)
                       const endTime = new Date(startTime.getTime() + scheduleDuration * 60000)
                       const res = await fetch("/api/google/calendar/events", {
-                        method: "POST",
+                        method: editingEvent ? "PATCH" : "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                          lead_id: id,
+                          ...(editingEvent ? { event_id: editingEvent.id } : { lead_id: id }),
                           title: scheduleTitle,
                           description: `Reunión con ${contact.full_name}${lead.title ? ` — ${lead.title}` : ""}`,
                           start_time: startTime.toISOString(),
@@ -1993,8 +2038,14 @@ export default function LeadDetailPage() {
                         setScheduling(false)
                         return
                       }
-                      setScheduleResult(data)
-                      loadData()
+                      if (editingEvent) {
+                        setEditingEvent(null)
+                        setShowSchedule(false)
+                        loadData()
+                      } else {
+                        setScheduleResult(data)
+                        loadData()
+                      }
                     } catch (e: any) {
                       alert(e.message || "Error al agendar")
                     }
@@ -2006,6 +2057,7 @@ export default function LeadDetailPage() {
                   {scheduling ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                   ) : (
+                    editingEvent ? "Guardar cambios" :
                     scheduleMeetType === "call" ? "Agendar llamada" :
                     scheduleMeetType === "in_person" ? "Agendar cita" :
                     "Crear reunión"

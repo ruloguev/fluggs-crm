@@ -1103,6 +1103,7 @@ export default function LeadDetailPage() {
         alert(data.error || "Error al eliminar la reunión")
         return
       }
+      setUpcomingEvents(prev => prev.filter(e => e.id !== ev.id))
       loadData()
     } catch (e: any) {
       alert(e.message || "Error al eliminar la reunión")

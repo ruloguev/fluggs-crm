@@ -164,16 +164,19 @@ export async function POST(req: NextRequest) {
     if (mtype === "in_person" && location) parts.push(`Lugar: ${location}`)
     if (meetLink) parts.push(`Meet: ${meetLink}`)
 
-    await (supabase as any).from("activities").insert({
-      lead_id,
-      contact_id: (contact as any)?.contact_id || null,
-      user_id: user.id,
-      company_id: (profile as any)?.company_id || "",
-      type: "meeting",
-      title: `${MEETING_LABELS[mtype]} agendada`,
-      body: parts.join("\n"),
-      created_at: new Date().toISOString(),
-    })
+    if ((contact as any)?.contact_id) {
+      const { error: actErr } = await (supabase as any).from("activities").insert({
+        lead_id,
+        contact_id: (contact as any)?.contact_id,
+        user_id: user.id,
+        company_id: (profile as any)?.company_id || "",
+        type: "meeting",
+        title: `${MEETING_LABELS[mtype]} agendada`,
+        body: parts.join("\n"),
+        created_at: new Date().toISOString(),
+      })
+      if (actErr) console.error("[calendar events] activity insert failed:", actErr)
+    }
 
     return NextResponse.json({
       ok: true,
@@ -250,7 +253,7 @@ export async function PATCH(req: NextRequest) {
 
     const reminderChanged = new Date(current.start_time).getTime() !== startDate.getTime()
 
-    await supabase
+    const { error: updateErr } = await supabase
       .from("lead_events")
       .update({
         google_event_id: googleEventId,
@@ -264,6 +267,10 @@ export async function PATCH(req: NextRequest) {
         ...(reminderChanged ? { reminder_sent: false } : {}),
       })
       .eq("id", event_id)
+    if (updateErr) {
+      console.error("[calendar events] lead_events update failed:", updateErr)
+      return NextResponse.json({ error: "No se pudo actualizar el evento" }, { status: 500 })
+    }
 
     await supabase
       .from("leads")
@@ -301,10 +308,14 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    await supabase
+    const { error: delErr } = await supabase
       .from("lead_events")
       .delete()
       .eq("id", eventId)
+    if (delErr) {
+      console.error("[calendar events] lead_events delete failed:", delErr)
+      return NextResponse.json({ error: "No se pudo eliminar el evento de la base de datos" }, { status: 500 })
+    }
 
     await supabase
       .from("leads")
@@ -317,21 +328,24 @@ export async function DELETE(req: NextRequest) {
       .eq("id", current.lead_id)
       .single()
 
-    const parts: string[] = [
-      `Tipo: ${MEETING_LABELS[current.meeting_type] ?? current.meeting_type}`,
-      `${new Date(current.start_time).toLocaleString("es-MX")} - ${new Date(current.end_time).toLocaleString("es-MX")}`,
-    ]
+    if ((contact as any)?.contact_id) {
+      const parts: string[] = [
+        `Tipo: ${MEETING_LABELS[current.meeting_type] ?? current.meeting_type}`,
+        `${new Date(current.start_time).toLocaleString("es-MX")} - ${new Date(current.end_time).toLocaleString("es-MX")}`,
+      ]
 
-    await (supabase as any).from("activities").insert({
-      lead_id: current.lead_id,
-      contact_id: (contact as any)?.contact_id || null,
-      user_id: user.id,
-      company_id: current.company_id,
-      type: "meeting",
-      title: `${MEETING_LABELS[current.meeting_type] ?? "Reunión"} cancelada`,
-      body: parts.join("\n"),
-      created_at: new Date().toISOString(),
-    })
+      const { error: actErr } = await (supabase as any).from("activities").insert({
+        lead_id: current.lead_id,
+        contact_id: (contact as any)?.contact_id,
+        user_id: user.id,
+        company_id: current.company_id,
+        type: "meeting",
+        title: `${MEETING_LABELS[current.meeting_type] ?? "Reunión"} cancelada`,
+        body: parts.join("\n"),
+        created_at: new Date().toISOString(),
+      })
+      if (actErr) console.error("[calendar events] activity insert failed:", actErr)
+    }
 
     return NextResponse.json({ ok: true })
   } catch (e) {

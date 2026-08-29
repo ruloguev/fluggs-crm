@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { Loader2, User, Shield, Building2, AlertTriangle, AlertCircle, X, Check, CreditCard, ExternalLink, XCircle, Pause, ArrowRight, Lock, Mail, Edit2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { PLAN_LIMITS, type PlanId } from "@/lib/stripe-plans"
 
 type ProfileDetail = {
   id: string
@@ -117,11 +118,13 @@ function SubscriptionSection({ isDirector, onPortalClick, portalLoading }: { isD
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Plan</p>
-              <p className="text-sm text-zinc-200 capitalize">{sub.plan_id}</p>
+              <p className="text-sm text-zinc-200">{PLAN_LIMITS[sub.plan_id as PlanId]?.name ?? sub.plan_id}</p>
             </div>
             <div>
               <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Asientos</p>
-              <p className="text-sm text-zinc-200">{sub.seats}</p>
+              <p className="text-sm text-zinc-200">
+                {sub.plan_id === "agente_pro" ? "1 (fijo)" : sub.seats}
+              </p>
             </div>
             <div>
               <p className="text-xs text-zinc-500 uppercase tracking-[0.12em] mb-1">Estado</p>
@@ -166,7 +169,7 @@ function SubscriptionSection({ isDirector, onPortalClick, portalLoading }: { isD
           {isDirector && (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-zinc-800/60">
               <Link href="/suscripcion" className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-700 px-3 py-1.5 text-xs flex items-center gap-1.5">
-                Cambiar plan / asientos
+                {sub.plan_id === "agente_pro" ? "Cambiar de plan" : "Cambiar plan / asientos"}
               </Link>
               <button onClick={onPortalClick} disabled={portalLoading} className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-700 px-3 py-1.5 text-xs flex items-center gap-1.5 disabled:opacity-50">
                 {portalLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}

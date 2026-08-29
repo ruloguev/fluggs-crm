@@ -3,8 +3,11 @@
 import Link from "next/link"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Play, Zap, BarChart3, Kanban, Sparkles, ThumbsUp, Shuffle, CalendarClock } from "lucide-react"
+import { ArrowRight, Play, Zap, BarChart3, Kanban, Sparkles, ThumbsUp, Shuffle, CalendarClock, Check } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { PLAN_LIMITS, PLAN_FEATURES, type PlanId } from "@/lib/stripe-plans"
+
+const PRICING_ORDER: PlanId[] = ["agente_pro", "fundacion", "expansion", "imperio"]
 
 const FEATURES = [
   {
@@ -227,6 +230,89 @@ export default function LandingPageMockup() {
                   </div>
                   <h3 className="text-lg font-semibold text-zinc-100">{feature.title}</h3>
                   <p className="text-sm text-zinc-400 mt-2 leading-relaxed">{feature.desc}</p>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* PRICING */}
+        <section className="w-full mt-20 md:mt-32">
+          <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/30 border border-cyan-900/50 text-cyan-400 text-xs font-semibold uppercase tracking-wider mb-6">
+              <Zap className="w-3.5 h-3.5" />
+              Precios
+            </span>
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-balance">
+              Planes simples, para tu etapa
+            </h2>
+            <p className="text-zinc-400 mt-4 text-base md:text-lg text-balance">
+              Desde un agente independiente hasta una desarrolladora con 50+ agentes. Sin costos ocultos: el precio que ves es el que pagas.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {PRICING_ORDER.map((pid) => {
+              const plan = PLAN_LIMITS[pid]
+              const features = PLAN_FEATURES[pid]
+              const isHighlight = pid === "agente_pro"
+              return (
+                <div
+                  key={pid}
+                  className={`relative rounded-2xl border p-6 flex flex-col backdrop-blur-xl transition-all ${
+                    isHighlight
+                      ? "border-fuchsia-400/40 bg-gradient-to-b from-fuchsia-500/10 to-zinc-900/50 hover:border-fuchsia-400/70 shadow-[0_0_30px_rgba(232,121,249,0.15)]"
+                      : "border-zinc-800/50 bg-zinc-900/50 hover:border-zinc-700"
+                  }`}
+                >
+                  {isHighlight && (
+                    <span className="absolute -top-3 left-6 rounded-full bg-fuchsia-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                      Nuevo · Ideal para independientes
+                    </span>
+                  )}
+                  {plan.promo && (
+                    <span className="absolute -top-3 right-6 rounded-full bg-emerald-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                      {plan.promo}
+                    </span>
+                  )}
+
+                  <h3 className="text-lg font-semibold text-zinc-100">{plan.name}</h3>
+                  <p className="text-xs text-zinc-500 mt-1">{plan.range}</p>
+                  <p className="text-sm text-zinc-400 mt-3 leading-relaxed flex-1">{plan.description}</p>
+
+                  <div className="mt-5 mb-5 flex items-baseline gap-2">
+                    {plan.priceCompare ? (
+                      <span className="text-lg text-zinc-600 line-through">${plan.priceCompare.toLocaleString("es-MX")}</span>
+                    ) : null}
+                    <span className="text-4xl font-bold tracking-tight text-zinc-100">${plan.unitPrice.toLocaleString("es-MX")}</span>
+                    <span className="text-sm text-zinc-500">MXN/mes</span>
+                  </div>
+
+                  <ul className="space-y-2 mb-6">
+                    {features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-400">
+                        <Check className={`w-4 h-4 shrink-0 mt-0.5 ${isHighlight ? "text-fuchsia-400" : "text-cyan-400"}`} />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href={`/suscripcion?plan=${pid}`}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all group ${
+                      isHighlight
+                        ? "bg-fuchsia-400 text-zinc-950 hover:bg-fuchsia-300 shadow-[0_0_20px_rgba(232,121,249,0.4)]"
+                        : "bg-zinc-100 text-zinc-950 hover:bg-zinc-300"
+                    }`}
+                  >
+                    Comenzar
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                  {isHighlight && (
+                    <p className="text-[11px] text-zinc-500 mt-3 text-center">
+                      Sin costo de activación · usa el código <span className="text-fuchsia-300 font-semibold">FLUGZZINDIE</span> para tu primer mes gratis
+                    </p>
+                  )}
                 </div>
               )
             })}

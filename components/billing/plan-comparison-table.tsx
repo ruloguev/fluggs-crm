@@ -1,13 +1,15 @@
 import { PLAN_LIMITS, PLAN_FEATURES, type PlanId } from "@/lib/stripe-plans"
-import { Check, Crown, ShieldCheck, Zap } from "lucide-react"
+import { Check, Crown, Rocket, ShieldCheck, Zap } from "lucide-react"
 
 const PLAN_ICONS: Record<PlanId, React.ComponentType<{ className?: string }>> = {
+  agente_pro: Rocket,
   fundacion: ShieldCheck,
   expansion: Zap,
   imperio: Crown,
 }
 
 const PLAN_ACCENTS: Record<PlanId, string> = {
+  agente_pro: "#E879F9",
   fundacion: "#22D3EE",
   expansion: "#34D399",
   imperio: "#FBBF24",
@@ -21,7 +23,7 @@ type Props = {
 
 export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true }: Props) {
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
       {(Object.keys(PLAN_LIMITS) as PlanId[]).map((id) => {
         const plan = PLAN_LIMITS[id]
         const Icon = PLAN_ICONS[id]
@@ -55,6 +57,17 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
               >
                 {plan.range}
               </span>
+              {plan.promo && (
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                    active
+                      ? "bg-flugzz-accent text-zinc-950"
+                      : "bg-flugzz-accent/15 text-flugzz-accent"
+                  }`}
+                >
+                  {plan.promo}
+                </span>
+              )}
             </div>
 
             <h3
@@ -73,6 +86,15 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
             </p>
 
             <div className="mt-4 flex items-baseline gap-1">
+              {plan.priceCompare && (
+                <span
+                  className={`text-lg font-medium line-through ${
+                    active ? "text-zinc-500" : "text-zinc-600"
+                  }`}
+                >
+                  ${plan.priceCompare}
+                </span>
+              )}
               <span
                 className={`text-2xl font-semibold ${
                   active ? "text-zinc-950" : "text-zinc-100"

@@ -49,6 +49,7 @@ export async function GET(_req: NextRequest) {
 
     const configured = {
       setup: process.env.STRIPE_PRICE_SETUP ?? null,
+      agente_pro: process.env.STRIPE_PRICE_INDEPENDIENTE ?? null,
       fundacion: process.env.STRIPE_PRICE_FUNDACION ?? null,
       expansion: process.env.STRIPE_PRICE_EXPANSION ?? null,
       imperio: process.env.STRIPE_PRICE_IMPERIO ?? null,

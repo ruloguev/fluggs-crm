@@ -9,7 +9,7 @@ import { Loader2, X, FlaskConical } from "lucide-react"
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 type Props = {
-  planId: "fundacion" | "expansion" | "imperio"
+  planId: "agente_pro" | "fundacion" | "expansion" | "imperio"
   seats: number
   open: boolean
   onClose: () => void

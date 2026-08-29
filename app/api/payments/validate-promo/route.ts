@@ -15,7 +15,7 @@ function adminClient() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { code, companyId } = await req.json()
+    const { code, companyId, planId } = await req.json()
     const normalized =
       typeof code === "string" && code.trim().length > 0 ? code.trim().toUpperCase() : null
 
@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Verificar si la empresa YA lo redimio antes
     const targetCompanyId = companyId ?? (await getUserCompanyId(supabase, user.id))
     if (!targetCompanyId) {
       return NextResponse.json({ error: "Empresa no encontrada." }, { status: 400 })
@@ -67,8 +66,27 @@ export async function POST(req: NextRequest) {
       .eq("company_id", targetCompanyId)
       .maybeSingle()
 
+    // El codigo esta vinculado a un plan especifico y el usuario eligio otro:
+    // devolver ok=true con planMismatch para que la UI cambie de plan automaticamente.
+    const codePlan = typeof checkData.plan_id === "string" ? checkData.plan_id : null
+    if (codePlan && planId && String(planId).toLowerCase() !== codePlan.toLowerCase()) {
+      return NextResponse.json({
+        ok: true,
+        planMismatch: true,
+        planId: codePlan,
+        alreadyRedeemed: Boolean(existing),
+        currentUses: checkData.current_uses,
+        maxUses: checkData.max_uses,
+        campaign: checkData.campaign,
+        expiresAt: checkData.expires_at,
+        error: `Este código solo aplica al plan ${codePlan}.`,
+      })
+    }
+
     return NextResponse.json({
       ok: true,
+      planId: codePlan,
+      planMismatch: false,
       alreadyRedeemed: Boolean(existing),
       currentUses: checkData.current_uses,
       maxUses: checkData.max_uses,

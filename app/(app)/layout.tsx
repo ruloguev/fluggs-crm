@@ -150,6 +150,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const notifRef = useRef<HTMLDivElement>(null)
   const [companySettings, setCompanySettings] = useState<Record<string, any> | null>(null)
   const [subStatus, setSubStatus] = useState<string | null | undefined>(undefined)
+  const [planId, setPlanId] = useState<string | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const normalizedRoleName = role?.name?.toLowerCase() ?? ""
   const canManageSettings =
@@ -172,16 +173,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [loading, profile, pathname])
 
   useEffect(() => {
-    if (loading || !profile?.company_id) { setCompanySettings(null); setSubStatus(undefined); return }
+    if (loading || !profile?.company_id) { setCompanySettings(null); setSubStatus(undefined); setPlanId(null); return }
     // Re-fetch en cada cambio de ruta para reflejar sub recién activada
     setSubStatus(undefined)
     Promise.all([
       supabase.from("companies").select("settings").eq("id", profile.company_id).single(),
-      supabase.from("company_subscriptions").select("status, cancel_at_period_end").eq("company_id", profile.company_id).maybeSingle(),
+      supabase.from("company_subscriptions").select("status, cancel_at_period_end, plan_id").eq("company_id", profile.company_id).maybeSingle(),
     ]).then(([compRes, subRes]) => {
       if (compRes.data) setCompanySettings(compRes.data.settings)
       // null = no row found (no sub), undefined = aún no ha cargado
       setSubStatus(subRes.data ? (subRes.data.status as string) : null)
+      setPlanId(typeof subRes.data?.plan_id === "string" ? (subRes.data.plan_id as string) : null)
     })
   }, [loading, profile?.company_id, pathname])
 
@@ -320,7 +322,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const navItems = ALL_NAV.filter((item) => {
     if ("marketingOnly" in item && item.marketingOnly && !showMarketingNav) return false
-    if (item.href === "/ajustes") return canManageSettings
+    if (item.href === "/ajustes") {
+      // Agente Pro es una sola cuenta: sin gestion de equipo/roles/admin
+      if (planId === "agente_pro") return false
+      return canManageSettings
+    }
     if (!item.permission) return true
     return can(item.permission)
   })

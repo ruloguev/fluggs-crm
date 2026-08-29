@@ -6,7 +6,7 @@ import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
 export const runtime = "nodejs"
 
-const VALID_PLANS = new Set(["fundacion", "expansion", "imperio"])
+const VALID_PLANS = new Set(["agente_pro", "fundacion", "expansion", "imperio"])
 
 function adminClient() {
   const url = getSupabaseUrl()

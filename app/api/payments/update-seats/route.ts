@@ -76,6 +76,14 @@ export async function POST(req: NextRequest) {
     const newPlan = PLAN_LIMITS[planId as PlanId]
     const oldPlanId = sub.plan_id as PlanId
 
+    // Agente Pro tiene 1 asiento fijo: solo puede migrar a otro plan, nunca sumar asientos
+    if (oldPlanId === "agente_pro" && planId === "agente_pro") {
+      return NextResponse.json(
+        { error: "El plan Agente Pro tiene un asiento fijo y no permite modificarlo. Contrata otro plan para sumar asientos." },
+        { status: 400 },
+      )
+    }
+
     // Si cambió de plan, actualizar el price_id también
     if (planId !== oldPlanId) {
       await stripe.subscriptions.update(sub.stripe_subscription_id, {

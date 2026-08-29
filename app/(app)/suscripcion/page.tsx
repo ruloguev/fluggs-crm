@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
 import { createClient } from "@/lib/supabase"
-import { PLAN_LIMITS, SETUP_FEE, type PlanId } from "@/lib/stripe-plans"
+import { PLAN_LIMITS, type PlanId } from "@/lib/stripe-plans"
 import { CheckoutModal } from "@/components/payments/checkout-modal"
 import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
 import { Loader2, Minus, Plus, CreditCard, Sparkles, ArrowRight, Ticket, CheckCircle2, Shield, AlertCircle, ChevronDown, ChevronUp, Rocket } from "lucide-react"
@@ -69,6 +69,15 @@ export default function SuscripcionPage() {
     })()
   }, [authLoading, profile?.company_id])
 
+  // Pre-selección desde onboarding (?plan=agente_pro)
+  useEffect(() => {
+    const planParam = new URLSearchParams(window.location.search).get("plan")
+    if (planParam && planParam in PLAN_LIMITS) {
+      setSelectedPlan(planParam as PlanId)
+      setSeats(PLAN_LIMITS[planParam as PlanId].min)
+    }
+  }, [])
+
   useEffect(() => {
     const { min, max } = PLAN_LIMITS[selectedPlan]
     setSeats((prev) => {
@@ -86,6 +95,7 @@ export default function SuscripcionPage() {
   const hasActiveSub = currentSub && ["active", "past_due"].includes(currentSub.status)
   const hasTrial = currentSub?.status === "trial"
   const limit = PLAN_LIMITS[selectedPlan]
+  const isAgentePro = selectedPlan === "agente_pro"
   const monthlySubtotal = limit.unitPrice * seats
   const clampedSeats = Math.min(Math.max(seats, limit.min), limit.max)
   const planLabel = (id: PlanId) => PLAN_LIMITS[id].name
@@ -99,11 +109,23 @@ export default function SuscripcionPage() {
       const res = await fetch("/api/payments/validate-promo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoInput.trim().toUpperCase() }),
+        body: JSON.stringify({ code: promoInput.trim().toUpperCase(), planId: selectedPlan }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         setValidation({ kind: "invalid", message: data?.error ?? "No pudimos validar el código." })
+        return
+      }
+      if (data?.planMismatch && typeof data.planId === "string") {
+        const target = data.planId as PlanId
+        setSelectedPlan(target)
+        setValidation({
+          kind: "valid",
+          currentUses: data.currentUses ?? 0,
+          maxUses: data.maxUses ?? 0,
+          campaign: data.campaign,
+          alreadyRedeemed: Boolean(data.alreadyRedeemed),
+        })
         return
       }
       if (!data?.ok) {
@@ -180,7 +202,7 @@ export default function SuscripcionPage() {
           <div>
             <p className="text-sm font-medium text-emerald-300">Suscripción activa</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Plan {currentSub.plan_id} · {currentSub.seats} {currentSub.seats === 1 ? "asiento" : "asientos"} ·{" "}
+              Plan {planLabel(currentSub.plan_id as PlanId)} · {currentSub.seats} {currentSub.seats === 1 ? "asiento" : "asientos"} ·{" "}
               {currentSub.current_period_end ? new Date(currentSub.current_period_end).toLocaleDateString("es-MX", { day: "numeric", month: "long" }) : ""}
             </p>
           </div>
@@ -195,7 +217,7 @@ export default function SuscripcionPage() {
           <div>
             <p className="text-sm font-medium text-cyan-300">Prueba activa</p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Plan {currentSub.plan_id} · Termina el{" "}
+              Plan {planLabel(currentSub.plan_id as PlanId)} · Termina el{" "}
               {currentSub.current_period_end
                 ? new Date(currentSub.current_period_end).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
                 : "—"}
@@ -223,52 +245,66 @@ export default function SuscripcionPage() {
 
       {!hasActiveSub && (
         <>
-          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5">
-            <div className="flex items-center justify-between mb-4">
+          {!isAgentePro && (
+            <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-100">Asientos</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Rango: {limit.min} - {limit.max === 9999 ? "∞" : limit.max} para el plan {limit.name}
+                  </p>
+                </div>
+                {memberCount > 0 && (
+                  <p className="text-xs text-zinc-500">
+                    Miembros activos: <span className="text-zinc-300 font-medium">{memberCount}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSeats((s) => Math.max(limit.min, s - 1))}
+                  disabled={seats <= limit.min}
+                  className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center text-zinc-300 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <input
+                  type="number"
+                  min={limit.min}
+                  max={limit.max}
+                  value={seats}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value || "0", 10)
+                    if (Number.isNaN(val)) return
+                    setSeats(Math.max(limit.min, Math.min(limit.max, val)))
+                  }}
+                  className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-center text-zinc-100 text-sm font-mono outline-none focus:border-zinc-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSeats((s) => Math.min(limit.max, s + 1))}
+                  disabled={seats >= limit.max}
+                  className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center text-zinc-300 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isAgentePro && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-zinc-100">Asientos</p>
+                <p className="text-sm font-medium text-emerald-300">1 asiento fijo</p>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Rango: {limit.min} - {limit.max === 9999 ? "∞" : limit.max} para el plan {limit.name}
+                  El plan Agente Pro es para agentes independientes: una sola cuenta, sin gestión de equipo.
                 </p>
               </div>
-              {memberCount > 0 && (
-                <p className="text-xs text-zinc-500">
-                  Miembros activos: <span className="text-zinc-300 font-medium">{memberCount}</span>
-                </p>
-              )}
+              <Ticket className="w-5 h-5 text-emerald-400 shrink-0" />
             </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSeats((s) => Math.max(limit.min, s - 1))}
-                disabled={seats <= limit.min}
-                className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center text-zinc-300 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <input
-                type="number"
-                min={limit.min}
-                max={limit.max}
-                value={seats}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value || "0", 10)
-                  if (Number.isNaN(val)) return
-                  setSeats(Math.max(limit.min, Math.min(limit.max, val)))
-                }}
-                className="flex-1 h-10 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-center text-zinc-100 text-sm font-mono outline-none focus:border-zinc-600"
-              />
-              <button
-                type="button"
-                onClick={() => setSeats((s) => Math.min(limit.max, s + 1))}
-                disabled={seats >= limit.max}
-                className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center text-zinc-300 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          )}
 
           <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-5 space-y-2">
             <p className="text-sm font-medium text-zinc-100 mb-3">Resumen</p>
@@ -279,23 +315,25 @@ export default function SuscripcionPage() {
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-zinc-400">Asientos</span>
-              <span className="text-zinc-200">{seats}</span>
+              <span className="text-zinc-200">{isAgentePro ? "1 (fijo)" : seats}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-zinc-400">Subtotal mensual</span>
               <span className="text-zinc-200">${monthlySubtotal.toLocaleString("es-MX")} MXN</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-zinc-400">Setup inicial (pago único)</span>
-              <span className="text-zinc-200">${SETUP_FEE.toLocaleString("es-MX")} MXN</span>
-            </div>
+            {limit.setupFee > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">Setup inicial (pago único)</span>
+                <span className="text-zinc-200">${limit.setupFee.toLocaleString("es-MX")} MXN</span>
+              </div>
+            )}
 
             <div className="h-px bg-zinc-800 my-3" />
 
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-zinc-200">Cargo hoy</span>
               <span className="text-lg font-semibold text-zinc-100">
-                ${(monthlySubtotal + SETUP_FEE).toLocaleString("es-MX")} MXN
+                ${(monthlySubtotal + limit.setupFee).toLocaleString("es-MX")} MXN
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -304,6 +342,12 @@ export default function SuscripcionPage() {
                 ${monthlySubtotal.toLocaleString("es-MX")} MXN
               </span>
             </div>
+
+            {isAgentePro && (
+              <p className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-300">
+                Promo de lanzamiento: 1 mes gratis usando el código <span className="font-mono font-semibold">FLUGZZINDIE</span>
+              </p>
+            )}
           </div>
         </>
       )}

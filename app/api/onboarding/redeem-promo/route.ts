@@ -6,7 +6,7 @@ import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/server-env"
 
 export const runtime = "nodejs"
 
-const VALID_PLANS = new Set(["fundacion", "expansion", "imperio"])
+const VALID_PLANS = new Set(["agente_pro", "fundacion", "expansion", "imperio"])
 
 function adminClient() {
   const url = getSupabaseUrl()
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       {
         company_id: profile.company_id,
         plan_id: normalizedPlan,
-        seats: 9999,
+        seats: normalizedPlan === "agente_pro" ? 1 : 9999,
         status: "trial",
         current_period_end: redeemData.expires_at,
         current_period_start: new Date().toISOString(),

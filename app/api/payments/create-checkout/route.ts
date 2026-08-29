@@ -78,7 +78,10 @@ export async function POST(req: NextRequest) {
     //  - Empresa nueva (no existe registro) → cobrar
     //  - Canceló/expiró antes → cobrar (segunda vuelta)
     //  - Activa/trial/past_due → no cobrar (no debería llegar aquí, pero por seguridad)
-    const chargeSetup = !existing || (existing.setup_fee_paid && ["cancelled", "expired"].includes(existing.status))
+    //  - El plan descarta el setup (Agente Pro: setupFee = 0) → nunca cobrar
+    const chargeSetup =
+      plan.setupFee > 0 &&
+      (!existing || (existing.setup_fee_paid && ["cancelled", "expired"].includes(existing.status)))
 
     const stripe = getStripe()
     const appUrl = origin || req.headers.get("origin") || "https://flugzz-crm.vercel.app"
@@ -108,13 +111,13 @@ export async function POST(req: NextRequest) {
     // en lugar del generico "No such price".
     try {
       await stripe.prices.retrieve(plan.priceId)
-      if (SETUP_PRICE_ID) await stripe.prices.retrieve(SETUP_PRICE_ID)
+      if (chargeSetup && SETUP_PRICE_ID) await stripe.prices.retrieve(SETUP_PRICE_ID)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Price no encontrado"
       console.error("[create-checkout] price validation failed:", msg)
       return NextResponse.json(
         {
-          error: `Price no disponible: ${plan.name}. Verifica STRIPE_PRICE_${planId.toUpperCase()}${SETUP_PRICE_ID ? " o STRIPE_PRICE_SETUP" : ""} en Vercel.`,
+          error: `Price no disponible: ${plan.name}. Verifica STRIPE_PRICE_${planId.toUpperCase()}${chargeSetup && SETUP_PRICE_ID ? " o STRIPE_PRICE_SETUP" : ""} en Vercel.`,
           details: msg,
         },
         { status: 500 },

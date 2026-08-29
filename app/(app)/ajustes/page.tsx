@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { Building2, KanbanSquare, Shield, Users, Brain, UserCog } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
 
 const ALL_CARDS = [
   {
@@ -43,8 +45,25 @@ const ALL_CARDS = [
 ]
 
 export default function AjustesPage() {
-  const { can } = useAuth()
-  const cards = ALL_CARDS.filter(c => !c.permission || can(c.permission))
+  const { can, profile } = useAuth()
+  const supabase = createClient()
+  const [planId, setPlanId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profile?.company_id) return
+    supabase
+      .from("company_subscriptions")
+      .select("plan_id")
+      .eq("company_id", profile.company_id)
+      .maybeSingle()
+      .then(({ data }) => setPlanId(typeof data?.plan_id === "string" ? data.plan_id : null))
+  }, [profile?.company_id, supabase])
+
+  const isAgentePro = planId === "agente_pro"
+  // Agente Pro: solo gestion de cuenta; sin equipo, roles ni admin
+  const cards = ALL_CARDS.filter(c =>
+    isAgentePro ? c.href === "/ajustes/cuenta" : !c.permission || can(c.permission)
+  )
 
   return (
     <div className="space-y-6">

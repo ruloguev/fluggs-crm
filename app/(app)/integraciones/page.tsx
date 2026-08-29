@@ -1067,9 +1067,9 @@ export default function IntegracionesPage() {
   const supabase = createClient()
   const { can, loading: authLoading, role, profile } = useAuth()
 
-  const [tab, setTab] = useState<"facebook" | "roundrobin" | "google">("facebook")
-
   // Google Calendar state
+  const [tab, setTab] = useState<"facebook" | "roundrobin" | "google">("facebook")
+  const [planId, setPlanId] = useState<string | null>(null)
   const [googleConnected, setGoogleConnected] = useState(false)
   const [googleEmail, setGoogleEmail] = useState("")
   const [loadingGoogle, setLoadingGoogle] = useState(true)
@@ -1116,7 +1116,24 @@ export default function IntegracionesPage() {
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>("new")
   const [loading, setLoading] = useState(true)
 
+  // Plan de la empresa (Agente Pro no incluye Round Robin)
+  useEffect(() => {
+    if (!profile?.company_id) { setPlanId(null); return }
+    supabase
+      .from("company_subscriptions")
+      .select("plan_id")
+      .eq("company_id", profile.company_id)
+      .maybeSingle()
+      .then(({ data }) => setPlanId(typeof data?.plan_id === "string" ? data.plan_id : null))
+  }, [profile?.company_id, supabase])
+
+  // Si el plan no permite Round Robin, salir de ese tab
+  useEffect(() => {
+    if (planId === "agente_pro" && tab === "roundrobin") setTab("facebook")
+  }, [planId, tab])
+
   const roleName = role?.name?.toLowerCase() ?? ""
+  const isAgentePro = planId === "agente_pro"
   const canOpenIntegrations =
     can("can_manage_users") ||
     can("can_manage_integrations") ||
@@ -1271,7 +1288,7 @@ export default function IntegracionesPage() {
                   ...(canOpenIntegrations
                     ? [
                         { id: "facebook" as const, label: "Facebook Leads", icon: Globe },
-                        { id: "roundrobin" as const, label: "Round Robin", icon: Shuffle },
+                        ...(!isAgentePro ? [{ id: "roundrobin" as const, label: "Round Robin", icon: Shuffle }] : []),
                       ]
                     : []),
                   { id: "google" as const, label: "Google Calendar", icon: Calendar },

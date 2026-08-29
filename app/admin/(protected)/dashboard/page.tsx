@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 const PLAN_LABELS: Record<string, string> = {
+  agente_pro: "Agente Pro",
   fundacion: "Fundación",
   expansion: "Expansión",
   imperio: "Imperio",

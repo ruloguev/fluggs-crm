@@ -20,6 +20,20 @@ export async function POST(req: NextRequest) {
     if (!email || !fullName || !companyId)
       return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
 
+    // El plan Agente Pro es de un solo asiento: no se puede invitar equipo
+    const { data: subPlan } = await adminClient
+      .from("company_subscriptions")
+      .select("plan_id")
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (subPlan?.plan_id === "agente_pro") {
+      return NextResponse.json(
+        { error: "El plan Agente Pro es para agentes independientes y no permite agregar miembros de equipo." },
+        { status: 403 },
+      )
+    }
+
     const seatCheck = await checkSeats(adminClient, companyId)
     if (!seatCheck.ok) {
       const msg = seatCheckErrorMessage(seatCheck)

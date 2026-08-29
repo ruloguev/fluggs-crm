@@ -8,7 +8,7 @@ import { PlanComparisonTable } from "@/components/billing/plan-comparison-table"
 import {
   Check, Plus, Trash2, ArrowRight, Loader2,
   KanbanSquare, Users, Sparkles, GripVertical,
-  Crown, Ticket, ShieldCheck, Zap,
+  Crown, Ticket, ShieldCheck, Zap, Rocket,
 } from "lucide-react"
 
 const STAGE_COLORS = [
@@ -18,7 +18,14 @@ const STAGE_COLORS = [
 
 type Stage = { id: string; name: string; color: string; position: number; is_closed: boolean; isNew?: boolean }
 type InviteRow = { email: string; name: string }
-type PlanId = "fundacion" | "expansion" | "imperio"
+type PlanId = "agente_pro" | "fundacion" | "expansion" | "imperio"
+
+const PLAN_NAMES: Record<PlanId, string> = {
+  agente_pro: "Agente Pro",
+  fundacion: "Fundación",
+  expansion: "Expansión",
+  imperio: "Imperio",
+}
 
 const STEPS = [
   { id: "plan",     label: "Plan",     icon: Crown },
@@ -58,7 +65,7 @@ export default function OnboardingPage() {
       .eq("company_id", profile!.company_id!)
       .maybeSingle()
 
-    if (data?.plan_id && (["fundacion", "expansion", "imperio"] as PlanId[]).includes(data.plan_id as PlanId)) {
+    if (data?.plan_id && (["agente_pro", "fundacion", "expansion", "imperio"] as PlanId[]).includes(data.plan_id as PlanId)) {
       setSelectedPlan(data.plan_id as PlanId)
       setStep(1)
     }
@@ -166,7 +173,8 @@ export default function OnboardingPage() {
       }
     }
     setSaving(false)
-    setStep(2)
+    // Agente Pro es un solo asiento: se salta el paso de invitar equipo
+    setStep(selectedPlan === "agente_pro" ? 3 : 2)
   }
 
   // ── Invites ─────────────────────────────────────────────────
@@ -225,7 +233,7 @@ export default function OnboardingPage() {
 
       {/* Step indicators */}
       <div className="flex items-center gap-2 mb-8">
-        {STEPS.map((s, i) => {
+        {STEPS.filter((s) => !(selectedPlan === "agente_pro" && s.id === "team")).map((s, i) => {
           const Icon = s.icon
           const active = i === step
           const done = i < step
@@ -239,7 +247,7 @@ export default function OnboardingPage() {
                 {done ? <Check className="w-3 h-3" /> : <Icon className="w-3 h-3" />}
                 {s.label}
               </div>
-              {i < STEPS.length - 1 && (
+              {i < STEPS.filter((x) => !(selectedPlan === "agente_pro" && x.id === "team")).length - 1 && (
                 <div className={`w-6 h-px transition-colors ${i < step ? "bg-zinc-700" : "bg-zinc-800"}`} />
               )}
             </div>
@@ -281,7 +289,7 @@ export default function OnboardingPage() {
                     setPlanError(null)
                   }}
                   placeholder="Ingresa tu codigo"
-                  maxLength={8}
+                  maxLength={16}
                   className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-sm uppercase tracking-[0.16em] text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-zinc-600"
                 />
               </div>
@@ -447,10 +455,10 @@ export default function OnboardingPage() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 text-left">
               {[
-                { label: "Plan", desc: selectedPlan ? selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1) : "Seleccionado" },
+                { label: "Plan", desc: selectedPlan ? PLAN_NAMES[selectedPlan] : "Seleccionado" },
                 { label: "Pipeline", desc: `${stages.length} etapas listas` },
                 { label: "Rol", desc: "Director asignado" },
-                { label: "Equipo", desc: `${invites.filter(i => i.email).length} invitados` },
+                { label: "Equipo", desc: selectedPlan === "agente_pro" ? "No aplica" : `${invites.filter(i => i.email).length} invitados` },
               ].map(item => (
                 <div key={item.label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3">
                   <p className="text-[10px] text-zinc-600 mb-0.5">{item.label}</p>

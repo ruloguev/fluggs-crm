@@ -241,6 +241,9 @@ export default function SuscripcionPage() {
           onSelect={(id) => setSelectedPlan(id)}
           interactive={!hasActiveSub}
         />
+        <p className="mt-3 text-xs text-zinc-500">
+          Fundación, Expansión e Imperio incluyen los mismos módulos: solo cambian los asientos, el asistente IA y el almacenamiento.
+        </p>
       </section>
 
       {!hasActiveSub && (

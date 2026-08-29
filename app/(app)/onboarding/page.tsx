@@ -50,6 +50,14 @@ export default function OnboardingPage() {
   const [promoCode, setPromoCode] = useState("")
   const [planError, setPlanError] = useState<string | null>(null)
 
+  // Preselección desde landing/signup (?plan=…)
+  useEffect(() => {
+    const planParam = new URLSearchParams(window.location.search).get("plan")
+    if (planParam && (["agente_pro", "fundacion", "expansion", "imperio"] as PlanId[]).includes(planParam as PlanId)) {
+      setSelectedPlan(planParam as PlanId)
+    }
+  }, [])
+
   useEffect(() => {
     if (!authLoading && !profile) router.replace("/login")
     if (!authLoading && profile?.company_id) {

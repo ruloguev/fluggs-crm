@@ -1,10 +1,12 @@
 "use client"
 
 import { Suspense, useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { ArrowRight, Loader2, Eye, EyeOff, Building2, User, Mail, Lock } from "lucide-react"
+
+const VALID_PLANS = new Set(["agente_pro", "fundacion", "expansion", "imperio"])
 
 const FlugzzIsotipo = ({ className = "w-10 h-10" }) => (
   <img src="/Flugzz.svg" alt="Flugzz" className={className} style={{ filter: "invert(1)" }} />
@@ -14,6 +16,9 @@ function SignUpForm() {
   const router = useRouter()
   const supabase = createClient()
   const { refresh } = useAuth()
+  const searchParams = useSearchParams()
+  const planParam = searchParams.get("plan")
+  const planTarget = planParam && VALID_PLANS.has(planParam) ? `/onboarding?plan=${planParam}` : "/onboarding"
 
   const [step, setStep] = useState<"account" | "company">("account")
   const [showPass, setShowPass] = useState(false)
@@ -95,7 +100,7 @@ function SignUpForm() {
       // Sesión inmediata (email confirmation desactivado en Supabase)
       // Forzar recarga de role en AuthContext (sin esto, Ajustes no aparece)
       await refresh()
-      router.push("/onboarding")
+      router.push(planTarget)
     } else {
       // Supabase requiere confirmación de email
       router.push("/login?hint=confirm")

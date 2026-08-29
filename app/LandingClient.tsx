@@ -306,7 +306,7 @@ export default function LandingPageMockup() {
                   </ul>
 
                   <Link
-                    href={`/suscripcion?plan=${pid}`}
+                    href={`/signup?plan=${pid}`}
                     className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all group ${
                       isNew
                         ? "bg-fuchsia-400 text-zinc-950 hover:bg-fuchsia-300 shadow-[0_0_20px_rgba(232,121,249,0.4)]"
@@ -332,6 +332,10 @@ export default function LandingPageMockup() {
               )
             })}
           </div>
+
+          <p className="mt-6 text-center text-xs text-zinc-500">
+            Fundación, Expansión e Imperio incluyen los mismos módulos: solo cambian los asientos, el asistente IA y el almacenamiento.
+          </p>
         </section>
 
         {/* CTA */}

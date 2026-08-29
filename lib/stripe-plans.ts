@@ -72,6 +72,24 @@ export function isValidSeats(planId: PlanId, seats: number) {
   return seats >= limit.min && seats <= limit.max
 }
 
+// Los planes de equipo comparten la misma base de módulos: solo cambian
+// los asientos, las llamadas de IA y el almacenamiento.
+const TEAM_FEATURES = (seats: string, ia: string, drive: string): string[] => [
+  seats,
+  "Pipeline Kanban ilimitado",
+  "Captura de leads (formularios + WhatsApp)",
+  "Facebook Leads + Google Calendar",
+  "Reparto equitativo de leads (Round Robin)",
+  "Jerarquía de equipo (gerentes / coordinadores)",
+  "Roles y permisos granulares",
+  "Integraciones (Meta Ads, Google Ads)",
+  "Google Meet para reuniones con tus leads",
+  `Asistente IA (${ia} resúmenes/mes)`,
+  `Drive compartido (${drive})`,
+  "Reportes avanzados + embudo por etapa",
+  "Soporte prioritario (chat)",
+]
+
 export const PLAN_FEATURES: Record<PlanId, string[]> = {
   agente_pro: [
     "1 asiento de agente independiente",
@@ -84,42 +102,7 @@ export const PLAN_FEATURES: Record<PlanId, string[]> = {
     "Reportes personalizados + BI",
     "Soporte en línea",
   ],
-  fundacion: [
-    "1–5 asientos",
-    "Pipeline Kanban ilimitado",
-    "Captura de leads (formularios + WhatsApp)",
-    "Facebook Leads + Google Calendar",
-    "Reparto equitativo de leads (Round Robin)",
-    "Roles y permisos",
-    "Asistente IA (200 resúmenes/mes)",
-    "Drive compartido (5 GB)",
-    "Reportes básicos",
-    "Soporte por email",
-  ],
-  expansion: [
-    "6–49 asientos",
-    "Pipeline Kanban ilimitado",
-    "Captura de leads (formularios + WhatsApp)",
-    "Jerarquía de equipo (gerentes / coordinadores)",
-    "Reparto equitativo de leads (Round Robin)",
-    "Roles y permisos granulares",
-    "Asistente IA (1,000 resúmenes/mes)",
-    "Drive compartido (50 GB)",
-    "Reportes avanzados + embudo por etapa",
-    "Integraciones (Meta Ads, Google Ads)",
-    "Google Calendar + Google Meet",
-    "Soporte prioritario (chat)",
-  ],
-  imperio: [
-    "50+ asientos",
-    "Multi-gerencia con jerarquía profunda",
-    "Reparto equitativo de leads (Round Robin)",
-    "Pipeline Kanban ilimitado",
-    "Asistente IA (5,000 resúmenes/mes)",
-    "Drive compartido (500 GB)",
-    "Reportes personalizados + BI",
-    "API access (lectura)",
-    "SLA 99.9% + onboarding dedicado",
-    "Customer Success Manager asignado",
-  ],
+  fundacion: TEAM_FEATURES("1–5 asientos", "200", "5 GB"),
+  expansion: TEAM_FEATURES("6–49 asientos", "1,000", "50 GB"),
+  imperio: TEAM_FEATURES("50+ asientos", "5,000", "500 GB"),
 }

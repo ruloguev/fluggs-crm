@@ -29,6 +29,7 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
         const Icon = PLAN_ICONS[id]
         const accent = PLAN_ACCENTS[id]
         const active = selectedPlan === id
+        const isPopular = id === "expansion"
         const features = PLAN_FEATURES[id]
 
         const inner = (
@@ -48,26 +49,39 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
               >
                 <Icon className="h-5 w-5" />
               </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                  active
-                    ? "bg-zinc-900 text-zinc-100"
-                    : "bg-zinc-950 text-zinc-500 border border-zinc-800"
-                }`}
-              >
-                {plan.range}
-              </span>
-              {plan.promo && (
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                     active
-                      ? "bg-flugzz-accent text-zinc-950"
-                      : "bg-flugzz-accent/15 text-flugzz-accent"
+                      ? "bg-zinc-900 text-zinc-100"
+                      : "bg-zinc-950 text-zinc-500 border border-zinc-800"
                   }`}
                 >
-                  {plan.promo}
+                  {plan.range}
                 </span>
-              )}
+                {plan.promo && (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                      active
+                        ? "bg-flugzz-accent text-zinc-950"
+                        : "bg-flugzz-accent/15 text-flugzz-accent"
+                    }`}
+                  >
+                    {plan.promo}
+                  </span>
+                )}
+                {isPopular && (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                      active
+                        ? "bg-amber-400 text-zinc-950"
+                        : "bg-amber-400/15 text-amber-300"
+                    }`}
+                  >
+                    Más elegido
+                  </span>
+                )}
+              </div>
             </div>
 
             <h3
@@ -144,7 +158,11 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
           return (
             <div
               key={id}
-              className="text-left rounded-2xl border border-zinc-800/60 bg-zinc-900/40 overflow-hidden"
+              className={`text-left rounded-2xl border overflow-hidden ${
+                isPopular && !active
+                  ? "border-amber-400/40 shadow-[0_0_24px_rgba(251,191,36,0.10)]"
+                  : "border-zinc-800/60 bg-zinc-900/40"
+              }`}
             >
               {inner}
             </div>
@@ -159,7 +177,9 @@ export function PlanComparisonTable({ selectedPlan, onSelect, interactive = true
             className={`text-left rounded-2xl border transition-all overflow-hidden ${
               active
                 ? "border-zinc-200 bg-zinc-100 text-zinc-950 shadow-[0_0_32px_rgba(255,255,255,0.18)]"
-                : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700"
+                : isPopular
+                  ? "border-amber-400/40 bg-zinc-900/40 hover:border-amber-400/70 shadow-[0_0_24px_rgba(251,191,36,0.12)]"
+                  : "border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700"
             }`}
           >
             {inner}

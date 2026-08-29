@@ -255,24 +255,32 @@ export default function LandingPageMockup() {
             {PRICING_ORDER.map((pid) => {
               const plan = PLAN_LIMITS[pid]
               const features = PLAN_FEATURES[pid]
-              const isHighlight = pid === "agente_pro"
+              const isNew = pid === "agente_pro"
+              const isPopular = pid === "expansion"
               return (
                 <div
                   key={pid}
                   className={`relative rounded-2xl border p-6 flex flex-col backdrop-blur-xl transition-all ${
-                    isHighlight
+                    isNew
                       ? "border-fuchsia-400/40 bg-gradient-to-b from-fuchsia-500/10 to-zinc-900/50 hover:border-fuchsia-400/70 shadow-[0_0_30px_rgba(232,121,249,0.15)]"
-                      : "border-zinc-800/50 bg-zinc-900/50 hover:border-zinc-700"
+                      : isPopular
+                        ? "border-amber-400/40 bg-gradient-to-b from-amber-500/10 to-zinc-900/50 hover:border-amber-400/70 shadow-[0_0_30px_rgba(251,191,36,0.15)]"
+                        : "border-zinc-800/50 bg-zinc-900/50 hover:border-zinc-700"
                   }`}
                 >
-                  {isHighlight && (
-                    <span className="absolute -top-3 left-6 rounded-full bg-fuchsia-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
-                      Nuevo · Ideal para independientes
+                  {isNew && (
+                    <span className="absolute -top-3 left-6 whitespace-nowrap rounded-full bg-fuchsia-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                      Nuevo
                     </span>
                   )}
                   {plan.promo && (
-                    <span className="absolute -top-3 right-6 rounded-full bg-emerald-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                    <span className="absolute -top-3 right-6 whitespace-nowrap rounded-full bg-emerald-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
                       {plan.promo}
+                    </span>
+                  )}
+                  {isPopular && (
+                    <span className="absolute -top-3 right-6 whitespace-nowrap rounded-full bg-amber-400 text-zinc-950 text-[10px] font-bold uppercase tracking-wider px-3 py-1">
+                      Más elegido
                     </span>
                   )}
 
@@ -288,10 +296,10 @@ export default function LandingPageMockup() {
                     <span className="text-sm text-zinc-500">MXN/mes</span>
                   </div>
 
-                  <ul className="space-y-2 mb-6">
+                  <ul className="space-y-2 mb-6 flex-1">
                     {features.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-zinc-400">
-                        <Check className={`w-4 h-4 shrink-0 mt-0.5 ${isHighlight ? "text-fuchsia-400" : "text-cyan-400"}`} />
+                        <Check className={`w-4 h-4 shrink-0 mt-0.5 ${isNew ? "text-fuchsia-400" : isPopular ? "text-amber-400" : "text-cyan-400"}`} />
                         <span>{f}</span>
                       </li>
                     ))}
@@ -300,17 +308,24 @@ export default function LandingPageMockup() {
                   <Link
                     href={`/suscripcion?plan=${pid}`}
                     className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all group ${
-                      isHighlight
+                      isNew
                         ? "bg-fuchsia-400 text-zinc-950 hover:bg-fuchsia-300 shadow-[0_0_20px_rgba(232,121,249,0.4)]"
-                        : "bg-zinc-100 text-zinc-950 hover:bg-zinc-300"
+                        : isPopular
+                          ? "bg-amber-400 text-zinc-950 hover:bg-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.4)]"
+                          : "bg-zinc-100 text-zinc-950 hover:bg-zinc-300"
                     }`}
                   >
                     Comenzar
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
-                  {isHighlight && (
+                  {isNew && (
                     <p className="text-[11px] text-zinc-500 mt-3 text-center">
                       Sin costo de activación · usa el código <span className="text-fuchsia-300 font-semibold">FLUGZZINDIE</span> para tu primer mes gratis
+                    </p>
+                  )}
+                  {isPopular && (
+                    <p className="text-[11px] text-zinc-500 mt-3 text-center">
+                      El favorito de equipos de ventas en crecimiento
                     </p>
                   )}
                 </div>
